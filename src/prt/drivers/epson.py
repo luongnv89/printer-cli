@@ -54,6 +54,8 @@ class EpsonDriver(IPPDriver):
         return value if isinstance(value, int) else None
 
     def send_raw(self, payload: bytes) -> None:
+        from prt.transport.ipp import trace
+        trace(f"RAW → {self.target.host}:{self.target.raw_port} ({len(payload)} bytes ESC/P2 remote mode)")
         try:
             with socket.create_connection((self.target.host, self.target.raw_port),
                                           timeout=self.timeout) as sock:

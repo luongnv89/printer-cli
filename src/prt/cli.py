@@ -120,6 +120,8 @@ def root(
     STATE._stale_exit = False  # type: ignore[attr-defined]
     STATE.printer, STATE.fmt, STATE.verbose, STATE.quiet = printer, fmt, verbose, quiet
     STATE.timeout, STATE.config_path, STATE.no_color = timeout, config, no_color
+    from prt.transport import ipp as _ipp
+    _ipp.TRACE = verbose
     STATE.out = style.decide(sys.stdout, machine=fmt == Fmt.json, no_color=no_color, is_stdout=True)
     STATE.err = style.decide(sys.stderr, no_color=no_color, is_stdout=False)
 

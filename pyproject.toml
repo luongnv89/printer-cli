@@ -12,6 +12,7 @@ dependencies = [
     "httpx>=0.27",
     "zeroconf>=0.132",
     "pillow>=10.1",
+    "shellingham>=1.5.4",
 ]
 
 [project.scripts]

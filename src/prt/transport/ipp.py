@@ -46,6 +46,18 @@ LANGUAGE = 0x48
 MIME = 0x49
 MEMBER_NAME = 0x4A
 
+TRACE = False  # set by `prt --verbose`: one line per request/response on stderr
+
+OP_NAMES = {0x0002: "Print-Job", 0x0004: "Validate-Job", 0x0008: "Cancel-Job", 0x0009: "Get-Job-Attributes",
+            0x000A: "Get-Jobs", 0x000B: "Get-Printer-Attributes", 0x003C: "Identify-Printer"}
+
+
+def trace(message: str) -> None:
+    if TRACE:
+        import sys
+        sys.stderr.write(f"· {message}\n")
+
+
 STRING_TAGS = {TEXT, NAME, KEYWORD, URI, URI_SCHEME, CHARSET, LANGUAGE, MIME, MEMBER_NAME, OCTET_STRING}
 
 # --- Operations & status ----------------------------------------------------
@@ -332,12 +344,14 @@ class IPPClient:
         self._request_id += 1
         body = encode_request(operation, self.printer_uri, request_id=self._request_id,
                               operation_attrs=operation_attrs, job_attrs=job_attrs, data=data)
+        trace(f"IPP → {OP_NAMES.get(operation, hex(operation))} {self.http_url} ({len(body)} bytes)")
         with httpx.Client(verify=False, timeout=timeout or self.timeout) as client:
             http = client.post(self.http_url, content=body,
                                headers={"Content-Type": "application/ipp"})
         if http.status_code != 200:
             raise IPPError(f"HTTP {http.status_code} from {self.http_url}")
         resp = decode_response(http.content)
+        trace(f"IPP ← status 0x{resp.status:04x} ({len(http.content)} bytes)")
         if not resp.ok:
             msg = resp.operation.get("status-message") or f"IPP status 0x{resp.status:04x}"
             raise IPPError(str(msg), resp.status)

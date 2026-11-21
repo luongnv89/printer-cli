@@ -238,3 +238,10 @@ def test_stale_box_footer():
     st.stale = True
     out = render_status(st, "demo", "EPSON", style.Mode(styled=True, tier="none", unicode=True, width=90))
     assert "cached" in out
+
+
+def test_verbose_traces_protocol(capsys):
+    code, out, err = run(capsys, "-v", "--timeout", "0.5", "-p", "127.0.0.1", "status")
+    assert code == 1 and "IPP → Get-Printer-Attributes" in err
+    from prt.transport import ipp
+    ipp.TRACE = False
