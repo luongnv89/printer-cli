@@ -235,10 +235,16 @@ DataTable > .datatable--header {
     text-style: bold;
 }
 
+/* Selected row: green text + underline — green stays a highlight, never a background. */
 DataTable > .datatable--cursor {
     background: #000000;
     color: #22C55E;
-    text-style: bold reverse;
+    text-style: bold underline;
+}
+
+DataTable > .datatable--hover {
+    background: #000000;
+    text-style: underline;
 }
 
 /* --- modal ---------------------------------------------------------------------- */

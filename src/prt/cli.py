@@ -235,28 +235,36 @@ def status_plain(st: Status) -> list[str]:
     return out
 
 
-def _fetch_status(d: Driver) -> Status:
+def _fetch_status(d: Driver | None = None) -> tuple[Driver | None, Status]:
+    """Live status, or the cached one when the printer does not answer (even during auto-detection)."""
+    target = d.target if d else STATE.cfg.resolve(STATE.printer)
     try:
+        d = d or STATE.driver()
         st = d.status()
     except Unreachable:
-        cached = cache.load(d.target.name)
+        cached = cache.load(target.name)
         if cached is None:
             raise
-        STATE.note("warn", f"{d.target.name} is not answering — showing last known status",
+        STATE.note("warn", f"{target.name} is not answering — showing last known status",
                    f"from {time.strftime('%Y-%m-%d %H:%M', time.localtime(cached.checked_at))}")
         STATE._stale_exit = True  # type: ignore[attr-defined]
-        return cached
-    cache.save(d.target.name, st)
-    return st
+        return d, cached
+    cache.save(target.name, st)
+    return d, st
 
 
-def _quick_facts(d: Driver) -> tuple[str, str | None, int | None]:
-    """Model, firmware, uptime from already-fetched attributes (no extra round-trip)."""
+def _quick_facts(d: Driver | None) -> tuple[str, str | None, int | None, int | None]:
+    """Model, firmware, uptime (already-fetched attributes) and page count (SNMP, when available)."""
     from prt.drivers.ipp import IPPDriver
+    if d is None:
+        return STATE.cfg.resolve(STATE.printer).name, None, None, None
+    pages = None
+    if d.supports(Capability.COUNTERS) and hasattr(d, "snmp_page_count"):
+        pages = d.snmp_page_count()  # type: ignore[attr-defined]
     if isinstance(d, IPPDriver) and d._attrs_cache:
         info = d.parse_info(d._attrs_cache)
-        return info.make_model, info.firmware, info.uptime_seconds
-    return d.display_name, None, None
+        return info.make_model, info.firmware, info.uptime_seconds, pages
+    return d.display_name, None, None, pages
 
 
 def _finish_stale() -> None:
@@ -273,15 +281,15 @@ def status(
                                           help="Repeat every N seconds, one line per sample (Ctrl-C to stop)."),
 ) -> None:
     """State, alerts, ink levels and paper — what the printer's panel should be telling you."""
-    d = STATE.driver()
     if watch:
-        _watch(d, watch)
+        _watch(STATE.driver(), watch)
         return
-    st = _fetch_status(d)
-    model, fw, up = _quick_facts(d)
+    d, st = _fetch_status()
+    name = STATE.cfg.resolve(STATE.printer).name
+    model, fw, up, pages = _quick_facts(d) if not st.stale else (name, None, None, None)
     STATE.emit(
-        {"printer": d.target.name, "model": model, **to_dict(st)},
-        lambda: render_status(st, d.target.name, model, STATE.out, fw, up),
+        {"printer": name, "model": model, "page_count": pages, **to_dict(st)},
+        lambda: render_status(st, name, model, STATE.out, fw, up, pages),
         lambda: status_plain(st),
     )
     _finish_stale()
@@ -316,17 +324,17 @@ def _watch(d: Driver, every: float) -> None:
 @app.command()
 def ink() -> None:
     """Ink levels only (compact)."""
-    d = STATE.driver()
-    st = _fetch_status(d)
+    _, st = _fetch_status()
+    name = STATE.cfg.resolve(STATE.printer).name
     mode = STATE.out
 
     def text() -> str:
         inner = max(30, min(mode.width, 100)) - 4
         g = style.glyphs(mode)
         foot = f"{'cached ' if st.stale else ''}{_clock(st.checked_at)}"
-        return style.box(f"ink {g['dot']} {d.target.name}", list(_ink_rows(st, mode, inner)), mode, footer=foot)
+        return style.box(f"ink {g['dot']} {name}", list(_ink_rows(st, mode, inner)), mode, footer=foot)
 
-    STATE.emit({"printer": d.target.name, "stale": st.stale, "inks": [to_dict(i) for i in st.inks]},
+    STATE.emit({"printer": name, "stale": st.stale, "inks": [to_dict(i) for i in st.inks]},
                text, lambda: [style.plain_record(i.name, "" if i.level is None else i.level, i.state)
                               for i in st.inks])
     _finish_stale()
@@ -415,6 +423,9 @@ def discover(timeout: float = typer.Option(3.0, "--wait", help="Seconds to liste
         sys.stderr.write(style.render(STATE.err, Text(f"listening for printers for {timeout:g}s…",
                                                       style=ROLES["dim"])) + "\n")
     found = run(timeout)
+    if not found:
+        STATE.note("warn", "no printers answered",
+                   "a sleeping printer does not reply to discovery — wake it (press a button) and retry")
     mode = STATE.out
     saved = {p.host.lower(): n for n, p in STATE.cfg.printers.items()}
 
@@ -546,7 +557,7 @@ def nozzle_check(yes: bool = typer.Option(False, "--yes", "-y", help="Skip the c
     """Print the nozzle check pattern (1 sheet, a little ink). Gaps in a line = clogged nozzles."""
     d = STATE.driver()
     d.require(Capability.NOZZLE_CHECK)
-    pf = nozzle_check_preflight(_fetch_status(d))
+    pf = nozzle_check_preflight(_fetch_status(d)[1])
     _show_preflight(pf)
     if not pf.ok:
         raise PrinterError("nozzle check not sent", hint="fix the issues above and retry")
@@ -565,7 +576,7 @@ def head_clean(
     """Clean the print head. Uses ink and fills the waste pad — run a nozzle check first."""
     d = STATE.driver()
     d.require(Capability.HEAD_CLEAN)
-    pf = head_clean_preflight(_fetch_status(d))
+    pf = head_clean_preflight(_fetch_status(d)[1])
     _show_preflight(pf)
     if not pf.ok and not force:
         raise PrinterError("head cleaning refused for safety",
@@ -694,7 +705,7 @@ class ScanArea(str, Enum):
 def scan(
     output: Optional[str] = typer.Option(None, "--output", "-o",
                                          help="Output file ('-' for stdout) [default: scan-<time>.<ext>]."),
-    fmt: ScanFormat = typer.Option(ScanFormat.pdf, "--type", "-T", help="File type: pdf or jpeg."),
+    fmt: ScanFormat = typer.Option(ScanFormat.pdf, "--format", "--type", "-T", help="File type: pdf or jpeg."),
     dpi: int = typer.Option(300, "--dpi", "-r", help="Resolution: 100, 200, 300, 600 or 1200."),
     mode_: ScanMode = typer.Option(ScanMode.color, "--mode", help="color, gray or bw."),
     area: ScanArea = typer.Option(ScanArea.a4, "--area", help="Scan area: a4, letter or full glass."),
@@ -777,6 +788,9 @@ def hoist_globals(argv: list[str]) -> list[str]:
         key = a.split("=", 1)[0]
         if a in GLOBAL_FLAGS:
             front.append(a)
+        elif key in ("-f", "--format") and (a.split("=", 1)[1] if "=" in a else
+                                             argv[i + 1] if i + 1 < len(argv) else "") not in ("text", "json"):
+            rest.append(a)  # e.g. `scan --format jpeg` belongs to the command, not the global flag
         elif key in GLOBAL_WITH_VALUE and "=" in a:
             front.append(a)
         elif a in GLOBAL_WITH_VALUE and i + 1 < len(argv):

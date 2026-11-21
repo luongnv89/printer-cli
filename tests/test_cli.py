@@ -98,18 +98,15 @@ def test_unknown_driver_is_usage_error(capsys):
 # --- offline / cache -----------------------------------------------------------------------
 
 def test_offline_with_cache_shows_stale_and_exits_1(capsys):
+    """Default config (driver = auto): the detection probe fails, the cache must still be used."""
     cache.save("ghost", FakeDriver().status())
-    code, out, err = run(capsys, "--timeout", "0.5", "printers", "add", "ghost", "127.0.0.1:9", "--driver", "ipp")
-    # host with :port isn't valid for IPP here; use an explicit closed port via config instead
-    from prt.config import Config
-    from prt.models import Target
-    cfg = Config.load()
-    cfg.printers["ghost"] = Target("ghost", "127.0.0.1", driver="ipp", ipp_port=9)
-    cfg.save()
+    assert run(capsys, "printers", "add", "ghost", "127.0.0.1")[0] == 0
     code, out, err = run(capsys, "--timeout", "0.5", "-p", "ghost", "status")
     assert code == 1
     assert out.startswith("state\toffline\tstale")
     assert "last known status" in err
+    code, out, _ = run(capsys, "--timeout", "0.5", "-p", "ghost", "ink")
+    assert code == 1 and out.startswith("Photo Black ink\t92")
 
 
 def test_offline_without_cache_errors(capsys):
@@ -173,6 +170,18 @@ def test_print_pdf_direct_refused(capsys, tmp_path):
     pdf.write_bytes(b"%PDF-1.4")
     code, _, err = run(capsys, "-p", "demo", "print", str(pdf), "--direct")
     assert code == 3 and "JPEG" in err
+
+
+def test_scan_format_option_matches_design(capsys, tmp_path):
+    out_file = tmp_path / "s.jpg"
+    code, _, _ = run(capsys, "-p", "demo", "scan", "--format", "jpeg", "-o", str(out_file))
+    assert code == 0 and out_file.read_bytes()[:2] == b"\xff\xd8"
+    assert hoist_globals(["scan", "--format", "jpeg"]) == ["scan", "--format", "jpeg"]
+
+
+def test_status_header_has_page_count(capsys):
+    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "status")
+    assert json.loads(out)["page_count"] == 1538
 
 
 def test_scan_to_file(capsys, tmp_path):

@@ -20,13 +20,24 @@ Built because the Epson XP-6000's web dashboard stopped working. prt talks to th
 ╰─┘4 alerts · checked 17:42└───────────────────────────────────────────────╯
 ```
 
+## Status
+
+| | Verified against the real XP-6000 | Covered by tests (replay of its data) |
+|---|---|---|
+| Ink, state, alerts, paper, firmware (IPP) | ✅ read live during development | ✅ |
+| Page counter (SNMP) | ✅ | ✅ |
+| Scanner capabilities (eSCL) | ✅ | ✅ |
+| Scanning a page | ⏳ not yet | ✅ (mocked HTTP) |
+| Printing (IPP / CUPS) | ⏳ not yet | ✅ (fake transport) |
+| Nozzle check / head cleaning (ESC/P2 on 9100) | ⏳ not yet: bytes match gutenprint `escputil`, port 9100 is open | ✅ (byte-exact) |
+
 ## Install
 
 Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone git@github.com:luongnv89/printer-epson-6000.git && cd printer-epson-6000
-uv tool install .          # puts `prt` on your PATH
+uv tool install .          # puts `prt` on your PATH (add --editable to track local changes)
 prt --install-completion   # optional: tab completion for your shell
 ```
 
@@ -135,7 +146,7 @@ To add a vendor, subclass `IPPDriver`, declare its `capabilities`, override what
 
 ```bash
 uv sync
-uv run pytest            # 79 tests, no printer needed
+uv run pytest            # 84 tests, no printer needed
 uv run prt -p demo tui
 ```
 

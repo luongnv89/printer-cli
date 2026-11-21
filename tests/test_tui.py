@@ -57,6 +57,17 @@ async def test_clean_confirm_shows_blockers_and_cancel_sends_nothing():
         assert app.drivers["demo"].raw_sent == []
 
 
+async def test_clean_without_status_fails_closed():
+    app = PrtApp(DEMO)
+    async with app.run_test(size=(130, 40)) as pilot:
+        await settle(pilot, app)
+        app.status = None
+        await pilot.press("c")
+        await pilot.pause()
+        assert "unknown" in str(app.screen.query_one("#details").render())
+        assert "anyway" in str(app.screen.query_one("#confirm", Button).label)
+
+
 async def test_nozzle_check_confirmed_sends_payload():
     app = PrtApp(DEMO)
     async with app.run_test(size=(130, 40)) as pilot:

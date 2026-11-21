@@ -297,6 +297,8 @@ class PrtApp(App):
 
     def _maintenance(self, kind: str) -> None:
         st = self.status or Status(state="unknown")
+        if st.stale:
+            st = Status(state="offline", inks=st.inks, trays=st.trays, waste=st.waste)
         if kind == "clean":
             pf, q, label = head_clean_preflight(st), "Clean the print head?", "Clean"
         elif kind == "nozzle":

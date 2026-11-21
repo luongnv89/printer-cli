@@ -39,7 +39,7 @@ def test_info_from_real_capture(fake):
 
 def test_serial_with_non_printable_byte_keeps_raw():
     d = IPPDriver(Target("x", "x"))
-    assert d._serial({"printer-device-id": "SN:583435343031333086;"}) == "X4540130 (raw 583435343031333086)"
+    assert d._serial({"printer-device-id": "SN:583132333435363786;"}) == "X1234567 (raw 583132333435363786)"
 
 
 def test_reason_parsing():
@@ -74,7 +74,10 @@ def test_head_clean_preflight_blocks_on_low_ink_and_waste(fake):
     pf = head_clean_preflight(fake.status())
     assert not pf.ok
     assert any("Cyan" in b for b in pf.blockers) and any("waste" in b for b in pf.blockers)
-    assert head_clean_preflight(Status(state="idle")).ok
+    from prt.models import Ink
+    assert head_clean_preflight(Status(state="idle", inks=[Ink("Black ink", "#000000", 80)])).ok
+    assert not head_clean_preflight(Status(state="unknown")).ok  # fails closed without data
+    assert not head_clean_preflight(Status(state="idle", inks=[Ink("Black ink", "#000000", None)])).ok
     assert not nozzle_check_preflight(Status(state="offline")).ok
 
 
@@ -95,6 +98,12 @@ def test_jobs(fake):
     assert fake.jobs() == []
     done = fake.jobs(include_completed=True)
     assert [j.id for j in done] == [41, 42] and done[0].state == "completed"
+
+
+def test_jobs_all_merges_active_and_completed(fake):
+    fake.fixture["jobs"].append({"job-id": 43, "job-name": "printing-now.jpg", "job-state": 5})
+    assert [j.id for j in fake.jobs()] == [43]
+    assert [j.id for j in fake.jobs(include_completed=True)] == [41, 42, 43]
 
 
 def test_generic_driver_lacks_maintenance():

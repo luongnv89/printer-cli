@@ -17,8 +17,12 @@ class Preflight:
 def head_clean_preflight(status: Status) -> Preflight:
     """Head cleaning flushes ink into the waste pad. Refuse when that would hurt."""
     blockers, warnings = [], []
+    if status.state in ("unknown", "") or not status.inks:
+        blockers.append("printer status is unknown — refresh and try again")
     for ink in status.inks:
-        if ink.level is not None and ink.level <= ink.low:
+        if ink.level is None:
+            blockers.append(f"{ink.name} level is unknown")
+        elif ink.level <= ink.low:
             blockers.append(f"{ink.name} is at {ink.level}% (low level {ink.low}%) — "
                             "cleaning may empty it; replace the cartridge first")
     if status.waste in ("almost-full", "full"):

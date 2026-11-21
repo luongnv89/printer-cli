@@ -52,7 +52,7 @@ class FakeIPPClient:
             which = next((a.value for a in operation_attrs or [] if a.name == "which-jobs"), "")
             for j in self.fixture.get("jobs", []):
                 done = j.get("job-state", 9) >= 7
-                if which == "completed" or not done:
+                if (which == "completed") == done:  # like a real printer: the two sets are disjoint
                     resp.groups.append((ipp.TAG_JOB, dict(j)))
         elif operation == ipp.OP_PRINT_JOB:
             self.next_job_id += 1

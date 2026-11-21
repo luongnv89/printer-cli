@@ -104,7 +104,7 @@ class IPPDriver(Driver):
     def _call(self, fn, *args, **kwargs):
         try:
             return fn(*args, **kwargs)
-        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, OSError) as exc:
+        except (httpx.TransportError, OSError) as exc:
             raise Unreachable(self.target, type(exc).__name__) from exc
         except IPPError as exc:
             raise PrinterError(f"printer rejected the request: {exc}") from exc
@@ -254,14 +254,21 @@ class IPPDriver(Driver):
         return self.parse_status(self.attributes())
 
     def jobs(self, include_completed: bool = False) -> list[Job]:
-        resp = self._call(self.client.request, ipp.OP_GET_JOBS, operation_attrs=[
-            Attr("which-jobs", ipp.KEYWORD, "completed" if include_completed else "not-completed"),
-            Attr("requested-attributes", ipp.KEYWORD, ["job-id", "job-name", "job-state",
-                                                      "job-originating-user-name",
-                                                      "job-impressions-completed",
-                                                      "time-at-creation"]),
-        ])
-        return [self._job(j) for j in resp.groups_of(ipp.TAG_JOB)]
+        """Active jobs; with include_completed, active + completed (IPP needs two calls for that)."""
+        which = ["not-completed", "completed"] if include_completed else ["not-completed"]
+        seen: dict[int, Job] = {}
+        for w in which:
+            resp = self._call(self.client.request, ipp.OP_GET_JOBS, operation_attrs=[
+                Attr("which-jobs", ipp.KEYWORD, w),
+                Attr("requested-attributes", ipp.KEYWORD, ["job-id", "job-name", "job-state",
+                                                          "job-originating-user-name",
+                                                          "job-impressions-completed",
+                                                          "time-at-creation"]),
+            ])
+            for j in resp.groups_of(ipp.TAG_JOB):
+                job = self._job(j)
+                seen.setdefault(job.id, job)
+        return sorted(seen.values(), key=lambda j: j.id)
 
     @staticmethod
     def _job(j: dict[str, Any]) -> Job:
@@ -317,5 +324,5 @@ class IPPDriver(Driver):
         client = ESCLClient.for_target(self.target, self.timeout)
         try:
             return client.scan(settings, progress=progress)
-        except (httpx.ConnectError, httpx.ConnectTimeout, OSError) as exc:
+        except (httpx.TransportError, OSError) as exc:
             raise Unreachable(self.target, f"scanner: {type(exc).__name__}") from exc
