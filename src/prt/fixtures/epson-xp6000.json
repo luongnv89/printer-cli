@@ -55,7 +55,7 @@
   },
   "snmp": {"page_count": 1538, "sys_descr": "EPSON Built-in 11b/g/n Print Server"},
   "jobs": [
-    {"job-id": 41, "job-name": "boarding-pass.pdf", "job-state": 9, "job-originating-user-name": "montimage", "job-impressions-completed": 1, "time-at-creation": 13900},
+    {"job-id": 41, "job-name": "boarding-pass.pdf", "job-state": 9, "job-originating-user-name": "alex", "job-impressions-completed": 1, "time-at-creation": 13900},
     {"job-id": 42, "job-name": "nozzle-check", "job-state": 9, "job-originating-user-name": "prt", "job-impressions-completed": 1, "time-at-creation": 14200}
   ],
   "scanner": {"make_model": "EPSON XP-6000 Series", "sources": ["platen"], "resolutions": [100, 200, 300, 600, 1200], "color_modes": ["BlackAndWhite1", "Grayscale8", "RGB24"], "formats": ["application/pdf", "image/jpeg"], "max_width": 2550, "max_height": 3510, "duplex": false}
