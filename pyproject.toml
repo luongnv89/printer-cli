@@ -1,0 +1,31 @@
+[project]
+name = "prt"
+version = "0.1.0"
+description = "prt — command-line and terminal dashboard for network printers (IPP, eSCL, SNMP, Epson ESC/P2)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.7",
+    "textual>=0.80",
+    "httpx>=0.27",
+    "zeroconf>=0.132",
+]
+
+[project.scripts]
+prt = "prt.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/prt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
