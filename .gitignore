@@ -12,3 +12,4 @@ scan-*.pdf
 scan-*.jpg
 .tmpcfg/
 .tmpcache/
+.idd/cache/
