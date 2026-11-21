@@ -10,3 +10,5 @@ build/
 *.scan.pdf
 scan-*.pdf
 scan-*.jpg
+.tmpcfg/
+.tmpcache/

@@ -98,6 +98,7 @@ class IPPDriver(Driver):
         self.client = client or IPPClient(target.host, target.ipp_port, target.ipp_path,
                                           target.ipp_tls, timeout)
         self._attrs_cache: dict[str, Any] | None = None
+        self._fresh = False  # True right after auto-detection fetched attributes
 
     # --- transport helpers ---------------------------------------------------
     def _call(self, fn, *args, **kwargs):
@@ -109,6 +110,9 @@ class IPPDriver(Driver):
             raise PrinterError(f"printer rejected the request: {exc}") from exc
 
     def attributes(self, refresh: bool = True) -> dict[str, Any]:
+        if self._fresh and self._attrs_cache is not None:
+            self._fresh = False
+            return self._attrs_cache
         if refresh or self._attrs_cache is None:
             self._attrs_cache = self._call(self.client.get_printer_attributes, ["all"])
         return self._attrs_cache
