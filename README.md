@@ -36,7 +36,7 @@ prt -p demo status
 ╰─┘4 alerts · checked 17:42└───────────────────────────────────────────────╯
 ```
 
-Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Photo booth](#photo-booth) · [Safety](#safety)
+Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Photo booth](#photo-booth) · [Article printing](#article-printing) · [Safety](#safety)
 
 ## Why printer-cli
 
@@ -79,6 +79,7 @@ Every command also works against the built-in replay: `prt -p demo status`, `prt
 | `prt maintain identify` | Flash the printer's panel |
 | `prt print FILE… [-n 2] [--media 4x6] [--tray photo] [--quality high] [--mono] [--duplex]` | Print |
 | `prt booth PHOTO [--style metro\|daily\|wizard\|wanted] [--story-file story.json] [--preview page.jpg] [--save page.pdf]` | Photo booth: print the photo as an A4 newspaper front page, wizard card or wanted poster (see [Photo booth](#photo-booth)) |
+| `prt article URL\|FILE [--style magazine\|classic-magazine] [--preview page.pdf] [--save page.pdf]` | Print a blog post, news article or X post as A4 magazine pages (see [Article printing](#article-printing)) |
 | `prt jobs [--all]` / `prt jobs cancel ID` | List or cancel jobs |
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
 | `prt tui` | Full-screen dashboard |
@@ -98,9 +99,10 @@ prt ink -f json | jq -r '.inks[] | select(.state != "ok") | "\(.name): \(.level)
 prt status | grep '^alert'            # piped output is tab-separated, no colour
 prt scan -o - --type jpeg > page.jpg
 prt booth me.jpg --style daily --story-file story.json --preview page.jpg   # render only, nothing printed
+prt article https://example.com/blog/post -o article.pdf                   # every page in one PDF, nothing printed
 ```
 
-Exit codes: `0` ok · `1` runtime/network error (also when only cached status is shown) · `2` usage error · `3` bad input file · `130` Ctrl-C.
+Exit codes: `0` ok · `1` runtime/network error (also when only cached status is shown) · `2` usage error · `3` bad input file, or an article that cannot be fetched or converted · `130` Ctrl-C.
 
 ## The TUI
 
@@ -131,10 +133,23 @@ Exit codes: `0` ok · `1` runtime/network error (also when only cached status is
 
 To let an AI agent look at the photo and write a story that fits it, give it the [photo-booth skill](https://github.com/luongnv89/printer-cli/blob/main/skills/photo-booth/SKILL.md).
 
+## Article printing
+
+`prt article https://example.com/blog/post` prints a web article as A4 magazine pages. It keeps the title, author, site name and the full text, and leaves out navigation, ads, share bars, comments and other page clutter.
+
+- `--style magazine` (default) is a white page with a blue accent bar and section label, a big bold headline and three ruled columns. `--style classic-magazine` is an ivory page in a double-rule frame with a centred headline between fleurons, one centred column and a drop cap.
+- Long articles run on over as many pages as they need, up to 30; nothing is cut. Each page is printed as its own job, after one confirmation prompt (`--yes` skips it).
+- Links must start with `http://` or `https://`. Pages are fetched with certificate checks, at most 5 redirects and 5 MiB, within the `--timeout` (default 5 s).
+- X posts (`https://x.com/<user>/status/<id>`, also `twitter.com`) are read through X's public oEmbed service, which returns the text of one public post only: no images, no threads, nothing behind a login.
+- For pages the command cannot read (a login wall, text built by JavaScript, a long X thread), pass a saved file instead: article JSON (`{"title": "...", "author": "...", "source": "...", "url": "...", "body": ["paragraph", "..."]}`), a saved `.html` page, or a text file whose first line is the title. The [article-print skill](https://github.com/luongnv89/printer-cli/blob/main/skills/article-print/SKILL.md) lets an AI agent fetch the article itself and write that JSON.
+- `--preview page.pdf` saves the pages without printing: a `.pdf` holds every page, while `.png`, `.jpg` or `.jpeg` save one image per page (`page-1.png`, `page-2.png`, …). `--save` keeps the same copies and still prints.
+- The page font covers Latin letters only: accents print without their marks, emoji are left out, and an article mostly in another script is refused.
+- When the article cannot be fetched or converted, `prt article` exits with code 3 and a hint, and nothing is sent to the printer.
+
 ## Safety
 
 - **Head cleaning is refused** while any ink is at or below its low level, or while the waste ink pad is flagged. Cleaning flushes ink into the pad, and a full pad locks the printer until it's serviced. `--force` overrides this, and the TUI offers "Clean anyway".
-- Nozzle check, cleaning, the test page and the photo booth ask for confirmation first. In scripts, pass `--yes`.
+- Nozzle check, cleaning, the test page, the photo booth and article printing ask for confirmation first. In scripts, pass `--yes`.
 - printer-cli never resets the waste ink counter or writes to the printer's EEPROM.
 
 ## How it talks to printers
