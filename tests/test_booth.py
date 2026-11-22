@@ -1,5 +1,6 @@
 import io
 import json
+import time
 
 import pytest
 from PIL import Image
@@ -11,6 +12,20 @@ from prt.drivers.base import PrinterError
 A4_150DPI = (1240, 1754)  # 210 × 297 mm at 150 dpi
 # Documented limits (skills/photo-booth/SKILL.md, "Write story.json").
 LIMITS = {"headline": 120, "story": 2500, "kicker": 40, "caption": 200, "byline": 80}
+
+
+@pytest.fixture(autouse=True)
+def fixed_date(monkeypatch):
+    """Pages rendered twice in one test must not differ because midnight passed in between."""
+    monkeypatch.setattr(booth, "_today", lambda: "Sunday, November 22, 2026")
+
+
+def _render(photo, story=booth.DEFAULT_STORY, style="metro"):
+    return booth.compose(photo, story, style)[0]
+
+
+def _render_jpeg(photo, story=booth.DEFAULT_STORY, style="metro"):
+    return booth.to_jpeg(_render(photo, story, style))
 
 
 def _photo(path, size=(300, 400), colour=(0, 0, 255)):
@@ -31,14 +46,14 @@ def _story_file(tmp_path, content):
 
 @pytest.mark.parametrize("style", ["metro", "daily"])
 def test_page_is_a4_jpeg_at_150dpi(tmp_path, style):
-    page = Image.open(io.BytesIO(booth.render_jpeg(booth.load_photo(_photo(tmp_path / "p.png")), style=style)))
+    page = Image.open(io.BytesIO(_render_jpeg(booth.load_photo(_photo(tmp_path / "p.png")), style=style)))
     assert page.format == "JPEG" and page.size == A4_150DPI
     assert page.info["dpi"] == (150, 150)
 
 
 def test_metro_keeps_colour_and_daily_is_black_and_white():
     blue = Image.new("RGB", (300, 400), (0, 0, 255))
-    metro, daily = booth.render(blue, style="metro"), booth.render(blue, style="daily")
+    metro, daily = _render(blue, style="metro"), _render(blue, style="daily")
     blue_px = sum(n for n, (r, g, b) in metro.getcolors(A4_150DPI[0] * A4_150DPI[1]) if b > 200 and r < 60 and g < 60)
     assert blue_px > 100_000  # the photo is printed in colour
     assert daily.convert("HSV").getchannel("S").getextrema() == (0, 0)  # no colour anywhere on the page
@@ -50,7 +65,7 @@ def test_longest_story_stays_inside_the_page_margins(style):
     # W is the widest capital, so the kicker only fits by shrinking.
     story = Story(headline="H" * LIMITS["headline"], story="A" * 200 + "\n" + "Wide paragraph.\n" * 140,
                   kicker="W" * LIMITS["kicker"], caption="c " * 100, byline="B" * LIMITS["byline"])
-    page = booth.render(Image.new("RGB", (1600, 400), "red"), booth.check_story(story, 2), style)
+    page = _render(Image.new("RGB", (1600, 400), "red"), booth.check_story(story, 2), style)
     w, h = A4_150DPI
     for band in [(0, 0, w, 80), (0, h - 80, w, h), (0, 0, 80, h), (w - 80, 0, w, h)]:
         assert page.crop(band).getextrema() == ((255, 255),) * 3, band
@@ -64,7 +79,7 @@ def test_full_length_portrait_keeps_the_top_of_the_photo(monkeypatch, style):
     boxes = []
     real = booth._photo
     monkeypatch.setattr(booth, "_photo", lambda page, img, box, mono: boxes.append(box) or real(page, img, box, mono))
-    page = booth.render(photo, style=style).convert("L")
+    page = _render(photo, style=style).convert("L")
     [(x0, y0, x1, _)] = boxes
     top = page.crop((x0 + 20, y0 + 10, x1 - 20, y0 + 20))  # just inside metro's thick frame
     assert top.getextrema()[1] < 60
@@ -74,7 +89,78 @@ def test_full_length_portrait_keeps_the_top_of_the_photo(monkeypatch, style):
 @pytest.mark.parametrize("shape", [(300, 400), (360, 640), (1600, 900)])
 def test_default_story_is_never_cut(style, shape):
     page, cut = booth.compose(Image.new("RGB", shape, "blue"), booth.DEFAULT_STORY, style)
-    assert cut == [] and page == booth.render(Image.new("RGB", shape, "blue"), style=style)
+    assert cut == [] and page == _render(Image.new("RGB", shape, "blue"), style=style)
+
+
+def test_unbroken_story_renders_quickly():
+    # A pasted URL or base64 blob is one 2500-character "word": it must wrap in good time, not minutes.
+    story = booth.check_story(Story(headline="H", story="x" * LIMITS["story"]), 2)
+    start = time.perf_counter()
+    for style in ("metro", "daily"):
+        page, _ = booth.compose(Image.new("RGB", (300, 400), "blue"), story, style)
+        assert page.size == A4_150DPI
+        w, h = A4_150DPI
+        for band in [(0, 0, 80, h), (w - 80, 0, w, h), (0, h - 80, w, h)]:
+            assert page.crop(band).getextrema() == ((255, 255),) * 3, (style, band)
+    assert time.perf_counter() - start < 10
+
+
+def test_wrap_splits_a_long_word_at_the_widest_prefix_that_fits():
+    font = booth._font(24)
+    lines = booth._wrap("go " + "x" * 300 + " end", font, 200)
+    assert lines[0] == "go" and lines[-1].endswith(" end") and "".join(lines[1:])[:-4] == "x" * 300
+    for line in lines[1:-1]:  # every full piece fits, and one more character would not
+        assert font.getlength(line) <= 200 < font.getlength(line + "x")
+
+
+def test_ellipsis_cuts_at_a_whole_word():
+    font = booth._font(48)
+    width = int(font.getlength("REMARKABLE HEADLINE"))
+    assert booth._ellipsize("REMARKABLE HEADLINE", font, width) == "REMARKABLE…"
+    lone = booth._ellipsize("W" * 40, font, width)  # a lone word wider than the line is cut mid-word
+    assert lone == "W" * (len(lone) - 1) + "…" and len(lone) > 2 and font.getlength(lone) <= width
+
+
+def test_metro_headline_is_cut_at_a_word_boundary(monkeypatch):
+    words = ("Remarkable scenes as local resident smiles broadly for the cameras outside the old town hall "
+             "while onlookers cheer")
+    blocks = []
+    real = booth._text_block
+    monkeypatch.setattr(booth, "_text_block", lambda d, x, y, block, *a, **kw: blocks.append(block) or
+                        real(d, x, y, block, *a, **kw))
+    story = booth.check_story(Story(headline=words, story="S"), 2)
+    cut = booth.compose(Image.new("RGB", (300, 400), "blue"), story, "metro")[1]
+    headline = blocks[0]
+    assert len(headline) == 3 and cut == ["headline"]  # three lines at the smallest size, then cut
+    assert headline[-1].endswith("…")
+    printed = " ".join(headline)[:-1].split()
+    assert printed == words.upper().split()[:len(printed)]  # only whole words, in order
+
+
+def test_blank_lines_between_paragraphs_add_no_extra_gap():
+    def page(text):
+        return _render(Image.new("RGB", (300, 400), "blue"), booth.check_story(Story(headline="H", story=text), 2))
+    assert page("A\n\nB") == page("A\nB") == page("A\n \n\n\nB")
+    assert page("A\nB") != page("A B")
+
+
+def test_metro_frame_lines_up_with_the_masthead():
+    # A very wide photo spans the full content width; its thick frame must not stick out past the margins.
+    page = _render(Image.new("RGB", (1600, 400), "red"), style="metro")
+    x0, x1 = booth.MARGIN, booth.W - booth.MARGIN
+    for x in (x0 - 4, x0 - 1, x1 + 1, x1 + 4):
+        assert page.crop((x, 0, x + 1, A4_150DPI[1])).getextrema() == ((255, 255),) * 3, x
+    assert page.getpixel((x0, 1000)) == (0, 0, 0)  # the frame reaches the edge on both sides
+    assert page.getpixel((x1, 1000)) == (0, 0, 0)
+
+
+def test_daily_short_story_fills_the_page():
+    # The photo (and, once it is at its largest, the type) grows, so little paper is left blank.
+    for shape in [(300, 400), (360, 640), (1600, 900)]:
+        page = _render(Image.new("RGB", shape, "blue"), style="daily").convert("L")
+        story_area = page.crop((booth.MARGIN, 0, booth.W - booth.MARGIN, booth.BOTTOM - 1))
+        rows = [y for y in range(story_area.height) if story_area.crop((0, y, story_area.width, y + 1)).getextrema()[0] < 128]
+        assert booth.BOTTOM - rows[-1] < 160, shape  # last line of text sits close to the bottom rule
 
 
 def test_compose_names_the_fields_cut_to_fit():
@@ -105,7 +191,7 @@ def test_kicker_of_only_an_accent_mark_renders(style):
 
 
 def test_empty_optional_fields_render(tmp_path):
-    page = booth.render(Image.new("RGB", (40, 40), "white"), Story(headline="Hi", story="Short."), "daily")
+    page = _render(Image.new("RGB", (40, 40), "white"), Story(headline="Hi", story="Short."), "daily")
     assert page.size == A4_150DPI
 
 
@@ -222,7 +308,7 @@ def test_length_limits(field):
 
 def test_check_story_strips_control_characters_but_keeps_paragraphs():
     s = booth.check_story(Story(headline="Big\x00 news\x1b[1m\ttoday", story="  One\r\n\r\nTwo  "), 2)
-    assert s.headline == "Big news[1m today" and s.story == "One\n\nTwo"
+    assert s.headline == "Big news[1m today" and s.story == "One\nTwo"  # blank lines collapse
 
 
 def test_check_story_refuses_text_the_font_cannot_print():
@@ -236,7 +322,7 @@ def test_check_story_refuses_text_the_font_cannot_print():
 
 def test_accents_print_without_their_marks():
     def page(headline):
-        return booth.render(Image.new("RGB", (40, 40), "white"), Story(headline=headline, story="S"), "daily")
+        return _render(Image.new("RGB", (40, 40), "white"), Story(headline=headline, story="S"), "daily")
     assert page("Café") == page("Café") == page("Cafe")
     assert page("Café") != page("Cafe?")
 

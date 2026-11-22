@@ -207,7 +207,7 @@ def _booth_photo(tmp_path, name="photo.jpg"):
 
 def _expected_page(photo, story=None, style="metro"):
     from prt import booth
-    return booth.render_jpeg(booth.load_photo(photo), story or booth.DEFAULT_STORY, style)
+    return booth.to_jpeg(booth.compose(booth.load_photo(photo), story or booth.DEFAULT_STORY, style)[0])
 
 
 def test_booth_bare_invocation_prints_default_story(capsys, tmp_path, monkeypatch, booth_printer):

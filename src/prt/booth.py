@@ -55,11 +55,12 @@ DEFAULT_STORY = Story(
 
 
 def _clean(text: str, keep_newlines: bool) -> str:
-    """Drop control characters; keep newlines (paragraph breaks) only where asked."""
+    """Drop control characters; keep newlines (paragraph breaks, blank lines dropped) only where asked."""
     text = text.replace("\r\n", "\n").replace("\t", " ")
     kept = "".join(c for c in text if (c == "\n" and keep_newlines) or unicodedata.category(c)[0] != "C")
     if keep_newlines:
-        return "\n".join(" ".join(line.split()) for line in kept.split("\n")).strip()
+        # A newline already starts a paragraph with a gap, so blank lines between paragraphs add nothing.
+        return "\n".join(line for line in (" ".join(raw.split()) for raw in kept.split("\n")) if line)
     return " ".join(kept.split())
 
 
@@ -188,6 +189,22 @@ def _today() -> str:
     return time.strftime(f"%A, %B {now.tm_mday}, %Y", now)
 
 
+def _longest(text: str, fits: Callable[[str], bool]) -> int:
+    """Length of the longest prefix of ``text`` that ``fits`` (at least 1, so callers always advance).
+
+    Widths only grow with the prefix, so gallop to bracket the answer and then bisect: a few short
+    measurements per line, even for a 2500-character token with no spaces.
+    """
+    lo, hi = 1, 2
+    while hi < len(text) and fits(text[:hi]):
+        lo, hi = hi, hi * 2
+    hi = min(hi, len(text))
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        lo, hi = (mid, hi) if fits(text[:mid]) else (lo, mid)
+    return hi if fits(text[:hi]) else lo
+
+
 def _wrap(text: str, font, width: int) -> list[str]:
     """Greedy word wrap; words wider than a line are split by character."""
     lines: list[str] = []
@@ -199,10 +216,10 @@ def _wrap(text: str, font, width: int) -> list[str]:
             continue
         if line:
             lines.append(line)
-        while font.getlength(word) > width:
-            cut = len(word) - 1
-            while cut > 1 and font.getlength(word[:cut]) > width:
-                cut -= 1
+        while len(word) > 1:
+            cut = _longest(word, lambda part: font.getlength(part) <= width)
+            if cut == len(word):
+                break
             lines.append(word[:cut])
             word = word[cut:]
         line = word
@@ -212,9 +229,18 @@ def _wrap(text: str, font, width: int) -> list[str]:
 
 
 def _ellipsize(line: str, font, width: int) -> str:
-    while line and font.getlength(line + ELLIPSIS) > width:
-        line = line[:-1]
-    return line.rstrip() + ELLIPSIS
+    """End ``line`` with "…" inside ``width``, dropping whole words; only a lone word is cut mid-word."""
+    def fits(part: str) -> bool:
+        return font.getlength(part.rstrip() + ELLIPSIS) <= width
+    if fits(line):
+        return line.rstrip() + ELLIPSIS
+    words = line.split()
+    for n in range(len(words) - 1, 0, -1):
+        head = " ".join(words[:n])
+        if fits(head):
+            return head + ELLIPSIS
+    word = words[0] if words else ""
+    return word[:_longest(word, fits)] + ELLIPSIS if word and fits(word[:1]) else ELLIPSIS
 
 
 def _fit(text: str, size: int, min_size: int, width: int, max_lines: int):
@@ -244,6 +270,25 @@ def _text_block(d: ImageDraw.ImageDraw, x: int, y: int, lines: list[str], font, 
     return y
 
 
+def _col_width(width: int, columns: int, gutter: int) -> int:
+    return (width - gutter * (columns - 1)) // columns
+
+
+def _paragraphs(text: str, font, width: int) -> list[str]:
+    """Wrap each paragraph, with one blank line between paragraphs."""
+    lines: list[str] = []
+    for para in text.split("\n"):
+        if para.strip():
+            lines += _wrap(para, font, width) + [""]
+    return lines[:-1]
+
+
+def _columns_height(text: str, width: int, columns: int, gutter: int, size: int) -> int:
+    """Height the text needs in balanced columns at type ``size``."""
+    lines = _paragraphs(text, _font(size), _col_width(width, columns, gutter))
+    return -(-len(lines) // columns) * _lead(size)
+
+
 def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], columns: int, gutter: int,
              size: int, min_size: int, fill, rule=None) -> bool:
     """Flow paragraphs down ``columns`` columns, shrinking the type until it fits, else cutting with "…".
@@ -251,13 +296,10 @@ def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], 
     Returns True when the text was cut.
     """
     x0, y0, x1, y1 = box
-    col_w = (x1 - x0 - gutter * (columns - 1)) // columns
+    col_w = _col_width(x1 - x0, columns, gutter)
     for s in range(size, min_size - 1, -1):
         font = _font(s)
-        lines: list[str] = []
-        for para in text.split("\n"):
-            lines += _wrap(para, font, col_w) + [""]
-        lines.pop()
+        lines = _paragraphs(text, font, col_w)
         per_col = max(1, (y1 - y0) // _lead(s))
         if len(lines) <= per_col * columns:
             break
@@ -265,6 +307,8 @@ def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], 
     cut = len(lines) > capacity
     if cut:
         lines = lines[:capacity]
+        while len(lines) > 1 and not lines[-1]:  # end on text, not on a paragraph gap
+            lines.pop()
         lines[-1] = _ellipsize(lines[-1], font, col_w)
     rows = -(-len(lines) // columns)  # balance the columns, like a real page
     col = row = 0
@@ -332,9 +376,12 @@ def _metro(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
         y += 62
         cut += ["kicker"] * cut_kicker
     font, size, lines, cut_headline = _fit(story.headline.upper(), 80, 48, CONTENT_W, 2)
+    if cut_headline:  # too long for two lines even at the smallest size: allow a third
+        font, size, lines, cut_headline = _fit(story.headline.upper(), 48, 48, CONTENT_W, 3)
     y = _text_block(d, left, y, lines, font, size, INK, bold=2) + 14
     cut += ["headline"] * cut_headline
-    px0, py0, px1, py1 = _photo_box(photo, y, 560, CONTENT_W)
+    # The frame is drawn 4 px outside the photo, so a full-width photo stays 4 px inside each edge.
+    px0, py0, px1, py1 = _photo_box(photo, y, 560, CONTENT_W - 8)
     _photo(page, photo, (px0, py0, px1, py1), mono=False)
     d.rectangle([px0 - 4, py0 - 4, px1 + 4, py1 + 4], outline=INK, width=10)
     y = py1 + 4
@@ -358,6 +405,8 @@ def _metro(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
 
 GREY = (95, 95, 95)
 DAILY_INK = (25, 25, 25)
+DAILY_PHOTO, DAILY_PHOTO_MAX = 460, 820  # photo height: normal, and grown into space a short story leaves
+DAILY_BODY, DAILY_BODY_MAX = 24, 28  # body type: normal, and grown when the photo is already at its largest
 
 
 def _daily(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
@@ -392,18 +441,29 @@ def _daily(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
         y = _text_block(d, left, y, lines, font, size, GREY, width=CONTENT_W)
         cut += ["byline"] * cut_byline
     y += 16
-    px0, py0, px1, py1 = _photo_box(photo, y + 12, 460, CONTENT_W * 2 // 3)
+    if story.caption:
+        cap_font, cap_size, cap_lines, cut_caption = _fit(story.caption, 20, 18, CONTENT_W, 2)
+        cut += ["caption"] * cut_caption
+    else:
+        cap_font, cap_size, cap_lines = None, 0, []
+    # A short story leaves paper to spare: the photo grows into it (up to a 4:3 crop of a wide photo),
+    # and a story that is still short sets its body type larger, so the page ends near the bottom rule.
+    max_w = CONTENT_W - 24
+    room = BOTTOM - 16 - (y + 12 + 24 + len(cap_lines) * _lead(cap_size) + 14 + 20)
+    grow_to = min(DAILY_PHOTO_MAX, round(max_w / min(photo.width / photo.height, 4 / 3)))
+    need = _columns_height(story.story, CONTENT_W, 3, 34, DAILY_BODY)
+    height = max(DAILY_PHOTO, min(grow_to, room - need))
+    px0, py0, px1, py1 = _photo_box(photo, y + 12, height, max_w)
     _photo(page, photo, (px0, py0, px1, py1), mono=True)
     d.rectangle([px0 - 12, y, px1 + 12, py1 + 12], outline=DAILY_INK, width=2)  # thin frame with a white mat
     y = py1 + 24
-    if story.caption:
-        font, size, lines, cut_caption = _fit(story.caption, 20, 18, CONTENT_W, 2)
-        y = _text_block(d, left, y, lines, font, size, GREY, width=CONTENT_W)
-        cut += ["caption"] * cut_caption
+    if cap_lines:
+        y = _text_block(d, left, y, cap_lines, cap_font, cap_size, GREY, width=CONTENT_W)
     y += 14
     d.line([(left, y), (right, y)], fill=DAILY_INK, width=1)
     d.line([(left, BOTTOM), (right, BOTTOM)], fill=DAILY_INK, width=1)
-    if _columns(d, story.story, (left, y + 20, right, BOTTOM - 16), 3, 34, 24, 14, DAILY_INK, rule=GREY):
+    if _columns(d, story.story, (left, y + 20, right, BOTTOM - 16), 3, 34, DAILY_BODY_MAX, 14, DAILY_INK,
+                rule=GREY):
         cut.append("story")
     return cut
 
@@ -423,10 +483,3 @@ def to_jpeg(page: Image.Image) -> bytes:
     page.save(buf, "JPEG", quality=92, dpi=(150, 150))
     return buf.getvalue()
 
-
-def render(photo: Image.Image, story: Story = DEFAULT_STORY, style: str = "metro") -> Image.Image:
-    return compose(photo, story, style)[0]
-
-
-def render_jpeg(photo: Image.Image, story: Story = DEFAULT_STORY, style: str = "metro") -> bytes:
-    return to_jpeg(render(photo, story, style))

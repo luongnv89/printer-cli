@@ -44,14 +44,14 @@ A longer story still fits: the body type gets smaller, and only text that cannot
 | Field | Required | Max characters | Shown as |
 |---|---|---|---|
 | `headline` | yes | 120 | Big headline |
-| `story` | yes | 2500 | Body text; each newline starts a paragraph |
+| `story` | yes | 2500 | Body text; each newline starts a paragraph (blank lines add no extra space) |
 | `kicker` | no | 40 | Small label above the headline |
 | `caption` | no | 200 | Line under the photo |
 | `byline` | no | 80 | Author line: above the story (metro) or under the headline (daily) |
 
 All values are strings, and other fields are rejected. Use Latin letters: accents print without their marks, and other scripts or emoji are refused. A headline of about 4–8 words looks best.
 
-The maximums are what the command accepts, not what always fits. The `metro` page has the least room: it holds a headline of about 70 characters, and under a portrait photo a caption of about 100. Longer text is cut with `…`.
+The maximums are what the command accepts, not what always fits. The `metro` page has the least room: a headline of about 70 characters fits on two full-size lines and about 100 on three smaller ones, and under a portrait photo a caption holds about 100. Longer text is cut with `…` after the last whole word that fits.
 
 ### 4. Preview without printing
 

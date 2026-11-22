@@ -122,7 +122,8 @@ Exit codes: `0` ok · `1` runtime/network error (also when only cached status is
 - Write your own story as JSON: `headline` and `story` are required, `kicker`, `caption` and `byline` are optional. Pass it with `--story-file story.json`. `--headline`, `--story`, `--kicker`, `--caption` and `--byline` override single fields.
 - The page uses the font that ships with Pillow, which covers basic Latin only. Accents print without their marks, and other scripts and emoji are refused with an error.
 - `--preview page.jpg` saves the page without printing.
-- Text too long for its space is cut with `…`, and `prt booth` warns on stderr naming the fields that were cut. Transparent parts of a PNG print as white paper.
+- The length limits (headline 120, story 2500, kicker 40, caption 200, byline 80 characters) are what the command accepts, not what always fits. `metro` has the least room: about 70 characters of headline on two full-size lines, about 100 on three smaller ones, and about 100 characters of caption under a portrait photo.
+- Text too long for its space is cut with `…` after the last whole word that fits, and `prt booth` warns on stderr naming the fields that were cut. Transparent parts of a PNG print as white paper.
 - The photo and story are checked before anything is sent, so an unreadable image or a bad story file exits with an error and prints nothing.
 
 To let an AI agent look at the photo and write a story that fits it, give it the [photo-booth skill](https://github.com/luongnv89/printer-cli/blob/main/skills/photo-booth/SKILL.md).
@@ -194,7 +195,7 @@ To add a vendor, subclass `IPPDriver`, declare its `capabilities`, override what
 
 ```bash
 uv sync
-uv run pytest            # 153 tests, no printer needed
+uv run pytest            # 160 tests, no printer needed
 uv run prt -p demo tui
 ```
 
