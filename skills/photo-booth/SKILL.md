@@ -29,7 +29,7 @@ Open the image and note only what is visible: the setting, clothing, expression,
 | `wizard` | Ornate trading card: dark blue card with a gold double border and cut marks, the photo in an arched gold frame, a moon-and-star emblem, the name on a gold ribbon, lore in a cream box | About 350 characters of lore |
 | `wanted` | Weathered poster: torn parchment, huge WANTED lettering, the photo in a heavy dark frame, a "dead or alive" line, the name, a reward line | About 350 characters of description |
 
-A longer story still fits: the body type gets smaller, and only text that cannot fit at the smallest size is cut. A short story gets a bigger photo on `daily` and `wanted`.
+A longer story still fits: the body type gets smaller, and only text that cannot fit at the smallest size is cut. A short story gets a bigger photo on `metro`, `daily` and `wanted`, and a story of up to four lines stays in the first column.
 
 Without any text, each style prints its own built-in example: a news story on `metro` and `daily`, "The Spellbound Guest" on `wizard`, and "The Grinning Captain" with a reward of 1,000,000 gold on `wanted`.
 

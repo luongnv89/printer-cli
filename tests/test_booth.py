@@ -166,15 +166,72 @@ def test_daily_short_story_fills_the_page():
         assert booth.BOTTOM - rows[-1] < 160, shape  # last line of text sits close to the bottom rule
 
 
+def _last_ink_row(page):
+    """Distance from the last line of ink on the page (above the bottom rule) to the bottom margin."""
+    area = page.convert("L").crop((booth.MARGIN, 0, booth.W - booth.MARGIN, booth.BOTTOM - 10))
+    rows = [y for y in range(area.height) if area.crop((0, y, area.width, y + 1)).getextrema()[0] < 128]
+    return booth.BOTTOM - rows[-1]
+
+
+ONE_SENTENCE = Story(headline="Local Star Steps Into the Spotlight", story="Local resident beams for the camera, then says cheese for good measure.",
+                     kicker="Local news", caption="Pictured: today's guest at the prt photo booth.",
+                     byline="By the prt newsroom")
+
+
+@pytest.mark.parametrize("shape", [(300, 400), (360, 640), (400, 400)])
+def test_metro_short_story_fills_the_page(shape):
+    # The photo grows into the space a short story leaves, so little paper is left blank.
+    assert _last_ink_row(_render(Image.new("RGB", shape, "blue"), ONE_SENTENCE, "metro")) < 120, shape
+
+
+def test_metro_short_story_grows_a_wide_photo_up_to_a_4_3_crop(monkeypatch):
+    boxes = []
+    real = booth._photo
+    monkeypatch.setattr(booth, "_photo", lambda page, img, box, mono: boxes.append(box) or real(page, img, box, mono))
+    _render(Image.new("RGB", (1600, 900), "blue"), ONE_SENTENCE, "metro")
+    _render(Image.new("RGB", (1600, 900), "blue"), Story(headline="H", story="Wide paragraph.\n" * 140), "metro")
+    (x0, y0, x1, y1), (_, b0, _, b1) = boxes
+    assert y1 - y0 == round((x1 - x0) * 3 / 4) > b1 - b0 == booth.METRO_PHOTO  # grown; a long story keeps 560
+
+
+@pytest.mark.parametrize("style, columns, gutter", [("metro", 2, 44), ("daily", 3, 34)])
+def test_one_sentence_story_stays_in_the_first_column(monkeypatch, style, columns, gutter):
+    boxes = []
+    real = booth._photo
+    monkeypatch.setattr(booth, "_photo", lambda page, img, box, mono: boxes.append(box) or real(page, img, box, mono))
+    page = _render(Image.new("RGB", (300, 400), "blue"), booth.check_story(ONE_SENTENCE, 2), style).convert("L")
+    [(_, _, _, bottom)] = boxes
+    top = bottom + 100  # below the photo's caption and the rule under it
+    col_w = booth._col_width(booth.CONTENT_W, columns, gutter)
+    first = page.crop((booth.MARGIN, top, booth.MARGIN + col_w, booth.BOTTOM - 10))
+    rest = page.crop((booth.MARGIN + col_w + gutter // 2, top, booth.W - booth.MARGIN, booth.BOTTOM - 10))
+    assert first.getextrema()[0] < 128  # the sentence is in the first column
+    assert rest.getextrema() == (255, 255)  # and no word of it spills into the next one
+
+
+def test_short_stories_are_not_split_across_columns():
+    assert [booth._rows(n, 2) for n in (1, 2, 3, 4, 5, 6, 7)] == [1, 2, 3, 4, 3, 3, 4]
+    assert [booth._rows(n, 3) for n in (4, 5, 9)] == [4, 2, 3]
+
+
+@pytest.mark.parametrize("style", STYLES)
+@pytest.mark.parametrize("kicker", ["W" * LIMITS["kicker"], "Wanted for crimes against good taste now"])
+def test_kicker_within_the_limit_is_never_cut(style, kicker):
+    assert len(kicker) == LIMITS["kicker"]
+    story = booth.check_story(Story(headline="H", story="S", kicker=kicker), 2)
+    assert booth.compose(Image.new("RGB", (300, 400), "blue"), story, style)[1] == []
+
+
 def test_compose_names_the_fields_cut_to_fit():
     portrait = Image.new("RGB", (300, 400), "blue")
     long = Story(headline="Wide headline words " * 6, story="Wide paragraph.\n" * 140, kicker="W" * 40,
                  caption="caption words " * 14, byline="B" * 80)
     assert booth.compose(portrait, booth.check_story(long, 2), "metro")[1] == ["headline", "caption", "story"]
     assert booth.compose(portrait, booth.check_story(long, 2), "daily")[1] == ["story"]
-    every = ["kicker", "headline", "caption", "story", "byline"]
-    assert booth.compose(portrait, booth.check_story(long, 2), "wizard")[1] == every
-    assert booth.compose(portrait, booth.check_story(long, 2), "wanted")[1] == every
+    # A 40-character kicker always fits; the rest of the card or poster is cut.
+    themed = ["headline", "caption", "story", "byline"]
+    assert booth.compose(portrait, booth.check_story(long, 2), "wizard")[1] == themed
+    assert booth.compose(portrait, booth.check_story(long, 2), "wanted")[1] == themed
     # Text that already ends in "…" is not mistaken for a cut.
     assert booth.compose(portrait, Story(headline="Wait for it…", story="Line one…"), "metro")[1] == []
 
@@ -402,6 +459,13 @@ def test_length_limits(field):
 def test_check_story_strips_control_characters_but_keeps_paragraphs():
     s = booth.check_story(Story(headline="Big\x00 news\x1b[1m\ttoday", story="  One\r\n\r\nTwo  "), 2)
     assert s.headline == "Big news[1m today" and s.story == "One\nTwo"  # blank lines collapse
+
+
+def test_line_breaks_in_one_line_fields_keep_words_apart():
+    s = booth.check_story(Story(headline="Hello\nWorld", story="One\rTwo", kicker="Big\r\nnews",
+                                caption="a\r\nb", byline="By\n\nJo"), 2)
+    assert (s.headline, s.kicker, s.caption, s.byline) == ("Hello World", "Big news", "a b", "By Jo")
+    assert s.story == "One\nTwo"  # in the story a lone carriage return is a line break too
 
 
 def test_check_story_refuses_text_the_font_cannot_print():

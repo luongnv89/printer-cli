@@ -92,8 +92,13 @@ def default_story(style: str) -> Story:
 
 
 def _clean(text: str, keep_newlines: bool) -> str:
-    """Drop control characters; keep newlines (paragraph breaks, blank lines dropped) only where asked."""
-    text = text.replace("\r\n", "\n").replace("\t", " ")
+    """Drop control characters; keep newlines (paragraph breaks, blank lines dropped) only where asked.
+
+    Elsewhere a line break is a word break, so it becomes a space rather than joining the words.
+    """
+    text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\t", " ")
+    if not keep_newlines:
+        text = text.replace("\n", " ")
     kept = "".join(c for c in text if (c == "\n" and keep_newlines) or unicodedata.category(c)[0] != "C")
     if keep_newlines:
         # A newline already starts a paragraph with a gap, so blank lines between paragraphs add nothing.
@@ -320,10 +325,18 @@ def _paragraphs(text: str, font, width: int) -> list[str]:
     return lines[:-1]
 
 
+SHORT_STORY = 4  # a story of this many lines or fewer stays in the first column
+
+
+def _rows(lines: int, columns: int) -> int:
+    """Rows per column: balanced like a real page, except that a short story is not split up."""
+    return lines if lines <= SHORT_STORY else -(-lines // columns)
+
+
 def _columns_height(text: str, width: int, columns: int, gutter: int, size: int) -> int:
-    """Height the text needs in balanced columns at type ``size``."""
+    """Height the text needs in columns at type ``size``."""
     lines = _paragraphs(text, _font(size), _col_width(width, columns, gutter))
-    return -(-len(lines) // columns) * _lead(size)
+    return _rows(len(lines), columns) * _lead(size)
 
 
 def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], columns: int, gutter: int,
@@ -347,7 +360,7 @@ def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], 
         while len(lines) > 1 and not lines[-1]:  # end on text, not on a paragraph gap
             lines.pop()
         lines[-1] = _ellipsize(lines[-1], font, col_w)
-    rows = -(-len(lines) // columns)  # balance the columns, like a real page
+    rows = min(per_col, _rows(len(lines), columns))
     col = row = 0
     for line in lines:
         if row == rows:
@@ -358,7 +371,7 @@ def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], 
         d.text((x0 + col * (col_w + gutter) + dx, y0 + row * _lead(s)), line, font=font, fill=fill)
         row += 1
     if rule:
-        for c in range(1, columns):
+        for c in range(1, min(columns, -(-len(lines) // rows) if rows else 1)):  # only between used columns
             rx = x0 + c * (col_w + gutter) - gutter // 2
             d.line([(rx, y0), (rx, y0 + rows * _lead(s))], fill=rule, width=1)
     return cut
@@ -393,6 +406,10 @@ CONTENT_W = W - 2 * MARGIN
 BOTTOM = H - MARGIN
 
 
+METRO_PHOTO, METRO_PHOTO_MAX = 560, 900  # photo height: normal, and grown into space a short story leaves
+METRO_BODY = 28
+
+
 def _metro(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
     """Colour tabloid: reversed black masthead, red accents, shouting headline, full-width photo, 2 columns."""
     d = ImageDraw.Draw(page)
@@ -418,8 +435,18 @@ def _metro(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
         font, size, lines, cut_headline = _fit(story.headline.upper(), 48, 48, CONTENT_W, 3)
     y = _text_block(d, left, y, lines, font, size, INK, bold=2) + 14
     cut += ["headline"] * cut_headline
-    # The frame is drawn 4 px outside the photo, so a full-width photo stays 4 px inside each edge.
-    px0, py0, px1, py1 = _photo_box(photo, y, 560, CONTENT_W - 8)
+    if story.byline:
+        by_font, by_size, by_lines, cut_byline = _fit(story.byline.upper(), 26, 20, CONTENT_W, 1)
+    # A short story leaves paper to spare: the photo grows into it (up to a 4:3 crop of a wide photo).
+    # The caption bar is reckoned at its largest, as the caption is fitted to the final photo width.
+    max_w = CONTENT_W - 8  # the frame is drawn 4 px outside the photo, so it lines up with the masthead
+    base = _photo_box(photo, y, METRO_PHOTO, max_w)  # the narrowest the photo can be
+    caption_lines = len(_fit(story.caption, 24, 20, base[2] - base[0] - 40, 2)[2]) if story.caption else 0
+    below = 4 + (caption_lines * _lead(24) + 20 if caption_lines else 0) + 26 + \
+        (_lead(by_size) + 6 if story.byline else 0)
+    room = BOTTOM - 24 - y - below - _columns_height(story.story, CONTENT_W, 2, 44, METRO_BODY)
+    grow_to = min(METRO_PHOTO_MAX, round(max_w / min(photo.width / photo.height, 4 / 3)))
+    px0, py0, px1, py1 = _photo_box(photo, y, max(METRO_PHOTO, min(grow_to, room)), max_w)
     _photo(page, photo, (px0, py0, px1, py1), mono=False)
     d.rectangle([px0 - 4, py0 - 4, px1 + 4, py1 + 4], outline=INK, width=10)
     y = py1 + 4
@@ -432,11 +459,10 @@ def _metro(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
         cut += ["caption"] * cut_caption
     y += 26
     if story.byline:
-        font, size, lines, cut_byline = _fit(story.byline.upper(), 26, 20, CONTENT_W, 1)
-        y = _text_block(d, left, y, lines, font, size, RED, bold=1) + 6
+        y = _text_block(d, left, y, by_lines, by_font, by_size, RED, bold=1) + 6
         cut += ["byline"] * cut_byline
     d.rectangle([left, BOTTOM - 8, right, BOTTOM], fill=RED)
-    if _columns(d, story.story, (left, y, right, BOTTOM - 24), 2, 44, 28, 16, INK):
+    if _columns(d, story.story, (left, y, right, BOTTOM - 24), 2, 44, METRO_BODY, 16, INK):
         cut.append("story")
     return cut
 
@@ -586,7 +612,7 @@ def _wizard(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
         _star(d, cx, cy, 14, GOLD, points=4, inner=0.35)
 
     if story.kicker.strip():
-        font, size, [label], cut_kicker = _fit(story.kicker.upper(), 30, 20, 640, 1)
+        font, size, [label], cut_kicker = _fit(story.kicker.upper(), 30, 20, 780, 1)
         y = y0 + 54
         d.text((mid - font.getlength(label) / 2, y), label, font=font, fill=GOLD_LIGHT)
         for side in (-1, 1):
@@ -696,7 +722,7 @@ def _wanted(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
 
     text_w = CONTENT_W - 120
     if story.kicker.strip():
-        k_font, k_size, [label], cut_kicker = _fit(story.kicker.upper(), 60, 34, 760, 1)
+        k_font, k_size, [label], cut_kicker = _fit(story.kicker.upper(), 60, 24, text_w, 1)
     name = _fit(story.headline.upper(), 104, 60, text_w, 1)
     if name[3]:  # too long for one line even at the smallest size: allow a second
         name = _fit(story.headline.upper(), 60, 60, text_w, 2)

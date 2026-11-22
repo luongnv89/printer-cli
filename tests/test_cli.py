@@ -329,6 +329,17 @@ def test_booth_story_file_with_flag_override(capsys, tmp_path, booth_printer):
     assert booth_printer.jobs() == [_expected_page(photo, expected)]
 
 
+def test_booth_multiline_flags_keep_words_apart(capsys, tmp_path, booth_printer):
+    from dataclasses import replace
+    from prt import booth
+    photo = _booth_photo(tmp_path)
+    code, _, _ = run(capsys, "-p", "demo", "booth", str(photo), "--headline", "Hello\nWorld",
+                     "--caption", "Seen at\r\nthe booth", "--yes")
+    assert code == 0
+    expected = replace(booth.DEFAULT_STORY, headline="Hello World", caption="Seen at the booth")
+    assert booth_printer.jobs() == [_expected_page(photo, expected)]
+
+
 def test_booth_preview_writes_jpeg_and_never_creates_a_driver(capsys, tmp_path, booth_printer):
     from PIL import Image
     photo, out_file = _booth_photo(tmp_path), tmp_path / "page.jpg"
