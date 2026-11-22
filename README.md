@@ -194,7 +194,7 @@ To add a vendor, subclass `IPPDriver`, declare its `capabilities`, override what
 
 ```bash
 uv sync
-uv run pytest            # 138 tests, no printer needed
+uv run pytest            # 153 tests, no printer needed
 uv run prt -p demo tui
 ```
 
