@@ -207,7 +207,7 @@ def _booth_photo(tmp_path, name="photo.jpg"):
 
 def _expected_page(photo, story=None, style="metro"):
     from prt import booth
-    return booth.to_jpeg(booth.compose(booth.load_photo(photo), story or booth.DEFAULT_STORY, style)[0])
+    return booth.to_jpeg(booth.compose(booth.load_photo(photo), story or booth.default_story(style), style)[0])
 
 
 def test_booth_bare_invocation_prints_default_story(capsys, tmp_path, monkeypatch, booth_printer):
@@ -230,14 +230,17 @@ def test_booth_needs_yes_without_tty(capsys, tmp_path, monkeypatch, booth_printe
     assert code == 2 and "--yes" in err and booth_printer.jobs() == []
 
 
+BOOTH_STYLES = ("metro", "daily", "wizard", "wanted")
+
+
 def test_booth_styles(capsys, tmp_path, booth_printer):
     photo = _booth_photo(tmp_path)
-    for job_id, style in enumerate(("metro", "daily"), start=101):
+    for job_id, style in enumerate(BOOTH_STYLES, start=101):
         code, out, _ = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--style", style, "--yes")
         assert code == 0 and json.loads(out) == {"action": "booth", "style": style, "job_id": job_id}
-    metro, daily = booth_printer.jobs()
-    assert metro == _expected_page(photo, style="metro") and daily == _expected_page(photo, style="daily")
-    assert metro != daily
+    pages = booth_printer.jobs()
+    assert pages == [_expected_page(photo, style=style) for style in BOOTH_STYLES]
+    assert len(set(pages)) == len(BOOTH_STYLES)  # every style prints a different page
     code, _, err = run(capsys, "-p", "demo", "booth", str(photo), "-s", "tabloid", "--yes")
     assert code == 2 and "tabloid" in err
 
@@ -245,7 +248,73 @@ def test_booth_styles(capsys, tmp_path, booth_printer):
 def test_booth_style_choices_match_renderer():
     from prt import booth
     from prt.cli import BoothStyle
-    assert {s.value for s in BoothStyle} == set(booth.STYLES) == {"metro", "daily"}
+    assert {s.value for s in BoothStyle} == set(booth.STYLES) == set(BOOTH_STYLES)
+
+
+@pytest.mark.parametrize("style, kind", [("wizard", "wizard card"), ("wanted", "wanted poster")])
+def test_booth_themed_style_prints_its_own_default(capsys, tmp_path, monkeypatch, booth_printer, style, kind):
+    from prt import booth
+    photo = _booth_photo(tmp_path)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True, raising=False)
+    asked = []
+    monkeypatch.setattr("typer.confirm", lambda q, **kw: asked.append(q) or True)
+    code, _, err = run(capsys, "-p", "demo", "booth", str(photo), "-s", style)
+    assert code == 0 and "queued as job 101" in err and "cut to fit" not in err
+    assert asked == [f"Print photo.jpg as a {kind} on demo?"]
+    assert booth_printer.jobs() == [_expected_page(photo, booth.default_story(style), style)]
+    assert booth.default_story(style) != booth.DEFAULT_STORY
+
+
+def test_booth_themed_style_flags_override_its_default(capsys, tmp_path, booth_printer):
+    from dataclasses import replace
+    from prt import booth
+    photo = _booth_photo(tmp_path)
+    code, _, _ = run(capsys, "-p", "demo", "booth", str(photo), "-s", "wanted", "--headline", "Captain Jo",
+                     "--caption", "Reward 5 gold", "--yes")
+    assert code == 0
+    expected = replace(booth.default_story("wanted"), headline="Captain Jo", caption="Reward 5 gold")
+    assert booth_printer.jobs() == [_expected_page(photo, expected, "wanted")]
+
+
+def test_booth_themed_style_story_file_replaces_the_default(capsys, tmp_path, booth_printer):
+    from prt.booth import Story
+    photo, story = _booth_photo(tmp_path), tmp_path / "card.json"
+    story.write_text(json.dumps({"headline": "Mira the Bright", "story": "Reads by candlelight.", "kicker": "Rare"}))
+    code, _, err = run(capsys, "-p", "demo", "booth", str(photo), "-s", "wizard", "--story-file", str(story),
+                       "--byline", "Card 7", "--yes")
+    assert code == 0 and "cut to fit" not in err
+    expected = Story(headline="Mira the Bright", story="Reads by candlelight.", kicker="Rare", byline="Card 7")
+    assert booth_printer.jobs() == [_expected_page(photo, expected, "wizard")]
+
+
+@pytest.mark.parametrize("style", ["wizard", "wanted"])
+def test_booth_themed_style_preview_never_creates_a_driver(capsys, tmp_path, booth_printer, style):
+    from PIL import Image
+    photo, out_file = _booth_photo(tmp_path), tmp_path / f"{style}.jpg"
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "-s", style, "-o", str(out_file))
+    assert code == 0 and "not printed" in err and booth_printer.made == []
+    assert json.loads(out) == {"action": "booth", "style": style, "file": str(out_file),
+                               "bytes": out_file.stat().st_size}
+    assert out_file.read_bytes() == _expected_page(photo, style=style)
+    assert Image.open(out_file).size == (1240, 1754)
+
+
+@pytest.mark.parametrize("style", ["wizard", "wanted"])
+def test_booth_themed_style_bad_input_sends_nothing(capsys, tmp_path, booth_printer, style):
+    bad = tmp_path / "photo.jpg"
+    bad.write_bytes(b"not a picture")
+    code, _, err = run(capsys, "-p", "demo", "booth", str(bad), "-s", style, "--yes")
+    assert code == 3 and "cannot read photo" in err
+    code, _, err = run(capsys, "-p", "demo", "booth", str(_booth_photo(tmp_path, "ok.jpg")), "-s", style,
+                       "--headline", "日本", "--yes")
+    assert code == 2 and "cannot print" in err
+    assert booth_printer.made == [] and booth_printer.jobs() == []
+
+
+def test_booth_themed_style_warns_when_text_is_cut(capsys, tmp_path, booth_printer):
+    code, _, err = run(capsys, "--no-color", "booth", str(_booth_photo(tmp_path)), "-s", "wanted",
+                       "-o", str(tmp_path / "page.jpg"), "--headline", "Wide headline words " * 6)
+    assert code == 0 and "headline cut to fit the wanted page" in err
 
 
 def test_booth_story_file_with_flag_override(capsys, tmp_path, booth_printer):
@@ -331,7 +400,8 @@ def test_photo_booth_skill_matches_the_cli(capsys, tmp_path, monkeypatch, booth_
     _booth_photo(tmp_path)
     (tmp_path / "story.json").write_text(re.search(r"```json\n(.*?)```", skill, re.S).group(1))
     commands = [shlex.split(line) for line in re.findall(r"^prt booth .*$", skill, re.M)]
-    assert len(commands) == 2
+    assert len(commands) == 3
+    assert {"metro", "wanted"} <= {argv[argv.index("--style") + 1] for argv in commands}
     for argv in commands:
         assert run(capsys, "-p", "demo", *argv[1:])[0] == 0
     assert (tmp_path / "page.jpg").read_bytes()[:2] == b"\xff\xd8" and len(booth_printer.jobs()) == 1

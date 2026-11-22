@@ -3,7 +3,7 @@ import json
 import time
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageChops
 
 from prt import booth
 from prt.booth import Story
@@ -20,11 +20,14 @@ def fixed_date(monkeypatch):
     monkeypatch.setattr(booth, "_today", lambda: "Sunday, November 22, 2026")
 
 
-def _render(photo, story=booth.DEFAULT_STORY, style="metro"):
+STYLES = list(booth.STYLES)
+
+
+def _render(photo, story=None, style="metro"):
     return booth.compose(photo, story, style)[0]
 
 
-def _render_jpeg(photo, story=booth.DEFAULT_STORY, style="metro"):
+def _render_jpeg(photo, story=None, style="metro"):
     return booth.to_jpeg(_render(photo, story, style))
 
 
@@ -44,7 +47,7 @@ def _story_file(tmp_path, content):
 
 # --- rendering -------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("style", ["metro", "daily"])
+@pytest.mark.parametrize("style", STYLES)
 def test_page_is_a4_jpeg_at_150dpi(tmp_path, style):
     page = Image.open(io.BytesIO(_render_jpeg(booth.load_photo(_photo(tmp_path / "p.png")), style=style)))
     assert page.format == "JPEG" and page.size == A4_150DPI
@@ -59,7 +62,7 @@ def test_metro_keeps_colour_and_daily_is_black_and_white():
     assert daily.convert("HSV").getchannel("S").getextrema() == (0, 0)  # no colour anywhere on the page
 
 
-@pytest.mark.parametrize("style", ["metro", "daily"])
+@pytest.mark.parametrize("style", STYLES)
 def test_longest_story_stays_inside_the_page_margins(style):
     # 141 paragraphs cannot fit even at the smallest type, so the end of the story is cut.
     # W is the widest capital, so the kicker only fits by shrinking.
@@ -71,7 +74,7 @@ def test_longest_story_stays_inside_the_page_margins(style):
         assert page.crop(band).getextrema() == ((255, 255),) * 3, band
 
 
-@pytest.mark.parametrize("style", ["metro", "daily"])
+@pytest.mark.parametrize("style", ["metro", "daily", "wanted"])  # wizard's arch frames the top: see below
 def test_full_length_portrait_keeps_the_top_of_the_photo(monkeypatch, style):
     # A 9:16 photo whose top 8% (where the head is) is black and the rest white.
     photo = Image.new("RGB", (360, 640), "white")
@@ -85,10 +88,10 @@ def test_full_length_portrait_keeps_the_top_of_the_photo(monkeypatch, style):
     assert top.getextrema()[1] < 60
 
 
-@pytest.mark.parametrize("style", ["metro", "daily"])
+@pytest.mark.parametrize("style", STYLES)
 @pytest.mark.parametrize("shape", [(300, 400), (360, 640), (1600, 900)])
 def test_default_story_is_never_cut(style, shape):
-    page, cut = booth.compose(Image.new("RGB", shape, "blue"), booth.DEFAULT_STORY, style)
+    page, cut = booth.compose(Image.new("RGB", shape, "blue"), booth.default_story(style), style)
     assert cut == [] and page == _render(Image.new("RGB", shape, "blue"), style=style)
 
 
@@ -96,7 +99,7 @@ def test_unbroken_story_renders_quickly():
     # A pasted URL or base64 blob is one 2500-character "word": it must wrap in good time, not minutes.
     story = booth.check_story(Story(headline="H", story="x" * LIMITS["story"]), 2)
     start = time.perf_counter()
-    for style in ("metro", "daily"):
+    for style in STYLES:
         page, _ = booth.compose(Image.new("RGB", (300, 400), "blue"), story, style)
         assert page.size == A4_150DPI
         w, h = A4_150DPI
@@ -169,11 +172,14 @@ def test_compose_names_the_fields_cut_to_fit():
                  caption="caption words " * 14, byline="B" * 80)
     assert booth.compose(portrait, booth.check_story(long, 2), "metro")[1] == ["headline", "caption", "story"]
     assert booth.compose(portrait, booth.check_story(long, 2), "daily")[1] == ["story"]
+    every = ["kicker", "headline", "caption", "story", "byline"]
+    assert booth.compose(portrait, booth.check_story(long, 2), "wizard")[1] == every
+    assert booth.compose(portrait, booth.check_story(long, 2), "wanted")[1] == every
     # Text that already ends in "…" is not mistaken for a cut.
     assert booth.compose(portrait, Story(headline="Wait for it…", story="Line one…"), "metro")[1] == []
 
 
-@pytest.mark.parametrize("style", ["metro", "daily"])
+@pytest.mark.parametrize("style", STYLES)
 def test_kicker_fits_the_page_even_when_stand_ins_widen_it(style):
     # Each "€" prints as "EUR", so this 40-character kicker is 120 capitals wide: cut, not overflowing.
     story = booth.check_story(Story(headline="H", story="S", kicker="€" * LIMITS["kicker"]), 2)
@@ -184,15 +190,102 @@ def test_kicker_fits_the_page_even_when_stand_ins_widen_it(style):
     assert cut == ["kicker"]
 
 
-@pytest.mark.parametrize("style", ["metro", "daily"])
+@pytest.mark.parametrize("style", STYLES)
 def test_kicker_of_only_an_accent_mark_renders(style):
     story = booth.check_story(Story(headline="H", story="S", kicker="¨"), 2)  # prints as a blank
     assert booth.compose(Image.new("RGB", (40, 40), "white"), story, style)[1] == []
 
 
-def test_empty_optional_fields_render(tmp_path):
-    page = _render(Image.new("RGB", (40, 40), "white"), Story(headline="Hi", story="Short."), "daily")
-    assert page.size == A4_150DPI
+@pytest.mark.parametrize("style", STYLES)
+def test_empty_optional_fields_render(style):
+    page, cut = booth.compose(Image.new("RGB", (40, 40), "white"), Story(headline="Hi", story="Short."), style)
+    assert page.size == A4_150DPI and cut == []
+
+
+# --- themed styles -------------------------------------------------------------------------------
+
+def _share(page, test):
+    small = page.reduce(4)  # a quarter-size copy is plenty for colour shares
+    return sum(n for n, p in small.getcolors(small.width * small.height) if test(*p)) / (small.width * small.height)
+
+
+def test_every_style_looks_different():
+    grey = Image.new("RGB", (300, 400), (128, 128, 128))  # a neutral photo, so the colours are the style's own
+    pages = {style: _render(grey, style=style) for style in STYLES}
+    assert len({page.tobytes() for page in pages.values()}) == len(STYLES) == 4
+
+    def navy(r, g, b):
+        return b > r + 20 and b > g + 15 and max(r, g, b) < 130
+
+    def gold(r, g, b):
+        return r > 170 and g > 130 and b < 120 and r - b > 80
+
+    def parchment(r, g, b):
+        return r > 150 and g > 110 and b < 180 and r - b > 40
+
+    def red(r, g, b):
+        return r > 180 and g < 60 and b < 80
+    signature = {style: {test.__name__: _share(page, test) for test in (navy, gold, parchment, red)}
+                 for style, page in pages.items()}
+    assert signature["wizard"]["navy"] > 0.25 and signature["wizard"]["gold"] > 0.03  # dark card, gold trim
+    assert signature["wanted"]["parchment"] > 0.45  # aged paper
+    assert signature["metro"]["red"] > 0.005  # red accents
+    assert pages["daily"].convert("HSV").getchannel("S").getextrema() == (0, 0)  # black and white
+    for style in ("metro", "daily", "wanted"):
+        assert signature[style]["navy"] < 0.001, style  # only the wizard card is dark blue
+    for style in ("metro", "daily", "wizard"):
+        assert signature[style]["parchment"] < signature["wanted"]["parchment"] / 4, style
+
+
+@pytest.mark.parametrize("style, frame", [
+    ("wizard", ((booth.W - booth.CARD_W) // 2, (booth.H - booth.CARD_H) // 2,
+                (booth.W + booth.CARD_W) // 2, (booth.H + booth.CARD_H) // 2)),
+    ("wanted", (booth.MARGIN, booth.MARGIN, booth.W - booth.MARGIN, booth.BOTTOM)),
+])
+@pytest.mark.parametrize("shape", [(300, 400), (1600, 900)])
+def test_photo_is_composited_into_the_frame(style, frame, shape):
+    magenta = Image.new("RGB", shape, (255, 0, 255))  # a colour no style uses on its own
+    page = _render(magenta, style=style)
+    r, g, b = page.split()
+    hits = ImageChops.multiply(ImageChops.multiply(r.point(lambda v: 255 if v > 180 else 0),
+                                                   b.point(lambda v: 255 if v > 160 else 0)),
+                               g.point(lambda v: 255 if v < 80 else 0))
+    x0, y0, x1, y1 = hits.getbbox()
+    assert hits.histogram()[255] > 150_000  # the photo is there, in its colours
+    assert frame[0] < x0 and frame[1] < y0 and x1 < frame[2] and y1 < frame[3]  # inside the card or poster
+    assert y0 > frame[1] + 100  # below the top label or the WANTED lettering
+
+
+def test_each_style_has_its_own_default_story():
+    assert booth.default_story("metro") is booth.default_story("daily") is booth.DEFAULT_STORY
+    themed = [booth.default_story("wizard"), booth.default_story("wanted")]
+    for story in themed:
+        assert all([story.headline, story.story, story.kicker, story.caption, story.byline])
+        assert booth.check_story(story, 2) == story  # valid as written: no blank lines, printable, in limits
+        assert story != booth.DEFAULT_STORY
+    assert themed[0] != themed[1]
+    assert booth.default_story("wanted").kicker.upper() == "DEAD OR ALIVE"
+    assert booth.default_story("wanted").caption.upper().startswith("REWARD")
+    assert set(booth.DEFAULT_STORIES) == set(booth.STYLES) == set(booth.KINDS)
+
+
+@pytest.mark.parametrize("style", STYLES)
+def test_compose_without_a_story_uses_the_styles_default(style):
+    photo = Image.new("RGB", (300, 400), "blue")
+    assert booth.compose(photo, None, style) == booth.compose(photo, booth.default_story(style), style)
+
+
+def test_wizard_arch_keeps_the_top_of_a_full_length_portrait(monkeypatch):
+    # As for the other styles, the head (top 8%, black) stays in the picture under the arch.
+    photo = Image.new("RGB", (360, 640), "white")
+    photo.paste((0, 0, 0), (0, 0, 360, 51))
+    boxes = []
+    real = booth._photo
+    monkeypatch.setattr(booth, "_photo", lambda page, img, box, mono: boxes.append(box) or real(page, img, box, mono))
+    page = _render(photo, style="wizard").convert("L")
+    [(x0, y0, x1, _)] = boxes
+    mid = (x0 + x1) // 2
+    assert page.crop((mid - 40, y0 + 10, mid + 40, y0 + 20)).getextrema()[1] < 60
 
 
 # --- photo -------------------------------------------------------------------------------------

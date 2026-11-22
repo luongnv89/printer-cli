@@ -78,7 +78,7 @@ Every command also works against the built-in replay: `prt -p demo status`, `prt
 | `prt maintain test-page` | Colour test page: ink bars, gradients, grey steps, fine lines |
 | `prt maintain identify` | Flash the printer's panel |
 | `prt print FILE… [-n 2] [--media 4x6] [--tray photo] [--quality high] [--mono] [--duplex]` | Print |
-| `prt booth PHOTO [--style metro\|daily] [--story-file story.json] [--preview page.jpg]` | Photo booth: print the photo as an A4 newspaper front page with a short story (see [Photo booth](#photo-booth)) |
+| `prt booth PHOTO [--style metro\|daily\|wizard\|wanted] [--story-file story.json] [--preview page.jpg]` | Photo booth: print the photo as an A4 newspaper front page, wizard card or wanted poster (see [Photo booth](#photo-booth)) |
 | `prt jobs [--all]` / `prt jobs cancel ID` | List or cancel jobs |
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
 | `prt tui` | Full-screen dashboard |
@@ -116,9 +116,11 @@ Exit codes: `0` ok · `1` runtime/network error (also when only cached status is
 
 ## Photo booth
 
-`prt booth photo.jpg` prints the photo as a newspaper front page with a short news story. With no story it uses a built-in one.
+`prt booth photo.jpg` prints the photo as a newspaper front page with a short news story, or as a themed card or poster. With no story each style uses its own built-in text.
 
 - `--style metro` (default) is a colour tabloid with two columns. `--style daily` is a black-and-white broadsheet with three columns.
+- `--style wizard` is an ornate trading card: a dark card with a gold double border and cut marks, the photo in an arched gold frame, a moon-and-star emblem, a name ribbon and a lore box. `--style wanted` is a weathered parchment poster: huge WANTED lettering, the photo in a heavy frame, a "dead or alive" line, the name and a reward.
+- The themed styles reuse the story fields: `headline` is the name, `kicker` the card type (wizard) or the "dead or alive" line (wanted), `caption` the subtitle (wizard) or the reward line (wanted), `story` the lore or description, and `byline` the footer. Without them, `wanted` prints "The Grinning Captain" with a reward of 1,000,000 gold.
 - Write your own story as JSON: `headline` and `story` are required, `kicker`, `caption` and `byline` are optional. Pass it with `--story-file story.json`. `--headline`, `--story`, `--kicker`, `--caption` and `--byline` override single fields.
 - The page uses the font that ships with Pillow, which covers basic Latin only. Accents print without their marks, and other scripts and emoji are refused with an error.
 - `--preview page.jpg` saves the page without printing.
@@ -195,7 +197,7 @@ To add a vendor, subclass `IPPDriver`, declare its `capabilities`, override what
 
 ```bash
 uv sync
-uv run pytest            # 160 tests, no printer needed
+uv run pytest            # 198 tests, no printer needed
 uv run prt -p demo tui
 ```
 

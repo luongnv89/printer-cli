@@ -1,14 +1,18 @@
-"""Photo booth: a photo of a person and a short news story, laid out as a newspaper front page.
+"""Photo booth: a photo of a person and a short story, laid out as a newspaper front page or a themed card.
 
 Rendered as an A4 JPEG at 150 dpi, like the test page, so it prints straight over IPP.
-Two styles: ``metro`` (colour tabloid, two columns) and ``daily`` (black-and-white broadsheet,
-three columns). Without a story the page uses DEFAULT_STORY.
+Newspaper styles: ``metro`` (colour tabloid, two columns) and ``daily`` (black-and-white broadsheet,
+three columns). Themed styles: ``wizard`` (an ornate trading card) and ``wanted`` (a weathered
+pirate poster), which reuse the same story fields for the name, label, subtitle, lore and footer.
+Without a story each style uses its own default (``default_story``).
 """
 
 from __future__ import annotations
 
 import io
 import json
+import math
+import random
 import time
 import unicodedata
 from dataclasses import dataclass, fields, replace
@@ -52,6 +56,39 @@ DEFAULT_STORY = Story(
     caption="Pictured: today's guest at the prt photo booth.",
     byline="By the prt newsroom",
 )
+
+# The themed styles read the same fields differently: headline is the name, kicker the small label
+# at the top, caption the subtitle (wizard) or reward line (wanted), story the lore or description,
+# and byline the footer.
+WIZARD_STORY = Story(
+    kicker="Legendary Wizard",
+    headline="The Spellbound Guest",
+    caption="Keeper of the Photo Booth",
+    story=("Appeared in a flash of light at the photo booth and has not stopped smiling since. "
+           "Said to brew a strong cup of tea and an even stronger pose.\n"
+           "Special power: turns any ordinary afternoon into a little bit of magic."),
+    byline="Booth wizard series · card No. 1",
+)
+
+WANTED_STORY = Story(
+    kicker="Dead or Alive",
+    headline="The Grinning Captain",
+    caption="Reward 1,000,000 Gold",
+    story=("Wanted for stealing the show at the photo booth and smiling without a licence. "
+           "Last seen striking a fearless pose and refusing to blink.\n"
+           "Approach with a camera. Do not attempt to out-smile."),
+    byline="By order of the Harbour Watch",
+)
+
+DEFAULT_STORIES = {"metro": DEFAULT_STORY, "daily": DEFAULT_STORY, "wizard": WIZARD_STORY, "wanted": WANTED_STORY}
+# What each style prints, for messages such as the confirmation prompt.
+KINDS = {"metro": "metro newspaper page", "daily": "daily newspaper page", "wizard": "wizard card",
+         "wanted": "wanted poster"}
+
+
+def default_story(style: str) -> Story:
+    """The story a style prints when none is given."""
+    return DEFAULT_STORIES[style]
 
 
 def _clean(text: str, keep_newlines: bool) -> str:
@@ -290,7 +327,7 @@ def _columns_height(text: str, width: int, columns: int, gutter: int, size: int)
 
 
 def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], columns: int, gutter: int,
-             size: int, min_size: int, fill, rule=None) -> bool:
+             size: int, min_size: int, fill, rule=None, centre: bool = False) -> bool:
     """Flow paragraphs down ``columns`` columns, shrinking the type until it fits, else cutting with "…".
 
     Returns True when the text was cut.
@@ -317,7 +354,8 @@ def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], 
             col, row = col + 1, 0
         if not line and row == 0:
             continue
-        d.text((x0 + col * (col_w + gutter), y0 + row * _lead(s)), line, font=font, fill=fill)
+        dx = (col_w - font.getlength(line)) / 2 if centre else 0
+        d.text((x0 + col * (col_w + gutter) + dx, y0 + row * _lead(s)), line, font=font, fill=fill)
         row += 1
     if rule:
         for c in range(1, columns):
@@ -468,11 +506,258 @@ def _daily(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
     return cut
 
 
-STYLES: dict[str, Callable[[Image.Image, Image.Image, Story], list[str]]] = {"metro": _metro, "daily": _daily}
+# --- themed styles ---------------------------------------------------------------------------
+# The page font has no star or ornament glyphs, so every decoration is drawn from shapes.
 
 
-def compose(photo: Image.Image, story: Story = DEFAULT_STORY, style: str = "metro") -> tuple[Image.Image, list[str]]:
-    """Lay out the page; also returns the fields (in page order) that were cut with "…" to fit."""
+def _star(d: ImageDraw.ImageDraw, cx: float, cy: float, r: float, fill, points: int = 5,
+          inner: float = 0.45) -> None:
+    pts = []
+    for i in range(points * 2):
+        radius = r if i % 2 == 0 else r * inner
+        angle = math.radians(-90 + i * 180 / points)
+        pts.append((cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
+    d.polygon(pts, fill=fill)
+
+
+def _moon(page: Image.Image, cx: int, cy: int, r: int, fill) -> None:
+    """A crescent: a disc with an offset disc taken out of it."""
+    mask = Image.new("L", (2 * r + 1, 2 * r + 1), 0)
+    md = ImageDraw.Draw(mask)
+    md.ellipse([0, 0, 2 * r, 2 * r], fill=255)
+    md.ellipse([round(r * 0.6), round(-r * 0.3), round(r * 2.6), round(r * 1.7)], fill=0)
+    page.paste(fill, (cx - r, cy - r, cx + r + 1, cy + r + 1), mask)
+
+
+def _arch(d: ImageDraw.ImageDraw, box: tuple[int, int, int, int], rise: int, fill) -> None:
+    """A window with a rounded top, the shape of the wizard card's portrait frame."""
+    x0, y0, x1, y1 = box
+    d.ellipse([x0, y0, x1, y0 + 2 * rise], fill=fill)
+    d.rectangle([x0, y0 + rise, x1, y1], fill=fill)
+
+
+def _grow(box: tuple[int, int, int, int], by: int) -> tuple[int, int, int, int]:
+    x0, y0, x1, y1 = box
+    return x0 - by, y0 - by, x1 + by, y1 + by
+
+
+def _centred(d: ImageDraw.ImageDraw, y: int, text: str, size: int, fill, bold: int = 0,
+             min_size: int | None = None, width: int = CONTENT_W - 120, lines: int = 1):
+    """Fit ``text`` (shrinking to ``min_size``) in ``lines`` centred lines; returns (y below, cut)."""
+    font, size, wrapped, cut = _fit(text, size, min_size or size, width, lines)
+    return _text_block(d, (W - width) // 2, y, wrapped, font, size, fill, width=width, bold=bold), cut
+
+
+NAVY = (20, 22, 58)
+PLUM = (62, 30, 94)
+GOLD = (212, 170, 60)
+GOLD_LIGHT = (240, 214, 130)
+GOLD_DARK = (140, 100, 28)
+CREAM = (247, 238, 212)
+GUIDE = (170, 170, 170)
+CARD_W, CARD_H = 1000, 1397  # a trading card's 63 × 88 proportions, as large as the page allows
+WIZARD_WINDOW, WIZARD_RISE = 640, 150  # portrait window height, and how high its arch rises
+
+
+def _wizard(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
+    """Trading card: dark card with a gold double border, arched portrait, emblem, name banner, lore box."""
+    d = ImageDraw.Draw(page)
+    cut = []
+    x0, y0 = (W - CARD_W) // 2, (H - CARD_H) // 2
+    x1, y1 = x0 + CARD_W, y0 + CARD_H
+    mid = W // 2
+    for x, y, sx, sy in ((x0, y0, -1, -1), (x1, y0, 1, -1), (x0, y1, -1, 1), (x1, y1, 1, 1)):  # cut guides
+        d.line([(x + sx * 6, y), (x + sx * 24, y)], fill=GUIDE, width=2)
+        d.line([(x, y + sy * 6), (x, y + sy * 24)], fill=GUIDE, width=2)
+    card_size = (CARD_W, CARD_H)
+    card = Image.composite(Image.new("RGB", card_size, PLUM), Image.new("RGB", card_size, NAVY),
+                           Image.linear_gradient("L").resize(card_size))
+    sparkle = ImageDraw.Draw(card)
+    rng = random.Random(63)  # fixed, so the same card prints the same every time
+    for _ in range(70):  # only around the portrait, clear of the text
+        sx, sy, r = rng.randrange(50, CARD_W - 50), rng.randrange(110, 820), rng.choice((1, 1, 2, 3))
+        sparkle.ellipse([sx - r, sy - r, sx + r, sy + r], fill=(150, 140, 205))
+    shape = Image.new("L", card_size, 0)
+    ImageDraw.Draw(shape).rounded_rectangle([0, 0, CARD_W - 1, CARD_H - 1], radius=36, fill=255)
+    page.paste(card, (x0, y0), shape)
+    d.rounded_rectangle([x0 + 14, y0 + 14, x1 - 14, y1 - 14], radius=26, outline=GOLD, width=8)
+    d.rounded_rectangle([x0 + 30, y0 + 30, x1 - 30, y1 - 30], radius=16, outline=GOLD, width=2)
+    for cx, cy in ((x0 + 30, y0 + 30), (x1 - 30, y0 + 30), (x0 + 30, y1 - 30), (x1 - 30, y1 - 30)):
+        _star(d, cx, cy, 14, GOLD, points=4, inner=0.35)
+
+    if story.kicker.strip():
+        font, size, [label], cut_kicker = _fit(story.kicker.upper(), 30, 20, 640, 1)
+        y = y0 + 54
+        d.text((mid - font.getlength(label) / 2, y), label, font=font, fill=GOLD_LIGHT)
+        for side in (-1, 1):
+            _star(d, mid + side * (font.getlength(label) / 2 + 26), y + size * 0.62, 10, GOLD, points=4,
+                  inner=0.35)
+        cut += ["kicker"] * cut_kicker
+
+    box = _photo_box(photo, y0 + 118, WIZARD_WINDOW, 800)
+    rise = WIZARD_RISE
+    for grow, colour in ((20, GOLD), (12, NAVY), (6, GOLD)):  # double gold frame following the arch
+        _arch(d, _grow(box, grow), rise + grow, colour)
+    frame = page.crop(box)
+    _photo(page, photo, box, mono=False)
+    window = Image.new("L", (box[2] - box[0], box[3] - box[1]), 255)
+    _arch(ImageDraw.Draw(window), (0, 0, window.width - 1, window.height - 1), rise, 0)
+    page.paste(frame, box[:2], window)  # put the frame back over the corners above the arch
+
+    ey = box[3] + 6  # emblem: a moon and a star in a gold medallion, over the foot of the frame
+    d.ellipse([mid - 58, ey - 58, mid + 58, ey + 58], fill=GOLD)
+    d.ellipse([mid - 48, ey - 48, mid + 48, ey + 48], fill=NAVY)
+    _moon(page, mid - 8, ey, 30, GOLD)
+    _star(d, mid + 20, ey - 14, 13, GOLD_LIGHT)
+
+    by = ey + 58 + 20  # name banner: a gold ribbon with notched tails
+    font, size, lines, cut_name = _fit(story.headline, 60, 40, 720, 1)
+    if cut_name:
+        font, size, lines, cut_name = _fit(story.headline, 40, 40, 720, 2)
+    cut += ["headline"] * cut_name
+    bh = len(lines) * _lead(size) + 24
+    for side in (-1, 1):
+        inner_x, outer_x = mid + side * 380, mid + side * 450
+        notch = outer_x - side * 28
+        d.polygon([(inner_x, by + 22), (outer_x, by + 22), (notch, by + 22 + bh / 2), (outer_x, by + 22 + bh),
+                   (inner_x, by + 22 + bh)], fill=GOLD_DARK)
+    d.rectangle([mid - 410, by, mid + 410, by + bh], fill=GOLD, outline=GOLD_DARK, width=3)
+    _text_block(d, mid - 360, by + 12, lines, font, size, NAVY, width=720, bold=1)
+    y = by + bh + 22 + 10
+
+    if story.caption:
+        y, cut_caption = _centred(d, y, story.caption, 30, GOLD_LIGHT, min_size=22, width=760, lines=2)
+        cut += ["caption"] * cut_caption
+    lore = (x0 + 70, y + 10, x1 - 70, y1 - 96)
+    d.rounded_rectangle(lore, radius=14, fill=CREAM, outline=GOLD, width=3)
+    if _columns(d, story.story, (lore[0] + 30, lore[1] + 20, lore[2] - 30, lore[3] - 14), 1, 0, 28, 16,
+                NAVY, centre=True):
+        cut.append("story")
+    if story.byline:
+        _, cut_byline = _centred(d, y1 - 80, story.byline, 22, GOLD_LIGHT, min_size=18, width=640)
+        cut += ["byline"] * cut_byline
+    return cut
+
+
+PARCHMENT = (236, 216, 170)
+SEPIA = (88, 56, 30)
+SEPIA_DARK = (58, 34, 16)
+RUST = (130, 42, 24)
+WANTED_PHOTO, WANTED_PHOTO_MAX = 560, 700  # photo height: normal, and grown into space a short text leaves
+
+
+@lru_cache(maxsize=1)
+def _parchment() -> tuple[Image.Image, Image.Image]:
+    """Aged paper the size of the printable area, and a mask with torn edges (made once, seeded)."""
+    w, h = CONTENT_W, BOTTOM - MARGIN
+    rng = random.Random(1848)
+    paper = Image.new("RGB", (w, h), PARCHMENT)
+    edges = Image.radial_gradient("L").resize((w, h)).point(lambda v: min(255, max(0, v - 110) * 2))
+    paper = Image.composite(Image.new("RGB", (w, h), (176, 128, 72)), paper, edges)
+    for cell, colour, depth in ((48, (196, 158, 104), 0.55), (6, (150, 110, 64), 0.18)):  # stains, then grain
+        cw, ch = w // cell + 2, h // cell + 2
+        noise = Image.frombytes("L", (cw, ch), rng.randbytes(cw * ch)).resize((w, h), Image.Resampling.BICUBIC)
+        paper = Image.composite(Image.new("RGB", (w, h), colour), paper,
+                                noise.point(lambda v, k=depth: round(max(0, v - 110) * k)))
+    outline = []
+    for i in range(0, w - 12, 24):  # walk round the edge, tearing a little off as we go
+        outline.append((i, rng.randint(0, 10)))
+    for i in range(12, h - 12, 24):
+        outline.append((w - 1 - rng.randint(0, 10), i))
+    for i in range(w - 13, 12, -24):
+        outline.append((i, h - 1 - rng.randint(0, 10)))
+    for i in range(h - 13, 12, -24):
+        outline.append((rng.randint(0, 10), i))
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).polygon(outline, fill=255)
+    ImageDraw.Draw(paper).line(outline + outline[:1], fill=(150, 104, 56), width=3)
+    return paper, mask
+
+
+def _wanted(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
+    """Wanted poster: torn parchment, huge WANTED, framed sepia-tinted photo, name, reward, description."""
+    d = ImageDraw.Draw(page)
+    cut = []
+    mid = W // 2
+    paper, mask = _parchment()
+    page.paste(paper, (MARGIN, MARGIN), mask)
+    d.ellipse([mid - 11, MARGIN + 18, mid + 11, MARGIN + 40], fill=(105, 96, 86))  # the nail it hangs on
+    d.ellipse([mid - 6, MARGIN + 22, mid + 1, MARGIN + 29], fill=(196, 186, 170))
+
+    size = next(s for s in range(240, 100, -4) if _font(s).getlength("WANTED") <= CONTENT_W - 180)
+    font = _font(size)
+    top, bottom = font.getbbox("WANTED")[1::2]
+    d.text((mid - font.getlength("WANTED") / 2, MARGIN + 74 - top), "WANTED", font=font, fill=SEPIA_DARK,
+           stroke_width=3, stroke_fill=SEPIA_DARK)
+    y = MARGIN + 74 + bottom - top + 28
+    d.line([(MARGIN + 70, y), (W - MARGIN - 70, y)], fill=SEPIA_DARK, width=5)
+    d.line([(MARGIN + 70, y + 11), (W - MARGIN - 70, y + 11)], fill=SEPIA_DARK, width=2)
+    y += 11
+
+    text_w = CONTENT_W - 120
+    if story.kicker.strip():
+        k_font, k_size, [label], cut_kicker = _fit(story.kicker.upper(), 60, 34, 760, 1)
+    name = _fit(story.headline.upper(), 104, 60, text_w, 1)
+    if name[3]:  # too long for one line even at the smallest size: allow a second
+        name = _fit(story.headline.upper(), 60, 60, text_w, 2)
+    reward = None
+    if story.caption:
+        reward = _fit(story.caption.upper(), 64, 40, text_w, 1)
+        if reward[3]:
+            reward = _fit(story.caption.upper(), 40, 40, text_w, 2)
+    # The photo grows into whatever a short description leaves (up to a 4:3 crop of a wide photo).
+    words = (_lead(k_size) + 6 if story.kicker.strip() else 0) + len(name[2]) * _lead(name[1]) + \
+        (4 + len(reward[2]) * _lead(reward[1]) if reward else 0)
+    room = BOTTOM - 104 - (y + 50 + 22 + 26 + words + 34)
+    max_w = CONTENT_W - 200
+    grow_to = min(WANTED_PHOTO_MAX, round(max_w / min(photo.width / photo.height, 4 / 3)))
+    height = max(WANTED_PHOTO, min(grow_to, room - _columns_height(story.story, CONTENT_W - 200, 1, 0, 30)))
+
+    box = _photo_box(photo, y + 50, height, max_w)
+    d.rectangle(_grow(box, 22), fill=SEPIA_DARK)  # heavy frame with a pale inner line
+    d.rectangle(_grow(box, 10), outline=(214, 186, 136), width=2)
+    _photo(page, photo, box, mono=False)
+    shot = page.crop(box)  # tone the photo towards the paper, keeping its colours
+    sepia = ImageOps.colorize(ImageOps.grayscale(shot), black=(40, 24, 10), white=(250, 236, 200))
+    page.paste(Image.blend(shot, sepia, 0.35), box[:2])
+    y = box[3] + 22 + 26
+
+    if story.kicker.strip():
+        d.text((mid - k_font.getlength(label) / 2, y), label, font=k_font, fill=SEPIA_DARK, stroke_width=1,
+               stroke_fill=SEPIA_DARK)
+        half = k_font.getlength(label) / 2 + 26
+        rule_y = y + k_size * 0.62
+        if half + 40 < CONTENT_W / 2 - 70:
+            for side in (-1, 1):
+                d.line([(mid + side * half, rule_y), (mid + side * (CONTENT_W / 2 - 70), rule_y)],
+                       fill=SEPIA_DARK, width=3)
+        y += _lead(k_size) + 6
+        cut += ["kicker"] * cut_kicker
+    font, size, lines, cut_name = name
+    y = _text_block(d, MARGIN + 60, y, lines, font, size, SEPIA_DARK, width=text_w, bold=2)
+    cut += ["headline"] * cut_name
+    if reward:
+        font, size, lines, cut_reward = reward
+        y = _text_block(d, MARGIN + 60, y + 4, lines, font, size, RUST, width=text_w, bold=1)
+        cut += ["caption"] * cut_reward
+    d.line([(mid - 160, y + 14), (mid + 160, y + 14)], fill=SEPIA, width=2)
+    if _columns(d, story.story, (MARGIN + 100, y + 34, W - MARGIN - 100, BOTTOM - 104), 1, 0, 30, 16, SEPIA,
+                centre=True):
+        cut.append("story")
+    if story.byline:
+        _, cut_byline = _centred(d, BOTTOM - 66, story.byline, 24, SEPIA, min_size=18, width=760)
+        cut += ["byline"] * cut_byline
+    return cut
+
+
+STYLES: dict[str, Callable[[Image.Image, Image.Image, Story], list[str]]] = {
+    "metro": _metro, "daily": _daily, "wizard": _wizard, "wanted": _wanted}
+
+
+def compose(photo: Image.Image, story: Story | None = None, style: str = "metro") -> tuple[Image.Image, list[str]]:
+    """Lay out the page (with the style's default story if none is given); also returns the fields
+    (in page order) that were cut with "…" to fit."""
+    story = default_story(style) if story is None else story
     page = Image.new("RGB", (W, H), "white")
     cut = STYLES[style](page, photo, Story(**{name: _printable(getattr(story, name)) for name in FIELDS}))
     return page, cut
