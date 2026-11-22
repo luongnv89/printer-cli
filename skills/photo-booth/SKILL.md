@@ -75,7 +75,7 @@ The maximums are what the command accepts, not what always fits. The `metro` pag
 prt booth photo.jpg --style metro --story-file story.json --preview page.jpg
 ```
 
-`--preview` (also `-o` or `--output`) writes the finished page as a JPEG and sends nothing to the printer. Open `page.jpg` and check it. When text had to be cut to fit, its last line ends in `…` and the command warns on stderr, naming the fields, for example `caption cut to fit the metro page`. Shorten those fields and preview again.
+`--preview` (also `-o` or `--output`) writes the finished page and sends nothing to the printer. The file name picks the type: `.jpg` or `.jpeg` for a JPEG, `.png` for a lossless image, `.pdf` for a one-page A4 PDF. Open `page.jpg` and check it. When text had to be cut to fit, its last line ends in `…` and the command warns on stderr, naming the fields, for example `caption cut to fit the metro page`. Shorten those fields and preview again.
 
 ### 5. Print
 
@@ -84,6 +84,14 @@ prt booth photo.jpg --style metro --story-file story.json --yes
 ```
 
 `--yes` skips the confirmation prompt, which is required when there is no terminal. The cut-to-fit warning also appears before printing, but the page is still printed. Add `-f json` to get `{"action": "booth", "style": "metro", "job_id": N}` on stdout.
+
+To keep a digital copy of the printed page, add `--save` with a `.pdf`, `.png`, `.jpg` or `.jpeg` file name (repeat it for more files):
+
+```bash
+prt booth photo.jpg --style metro --story-file story.json --save page.pdf --yes
+```
+
+The copies are written before the printer is contacted, so they are kept even when printing is declined or the printer cannot be reached. With `-f json` the output gains a `saved` list: `{"action": "booth", "style": "metro", "job_id": N, "saved": [{"file": "page.pdf", "format": "pdf", "bytes": N}]}`. Combined with `--preview`, `--save` writes every file and prints nothing.
 
 For a one-off tweak, override any field from the command line: `--headline`, `--story`, `--kicker`, `--caption`, `--byline`. These flags win over the story file. With no story at all, `prt booth photo.jpg` prints the style's built-in default text, so a themed style can be tried with nothing but the photo:
 
@@ -97,6 +105,6 @@ Nothing is sent to the printer when an error occurs; the message and a hint go t
 
 | Exit | Cause | Fix |
 |---|---|---|
-| `2` | Bad flag value: unknown `--style`; an empty, too long or unprintable `--headline`, `--story`, `--kicker`, `--caption` or `--byline`; or no `--yes` without a terminal | Correct the flag |
+| `2` | Bad flag value: unknown `--style`; an empty, too long or unprintable `--headline`, `--story`, `--kicker`, `--caption` or `--byline`; a `--preview` or `--save` file name that does not end in `.pdf`, `.png`, `.jpg` or `.jpeg`; or no `--yes` without a terminal | Correct the flag |
 | `3` | The photo is missing or not a readable image, or `story.json` is missing, not valid JSON, or has unknown, missing or non-string fields, an empty `headline` or `story`, text that is too long, or characters the font cannot print | Fix the file the message names |
-| `1` | Printer unreachable, or the preview file cannot be written | Wake the printer (`prt status`) or pick another output path |
+| `1` | Printer unreachable, or a `--preview` or `--save` file cannot be written | Wake the printer (`prt status`) or pick another output path |

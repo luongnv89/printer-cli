@@ -504,17 +504,18 @@ def test_photo_booth_skill_matches_the_cli(capsys, tmp_path, monkeypatch, booth_
     skill = (ROOT / "skills" / "photo-booth" / "SKILL.md").read_text()
     code, help_text, _ = run(capsys, "booth", "--help")
     flags = set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", skill))
-    assert {"--style", "--story-file", "--preview", "--yes"} <= flags
+    assert {"--style", "--story-file", "--preview", "--save", "--yes"} <= flags
     assert [f for f in sorted(flags) if f not in help_text] == []
     monkeypatch.chdir(tmp_path)
     _booth_photo(tmp_path)
     (tmp_path / "story.json").write_text(re.search(r"```json\n(.*?)```", skill, re.S).group(1))
     commands = [shlex.split(line) for line in re.findall(r"^prt booth .*$", skill, re.M)]
-    assert len(commands) == 3
+    assert len(commands) == 4
     assert {"metro", "wanted"} <= {argv[argv.index("--style") + 1] for argv in commands}
     for argv in commands:
         assert run(capsys, "-p", "demo", *argv[1:])[0] == 0
-    assert (tmp_path / "page.jpg").read_bytes()[:2] == b"\xff\xd8" and len(booth_printer.jobs()) == 1
+    assert (tmp_path / "page.jpg").read_bytes()[:2] == b"\xff\xd8" and len(booth_printer.jobs()) == 2
+    assert (tmp_path / "page.pdf").read_bytes().startswith(b"%PDF-")
 
 
 def test_status_header_has_page_count(capsys):
