@@ -365,10 +365,10 @@ class PrtApp(App):
                             quality=str(self.query_one("#print-quality", Select).value),
                             mono=self.query_one("#print-mono", Switch).value)
         result.update(Text(f"sending {path.name}…"))
-        self._print(path, opts)
+        self._send_print(path, opts)
 
     @work(thread=True, group="action")
-    def _print(self, path: Path, opts: PrintOptions) -> None:
+    def _send_print(self, path: Path, opts: PrintOptions) -> None:
         result = self.query_one("#print-result", Static)
         try:
             job = self.driver().print_file(path, opts)

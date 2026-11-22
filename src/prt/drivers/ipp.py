@@ -170,15 +170,22 @@ class IPPDriver(Driver):
 
     def parse_trays(self, a: dict[str, Any]) -> list[Tray]:
         trays: list[Tray] = []
+        seen: set[tuple] = set()
         for col in as_list(a.get("media-col-ready")):
             if not isinstance(col, dict):
                 continue
             size = col.get("media-size") or {}
-            trays.append(Tray(
+            tray = Tray(
                 source=str(col.get("media-source") or "auto"),
                 media=media.from_size(_int(size.get("x-dimension")), _int(size.get("y-dimension"))),
                 media_type=col.get("media-type"),
-            ))
+            )
+            # Printers list the same loaded paper once per margin variant (an HP DeskJet sends
+            # bordered, borderless and bordered again); keep one entry per tray/size/type.
+            key = (tray.source, tray.media, tray.media_type)
+            if key not in seen:
+                seen.add(key)
+                trays.append(tray)
         if not trays:  # fall back to media-ready keywords
             for kw in as_list(a.get("media-ready")):
                 trays.append(Tray(source="auto", media=media.friendly(str(kw))))

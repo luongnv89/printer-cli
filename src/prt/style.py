@@ -16,6 +16,7 @@ from __future__ import annotations
 import io
 import math
 import os
+import re
 import sys
 from dataclasses import dataclass
 from typing import TextIO
@@ -180,16 +181,29 @@ def fit(text: Text, width: int, mode: Mode) -> Text:
 
 # --- Components (section 4) -------------------------------------------------------
 
-def ink_style(hex_color: str) -> str:
-    """Real cartridge colour; near-black inks use the terminal's default foreground so they
-    stay visible on dark terminals."""
-    h = hex_color.lstrip("#")
-    try:
-        r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
-    except ValueError:
+_HEX = re.compile(r"#?([0-9A-Fa-f]{6})")
+
+
+def ink_colors(value: str) -> list[str]:
+    """Parse an IPP marker-colors value into '#RRGGBB' strings.
+
+    A single cartridge is '#RRGGBB'; a multi-colour one concatenates them
+    ('#00FFFF#FF00FF#FFFF00' for an HP tri-colour); 'none' or junk gives []."""
+    return [f"#{m.upper()}" for m in _HEX.findall(value or "")]
+
+
+def is_dark(hex_color: str) -> bool:
+    r, g, b = (int(hex_color[i : i + 2], 16) for i in (1, 3, 5))
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.2
+
+
+def ink_style(color: str) -> str:
+    """Real cartridge colour (the first, for a multi-colour cartridge); near-black inks use the
+    terminal's default foreground so they stay visible on dark terminals."""
+    colors = ink_colors(color)
+    if not colors or is_dark(colors[0]):
         return "bold"
-    luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
-    return "bold" if luminance < 0.2 else f"#{h}"
+    return colors[0]
 
 
 def meter(value: int | None, width: int, mode: Mode, fill_style: str = "bold") -> Text:

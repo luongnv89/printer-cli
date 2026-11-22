@@ -115,3 +115,36 @@ def test_build_targets_falls_back_to_demo(tmp_path, monkeypatch):
     monkeypatch.setattr("prt.discovery.discover", lambda timeout=2.0: [])
     targets, notice = build_targets(Config(path=tmp_path / "c.toml"), None)
     assert targets[0].driver == "fake" and "demo" in notice
+
+
+def test_tanks_multi_colour_cartridge():
+    """HP tri-colour cartridges report marker-colors '#00FFFF#FF00FF#FFFF00' (was a crash)."""
+    from prt.models import Ink
+    inks = [Ink(name="tri-color ink", color="#00FFFF#FF00FF#FFFF00", level=90, low=1),
+            Ink(name="black ink", color="#000000", level=100, low=1),
+            Ink(name="odd ink", color="none", level=50)]
+    text = render_tanks(inks)
+    styles = {str(span.style) for span in text.spans}
+    assert {"#00FFFF", "#FF00FF", "#FFFF00"} <= styles
+    assert not any(s.count("#") > 1 for s in styles)
+    from rich.console import Console
+    Console(file=__import__("io").StringIO(), color_system="truecolor").print(text)
+
+
+def test_ink_style_multi_colour():
+    from prt.style import ink_colors, ink_style
+    assert ink_colors("#00FFFF#FF00FF#FFFF00") == ["#00FFFF", "#FF00FF", "#FFFF00"]
+    assert ink_style("#00FFFF#FF00FF#FFFF00") == "#00FFFF"
+    assert ink_style("#000000") == "bold" and ink_style("none") == "bold"
+
+
+async def test_stray_output_does_not_crash_app():
+    """Textual routes captured stdout/stderr to App._print(text, stderr=); a PrtApp method of the
+    same name used to shadow it, so any library warning crashed the dashboard."""
+    import sys
+    app = PrtApp(DEMO)
+    async with app.run_test(size=(130, 40)) as pilot:
+        await settle(pilot, app)
+        print("stray stdout")
+        print("stray stderr", file=sys.stderr)
+        await pilot.pause()

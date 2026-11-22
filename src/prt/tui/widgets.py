@@ -8,7 +8,7 @@ from rich.text import Text
 from textual.widgets import Static
 
 from prt.models import Ink, PrinterInfo, Severity, Status
-from prt.style import escape
+from prt.style import escape, ink_colors, is_dark
 
 # Palette (frontend-design default): black field, white text, gray hairlines, one green accent.
 # Status colours are used on text only. Gray is never used for text (4.3:1 on black < AA).
@@ -17,14 +17,10 @@ RED, AMBER = "#EF4444", "#F59E0B"
 EIGHTHS = " ▁▂▃▄▅▆▇█"
 
 
-def ink_fill(ink: Ink) -> str:
-    """The cartridge's real colour; near-black inks are drawn white so they show on the black field."""
-    h = ink.color.lstrip("#")
-    try:
-        r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
-    except ValueError:
-        return WHITE
-    return WHITE if (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.2 else f"#{h.upper()}"
+def ink_fills(ink: Ink) -> list[str]:
+    """The cartridge's real colour(s) — several for a multi-colour cartridge such as an HP
+    tri-colour; near-black inks are drawn white so they show on the black field."""
+    return [WHITE if is_dark(c) else c for c in ink_colors(ink.color)] or [WHITE]
 
 
 def render_tanks(inks: list[Ink], height: int = 10, tank_w: int = 6, gap: int = 4,
@@ -48,7 +44,9 @@ def render_tanks(inks: list[Ink], height: int = 10, tank_w: int = 6, gap: int = 
             fill = max(0, min(8, eighths - cell_floor))
             low_row = ink.level is not None and row == max(1, round(ink.low / 100 * height))
             out.append("▕", style=GRAY)
-            out.append(EIGHTHS[fill] * inner, style=ink_fill(ink))
+            fills = ink_fills(ink)
+            for cell in range(inner):  # multi-colour cartridges split the tank into stripes
+                out.append(EIGHTHS[fill], style=fills[cell * len(fills) // inner])
             out.append("▏" if not low_row else "◂", style=AMBER if low_row else GRAY)
         out.append("\n")
     for i, _ in enumerate(inks):

@@ -135,3 +135,14 @@ def test_test_page_renders_jpeg(fake):
     assert job > 0
     _, _, _, data = fake.client.requests[-1]
     assert data[:2] == b"\xff\xd8"
+
+
+def test_trays_dedupe_margin_variants():
+    """HP DeskJet 3630 reports one A4 tray three times, differing only in margins."""
+    def col(m):
+        return {"media-size": {"x-dimension": 21000, "y-dimension": 29700}, "media-source": "main",
+                "media-type": "stationery", **{f"media-{s}-margin": m for s in ("top", "bottom", "left", "right")}}
+    a = {"media-col-ready": [col(296), col(0), col(296)],
+         "printer-input-tray": ["type=sheetFeedAutoNonRemovable;maxcapacity=100;level=40;name=InputTray1"]}
+    trays = IPPDriver(Target("x", "x")).parse_trays(a)
+    assert [(t.source, t.media, t.media_type, t.level) for t in trays] == [("main", "A4", "stationery", 40)]
