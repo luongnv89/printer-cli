@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import unicodedata
 from functools import lru_cache
-from typing import Callable
+from itertools import chain, islice
+from typing import Callable, Iterator
 
 from PIL import ImageDraw
 
@@ -85,7 +86,11 @@ def _longest(text: str, fits: Callable[[str], bool]) -> int:
 
 def _wrap(text: str, font, width: int) -> list[str]:
     """Greedy word wrap; words wider than a line are split by character."""
-    lines: list[str] = []
+    return list(_wrapped(text, font, width))
+
+
+def _wrapped(text: str, font, width: int) -> Iterator[str]:
+    """The lines of ``_wrap`` one at a time, so a caller can stop once its page is full."""
     line = ""
     for word in text.split():
         candidate = f"{line} {word}" if line else word
@@ -93,17 +98,16 @@ def _wrap(text: str, font, width: int) -> list[str]:
             line = candidate
             continue
         if line:
-            lines.append(line)
+            yield line
         while len(word) > 1:
             cut = _longest(word, lambda part: font.getlength(part) <= width)
             if cut == len(word):
                 break
-            lines.append(word[:cut])
+            yield word[:cut]
             word = word[cut:]
         line = word
     if line:
-        lines.append(line)
-    return lines
+        yield line
 
 
 def _ellipsize(line: str, font, width: int) -> str:
@@ -211,3 +215,103 @@ def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], 
             rx = x0 + c * (col_w + gutter) - gutter // 2
             d.line([(rx, y0), (rx, y0 + rows * _lead(s))], fill=rule, width=1)
     return cut
+
+
+# --- text that runs on over several pages -----------------------------------------------------
+# A page holds columns of lines; "" is the blank row between two paragraphs. Nothing is cut with "…":
+# whatever does not fit is handed back, word for word, to start the next page.
+
+Columns = list[list[str]]
+
+
+def _consumed(para: str, lines: list[str]) -> int:
+    """Where ``para`` resumes after ``lines``, the first lines ``_wrap`` made of it (each one is a slice of it)."""
+    pos = 0
+    for line in lines:
+        pos = para.index(line, pos) + len(line)
+    return pos
+
+
+def flow_columns(paragraphs: list[str], font, col_w: int, rows: int, columns: int,
+                 narrow: tuple[int, int] = (0, 0)) -> tuple[Columns, list[str]]:
+    """Fill up to ``columns`` columns of ``rows`` lines with paragraphs, a blank row between paragraphs.
+
+    ``narrow`` is (lines, width): the first lines of the first paragraph wrap to that width, leaving room
+    for a drop cap. Text that fits on the page is balanced over the columns like ``_columns``.
+    Returns the columns and the leftover paragraphs, the first of which resumes mid-paragraph when a
+    paragraph was split.
+    """
+    paras = [p for p in (" ".join(raw.split()) for raw in paragraphs) if p]
+    if rows <= 0 or not paras:
+        return [], paras
+    capacity = rows * columns
+    lines: list[tuple[int, str]] = []  # (paragraph, line); a "" line is the gap before that paragraph
+    # Only one line more than the page holds is measured, so a long text costs one page of wrapping per page.
+    measured, partial = 0, False
+    for i, para in enumerate(paras):
+        if len(lines) > capacity:
+            break
+        measured = i + 1
+        if lines:
+            lines.append((i, ""))
+        n, width = narrow if i == 0 else (0, 0)
+        head = _wrap(para, font, width)[:n] if n else []
+        rest = para[_consumed(para, head):].lstrip()
+        wrapped = chain(head, _wrapped(rest, font, col_w))
+        lines += [(i, line) for line in islice(wrapped, capacity + 1 - len(lines))]
+        if next(wrapped, None) is not None:
+            partial = True
+            break
+    fits = not partial and measured == len(paras) and len(lines) <= capacity
+    per_col = min(rows, _rows(len(lines), columns)) if fits else rows
+    cols: Columns = [[]]
+    taken = 0
+    for _, line in lines:
+        if len(cols[-1]) == per_col:
+            if len(cols) == columns:
+                break
+            cols.append([])
+        taken += 1
+        if line or cols[-1]:  # a paragraph gap at the top of a column is left out
+            cols[-1].append(line)
+    if taken == len(lines) and not partial:  # gaps left out at column tops can make room for everything
+        return cols, paras[measured:]
+    i = lines[taken][0] if taken < len(lines) else measured - 1
+    done = [text for p, text in lines[:taken] if p == i and text]
+    if not done:
+        return cols, paras[i:]
+    return cols, [paras[i][_consumed(paras[i], done):].lstrip()] + paras[i + 1:]
+
+
+def paginate(paragraphs: list[str], font, col_w: int, columns: int, first_rows: int, rows: int,
+             narrow: tuple[int, int] = (0, 0)) -> Iterator[Columns]:
+    """Lay the text out page by page: ``first_rows`` lines per column on page one, ``rows`` after.
+
+    Every word lands on exactly one page; ``narrow`` applies to the first page only (see ``flow_columns``).
+    Pages are made as they are asked for, so a caller with a page limit can stop early.
+    """
+    if rows <= 0:
+        raise ValueError("a page needs room for at least one line")
+    cols, left = flow_columns(paragraphs, font, col_w, first_rows, columns, narrow)
+    yield cols
+    while left:
+        cols, left = flow_columns(left, font, col_w, rows, columns)
+        yield cols
+
+
+def draw_columns(d: ImageDraw.ImageDraw, cols: Columns, x0: int, y0: int, col_w: int, gutter: int, font,
+                 size: int, fill, rule=None, indent: tuple[int, int] = (0, 0)) -> None:
+    """Draw columns from ``flow_columns``; ``indent`` (lines, px) shifts the first lines of the first column.
+
+    ``rule`` draws a thin line of that colour between the columns in use.
+    """
+    for c, col in enumerate(cols):
+        x = x0 + c * (col_w + gutter)
+        for r, line in enumerate(col):
+            dx = indent[1] if c == 0 and r < indent[0] else 0
+            d.text((x + dx, y0 + r * _lead(size)), line, font=font, fill=fill)
+    if rule:
+        depth = y0 + max((len(col) for col in cols), default=0) * _lead(size)
+        for c in range(1, len(cols)):
+            rx = x0 + c * (col_w + gutter) - gutter // 2
+            d.line([(rx, y0), (rx, depth)], fill=rule, width=1)
