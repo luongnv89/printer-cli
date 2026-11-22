@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "Your printer's dashboard in the terminal: ink, paper, alerts, nozzle checks, head cleaning, printing and scanning for network printers (IPP, eSCL, SNMP, Epson ESC/P2)."
 readme = "README.md"
 requires-python = ">=3.11"
-license = "MIT"
-license-files = ["LICENSE"]
+license = "MIT AND OFL-1.1"
+license-files = ["LICENSE", "src/prt/fonts/OFL-*.txt"]
 authors = [{ name = "Luong NGUYEN" }]
 keywords = ["printer", "cli", "tui", "ipp", "escl", "airprint", "snmp", "epson", "scanner", "ink"]
 classifiers = [
