@@ -736,6 +736,74 @@ def _save_booth_page(data: bytes, path: Path) -> int:
     return len(data)
 
 
+class ArticleStyle(str, Enum):
+    magazine = "magazine"
+    classic_magazine = "classic-magazine"
+
+
+@app.command("article")
+def article_cmd(
+    source: str = typer.Argument(..., help="Link to a blog post, news article or X post (http or https), or a "
+                                           "saved file: article JSON, HTML or plain text."),
+    paper: ArticleStyle = typer.Option(ArticleStyle.magazine, "--style", "-s",
+                                       help="magazine (bold headline, 3 columns, colour accents) or "
+                                            "classic-magazine (ivory page, centred single column, drop cap, "
+                                            "ornaments)."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save the pages here instead of printing; the extension picks "
+                                                "the file type: .pdf (every page in one file), or .png, .jpg, "
+                                                ".jpeg (one file per page, numbered when there are several)."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of the pages here (.pdf, .png, .jpg or "
+                                                   ".jpeg) before printing them; repeat for more files."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Print a web article or an X post as magazine pages (A4, as many pages as the text needs).
+
+    The title, author, site and full text are kept; navigation, ads and other page clutter are left out.
+    """
+    from prt import article, booth
+    # Fetch, convert and lay out every page before a file is written or a driver exists, so a page that
+    # cannot be fetched or converted never leaves a partial result or reaches the printer.
+    preview_format = booth.format_for(preview) if preview else None
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    text = article.load(source, STATE.timeout or STATE.cfg.timeout)
+    pages = article.compose_pages(text, paper.value)
+    count = f"{len(pages)} page{'s' if len(pages) != 1 else ''}"
+
+    def write(path: Path, fmt: str) -> list[dict[str, Any]]:
+        written = []
+        for file, data in article.page_files(pages, path, fmt):
+            size = _save_booth_page(data, file)
+            STATE.note("ok", f"saved {file}", f"{paper.value} · {fmt.upper()} · {size / 1024:,.0f} KiB")
+            written.append({"file": str(file), "format": fmt, "bytes": size})
+        return written
+
+    files = write(preview, preview_format) if preview else []
+    # Copies are written before connecting, so they exist even when the printer is unreachable.
+    saved = [entry for path, fmt in copies for entry in write(path, fmt)]
+    summary = {"action": "article", "style": paper.value, "title": text.title, "pages": len(pages)}
+    extra = {"saved": saved} if save else {}
+    if preview:
+        STATE.note("ok", f"{count} of '{text.title}' rendered", "not printed")
+        if STATE.json:
+            STATE.write(json.dumps({**summary, "files": files, **extra}) + "\n")
+        return
+    d = STATE.driver()
+    d.require(Capability.PRINT)
+    kind = article.ARTICLE_STYLES[paper.value].kind
+    _confirm(f"Print {count} of '{text.title}' as a {kind} on {d.display_name}?", yes)
+    jobs = []
+    for number, page in enumerate(pages, start=1):
+        jobs.append(d.submit(booth.to_jpeg(page), "image/jpeg",
+                             PrintOptions(job_name=f"prt article {number}/{len(pages)} {text.title[:60]}",
+                                          media="a4")))
+    STATE.note("ok", f"{count} queued as job{'s' if len(jobs) != 1 else ''} {', '.join(map(str, jobs))}",
+               d.display_name)
+    if STATE.json:
+        STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
+
+
 @jobs_app.callback()
 def jobs(ctx: typer.Context,
          all_: bool = typer.Option(False, "--all", "-a", help="Include completed jobs.")) -> None:
