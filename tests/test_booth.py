@@ -1,9 +1,11 @@
 import io
 import json
+import re
 import time
+from pathlib import Path
 
 import pytest
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageStat
 
 from prt import booth
 from prt.booth import Story
@@ -343,6 +345,66 @@ def test_wizard_arch_keeps_the_top_of_a_full_length_portrait(monkeypatch):
     [(x0, y0, x1, _)] = boxes
     mid = (x0 + x1) // 2
     assert page.crop((mid - 40, y0 + 10, mid + 40, y0 + 20)).getextrema()[1] < 60
+
+
+# --- saving a copy -------------------------------------------------------------------------------
+
+def _pdf_page_image(pdf):
+    """The page picture embedded in a one-page PDF (Pillow cannot open PDFs itself)."""
+    found = re.search(rb"/Filter /DCTDecode.*?/Length (\d+)\s*>>stream\n", pdf, re.S)
+    assert found, "no JPEG image in the PDF"
+    image = Image.open(io.BytesIO(pdf[found.end():found.end() + int(found.group(1))]))
+    image.load()
+    return image
+
+
+@pytest.mark.parametrize("name, fmt", [("page.pdf", "pdf"), ("PAGE.PDF", "pdf"), ("page.png", "png"),
+                                       ("Page.Png", "png"), ("page.jpg", "jpeg"), ("page.JPG", "jpeg"),
+                                       ("page.jpeg", "jpeg"), ("page.Jpeg", "jpeg"), ("my page.jpg.pdf", "pdf")])
+def test_format_for_reads_the_extension_in_any_case(name, fmt):
+    assert booth.format_for(Path(name)) == fmt
+
+
+@pytest.mark.parametrize("name, reason", [("page.gif", "unknown file type .gif"),
+                                          ("page.pdf.txt", "unknown file type .txt"),
+                                          ("page", "no file extension"), ("folder/page", "no file extension")])
+def test_format_for_refuses_other_file_types(name, reason):
+    with pytest.raises(PrinterError) as exc:
+        booth.format_for(Path(name))
+    assert str(exc.value) == f"cannot save {Path(name)}: {reason}"
+    assert exc.value.exit_code == 2 and exc.value.hint == "end the file name in one of .pdf, .png, .jpg, .jpeg"
+
+
+@pytest.mark.parametrize("style", STYLES)
+def test_pdf_copy_is_one_a4_page_showing_the_printed_page(style):
+    page = _render(Image.new("RGB", (300, 400), "blue"), style=style)
+    pdf = booth.to_bytes(page, "pdf")
+    assert pdf.startswith(b"%PDF-") and pdf.count(b"/Type /Page\n") == 1
+    assert b"/MediaBox [ 0 0 595.2 841.92 ]" in pdf  # 210 x 297 mm in points: A4
+    image = _pdf_page_image(pdf)
+    assert image.size == A4_150DPI and image.mode == "RGB"
+    # JPEG compression shifts pixels a little; another style's page differs by 40+ on average.
+    assert max(ImageStat.Stat(ImageChops.difference(image, page)).mean) < 4
+
+
+@pytest.mark.parametrize("style", STYLES)
+def test_png_copy_is_pixel_identical_to_the_page(style):
+    page = _render(Image.new("RGB", (300, 400), "blue"), style=style)
+    image = Image.open(io.BytesIO(booth.to_bytes(page, "png")))
+    assert image.format == "PNG" and image.size == A4_150DPI and image.mode == "RGB"
+    assert ImageChops.difference(image, page).getbbox() is None
+    assert [round(d) for d in image.info["dpi"]] == [150, 150]
+
+
+@pytest.mark.parametrize("style", STYLES)
+def test_jpeg_copy_is_the_printed_jpeg(style):
+    page = _render(Image.new("RGB", (300, 400), "blue"), style=style)
+    assert booth.to_bytes(page, "jpeg") == booth.to_jpeg(page)
+
+
+def test_to_bytes_refuses_a_format_it_cannot_write():
+    with pytest.raises(ValueError, match="unknown page format 'gif'"):
+        booth.to_bytes(Image.new("RGB", A4_150DPI, "white"), "gif")
 
 
 # --- photo -------------------------------------------------------------------------------------

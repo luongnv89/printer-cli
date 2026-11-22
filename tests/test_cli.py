@@ -358,6 +358,105 @@ def test_booth_preview_to_missing_folder(capsys, tmp_path, booth_printer):
     assert code == 1 and "cannot write" in err and booth_printer.made == []
 
 
+def _page_of(path):
+    from prt import booth
+    return booth.compose(booth.load_photo(path), None, "metro")[0]
+
+
+def _assert_same_page(file, page):
+    from PIL import Image, ImageChops
+    with Image.open(file) as image:
+        assert image.size == (1240, 1754) and ImageChops.difference(image.convert("RGB"), page).getbbox() is None
+
+
+def _print_jobs(fake):
+    """(document-format, data) of every Print-Job the CLI sent."""
+    return [(next(a.value for a in attrs if a.name == "document-format"), data)
+            for op, attrs, _, data in fake.client.requests if op == ipp.OP_PRINT_JOB]
+
+
+@pytest.mark.parametrize("name, magic", [("page.pdf", b"%PDF-"), ("PAGE.PNG", b"\x89PNG\r\n\x1a\n"),
+                                         ("page.Jpeg", b"\xff\xd8\xff")])
+def test_booth_preview_picks_the_file_type_from_the_extension(capsys, tmp_path, booth_printer, name, magic):
+    photo, out_file = _booth_photo(tmp_path), tmp_path / name
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--preview", str(out_file))
+    assert code == 0 and "not printed" in err and booth_printer.made == []
+    assert json.loads(out) == {"action": "booth", "style": "metro", "file": str(out_file),
+                               "bytes": out_file.stat().st_size}
+    assert out_file.read_bytes().startswith(magic)
+
+
+def test_booth_save_prints_and_keeps_digital_copies(capsys, tmp_path, booth_printer):
+    photo, pdf, png = _booth_photo(tmp_path), tmp_path / "page.pdf", tmp_path / "page.png"
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--save", str(pdf),
+                         "--save", str(png), "--yes")
+    assert code == 0 and "queued as job 101" in err and f"saved {pdf}" in err and f"saved {png}" in err
+    assert json.loads(out) == {"action": "booth", "style": "metro", "job_id": 101, "saved": [
+        {"file": str(pdf), "format": "pdf", "bytes": pdf.stat().st_size},
+        {"file": str(png), "format": "png", "bytes": png.stat().st_size}]}
+    assert _print_jobs(booth_printer.driver) == [("image/jpeg", _expected_page(photo))]
+    assert pdf.read_bytes().startswith(b"%PDF-")
+    _assert_same_page(png, _page_of(photo))
+
+
+def test_booth_preview_with_save_writes_every_file_and_prints_nothing(capsys, tmp_path, booth_printer):
+    photo, jpg, pdf = _booth_photo(tmp_path), tmp_path / "page.jpg", tmp_path / "copy.PDF"
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "-o", str(jpg),
+                         "--save", str(pdf))
+    assert code == 0 and "not printed" in err
+    assert booth_printer.made == [] and booth_printer.jobs() == []
+    assert json.loads(out) == {"action": "booth", "style": "metro", "file": str(jpg),
+                               "bytes": jpg.stat().st_size,
+                               "saved": [{"file": str(pdf), "format": "pdf", "bytes": pdf.stat().st_size}]}
+    assert jpg.read_bytes() == _expected_page(photo) and pdf.read_bytes().startswith(b"%PDF-")
+
+
+def test_booth_save_keeps_the_copy_when_printing_is_declined(capsys, tmp_path, monkeypatch, booth_printer):
+    photo, png = _booth_photo(tmp_path), tmp_path / "page.png"
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True, raising=False)
+    monkeypatch.setattr("typer.confirm", lambda q, **kw: False)
+    code, _, err = run(capsys, "-p", "demo", "booth", str(photo), "--save", str(png))
+    assert code == 1 and "cancelled" in err and booth_printer.jobs() == []
+    _assert_same_page(png, _page_of(photo))
+
+
+def test_booth_save_works_without_a_reachable_printer(capsys, tmp_path, monkeypatch, booth_printer):
+    from prt.drivers.base import Unreachable
+
+    def unreachable(target, timeout=5.0):
+        raise Unreachable(target, "timed out")
+
+    monkeypatch.setattr("prt.cli.make_driver", unreachable)
+    photo, png = _booth_photo(tmp_path), tmp_path / "page.png"
+    code, _, err = run(capsys, "-p", "demo", "booth", str(photo), "--save", str(png), "--yes")
+    assert code == 1 and "cannot reach printer" in err and f"saved {png}" in err
+    _assert_same_page(png, _page_of(photo))
+
+
+@pytest.mark.parametrize("args, bad", [
+    (["-o", "page.gif"], "page.gif"),
+    (["--preview", "page"], "page"),
+    (["--save", "page.pdf", "--save", "page.txt", "--yes"], "page.txt"),
+    (["-o", "page.png", "--save", "page.bmp"], "page.bmp"),
+])
+def test_booth_unsupported_file_type_writes_and_sends_nothing(capsys, tmp_path, monkeypatch, booth_printer,
+                                                              args, bad):
+    monkeypatch.chdir(tmp_path)
+    _booth_photo(tmp_path)
+    code, out, err = run(capsys, "-p", "demo", "--no-color", "booth", "photo.jpg", *args)
+    assert code == 2 and out == ""
+    assert f"error: cannot save {bad}:" in err and "hint: end the file name in one of .pdf, .png, .jpg, .jpeg" in err
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["photo.jpg"]
+    assert booth_printer.made == [] and booth_printer.jobs() == []
+
+
+def test_booth_save_to_missing_folder_prints_nothing(capsys, tmp_path, booth_printer):
+    code, _, err = run(capsys, "-p", "demo", "booth", str(_booth_photo(tmp_path)),
+                       "--save", str(tmp_path / "no" / "page.pdf"), "--yes")
+    assert code == 1 and "cannot write" in err
+    assert booth_printer.made == [] and booth_printer.jobs() == []
+
+
 def test_booth_warns_when_text_is_cut_to_fit(capsys, tmp_path, booth_printer):
     photo, out_file = _booth_photo(tmp_path), tmp_path / "page.jpg"
     code, _, err = run(capsys, "-p", "demo", "--no-color", "booth", str(photo), "--yes",
