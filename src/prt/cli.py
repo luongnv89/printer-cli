@@ -645,6 +645,76 @@ def print_cmd(
         STATE.write(json.dumps(results) + "\n")
 
 
+class BoothStyle(str, Enum):
+    metro = "metro"
+    daily = "daily"
+    wizard = "wizard"
+    wanted = "wanted"
+
+
+@app.command("booth")
+def booth_cmd(
+    photo: Path = typer.Argument(..., help="Photo of a person: JPEG, PNG, WebP, GIF, BMP or TIFF."),
+    paper: BoothStyle = typer.Option(BoothStyle.metro, "--style", "-s",
+                                     help="metro (colour tabloid, 2 columns), daily (black-and-white "
+                                          "broadsheet, 3 columns), wizard (ornate trading card) or wanted "
+                                          "(weathered pirate poster)."),
+    story_file: Optional[Path] = typer.Option(None, "--story-file",
+                                              help="JSON story: headline and story required; kicker, caption, "
+                                                   "byline optional."),
+    headline: Optional[str] = typer.Option(None, "--headline",
+                                           help="Headline; the name on wizard and wanted (overrides the story "
+                                                "file)."),
+    story: Optional[str] = typer.Option(None, "--story",
+                                        help="Story text, or the lore / description on wizard and wanted; a "
+                                             "newline starts a new paragraph."),
+    kicker: Optional[str] = typer.Option(None, "--kicker",
+                                         help="Small label above the headline; the card type on wizard, the "
+                                              "'Dead or alive' line on wanted."),
+    caption: Optional[str] = typer.Option(None, "--caption",
+                                          help="Line under the photo; the subtitle on wizard, the reward line on "
+                                               "wanted."),
+    byline: Optional[str] = typer.Option(None, "--byline",
+                                         help="Author line, e.g. 'By Jo Smith'; the footer on wizard and wanted."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save the page as a JPEG here instead of printing."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Photo booth: print a photo as a newspaper front page, a wizard card or a wanted poster (A4).
+
+    Without a story each style uses its own built-in one. Story flags override --story-file.
+    """
+    from prt import booth
+    # Decode and check every input before a driver exists, so bad input never reaches the printer.
+    image = booth.load_photo(photo)
+    base = booth.load_story(story_file) if story_file else booth.default_story(paper.value)
+    text = booth.with_overrides(base, headline=headline, story=story, kicker=kicker, caption=caption,
+                                byline=byline)
+    page, cut = booth.compose(image, text, paper.value)
+    data = booth.to_jpeg(page)
+    if cut:
+        STATE.note("warn", f"{', '.join(cut)} cut to fit the {paper.value} page",
+                   "shorten it, or check the page with --preview")
+    if preview:
+        try:
+            preview.write_bytes(data)
+        except OSError as exc:
+            raise PrinterError(f"cannot write {preview}: {exc.strerror}",
+                               hint="check that the folder exists and is writable") from exc
+        STATE.note("ok", f"saved {preview}", f"{paper.value} page · {len(data) / 1024:,.0f} KiB · not printed")
+        if STATE.json:
+            STATE.write(json.dumps({"action": "booth", "style": paper.value, "file": str(preview),
+                                    "bytes": len(data)}) + "\n")
+        return
+    d = STATE.driver()
+    d.require(Capability.PRINT)
+    _confirm(f"Print {photo.name} as a {booth.KINDS[paper.value]} on {d.display_name}?", yes)
+    job = d.submit(data, "image/jpeg", PrintOptions(job_name=f"prt booth {photo.name}", media="a4"))
+    STATE.note("ok", f"booth page queued as job {job}", d.display_name)
+    if STATE.json:
+        STATE.write(json.dumps({"action": "booth", "style": paper.value, "job_id": job}) + "\n")
+
+
 @jobs_app.callback()
 def jobs(ctx: typer.Context,
          all_: bool = typer.Option(False, "--all", "-a", help="Include completed jobs.")) -> None:

@@ -36,7 +36,7 @@ prt -p demo status
 ╰─┘4 alerts · checked 17:42└───────────────────────────────────────────────╯
 ```
 
-Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Safety](#safety)
+Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Photo booth](#photo-booth) · [Safety](#safety)
 
 ## Why printer-cli
 
@@ -78,6 +78,7 @@ Every command also works against the built-in replay: `prt -p demo status`, `prt
 | `prt maintain test-page` | Colour test page: ink bars, gradients, grey steps, fine lines |
 | `prt maintain identify` | Flash the printer's panel |
 | `prt print FILE… [-n 2] [--media 4x6] [--tray photo] [--quality high] [--mono] [--duplex]` | Print |
+| `prt booth PHOTO [--style metro\|daily\|wizard\|wanted] [--story-file story.json] [--preview page.jpg]` | Photo booth: print the photo as an A4 newspaper front page, wizard card or wanted poster (see [Photo booth](#photo-booth)) |
 | `prt jobs [--all]` / `prt jobs cancel ID` | List or cancel jobs |
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
 | `prt tui` | Full-screen dashboard |
@@ -96,6 +97,7 @@ Every command also works against the built-in replay: `prt -p demo status`, `prt
 prt ink -f json | jq -r '.inks[] | select(.state != "ok") | "\(.name): \(.level)%"'
 prt status | grep '^alert'            # piped output is tab-separated, no colour
 prt scan -o - --type jpeg > page.jpg
+prt booth me.jpg --style daily --story-file story.json --preview page.jpg   # render only, nothing printed
 ```
 
 Exit codes: `0` ok · `1` runtime/network error (also when only cached status is shown) · `2` usage error · `3` bad input file · `130` Ctrl-C.
@@ -112,10 +114,26 @@ Exit codes: `0` ok · `1` runtime/network error (also when only cached status is
 | `1`–`9` | Switch between saved printers |
 | `q` | Quit |
 
+## Photo booth
+
+`prt booth photo.jpg` prints the photo as a newspaper front page with a short news story, or as a themed card or poster. With no story each style uses its own built-in text.
+
+- `--style metro` (default) is a colour tabloid with two columns. `--style daily` is a black-and-white broadsheet with three columns.
+- `--style wizard` is an ornate trading card: a dark card with a gold double border and cut marks, the photo in an arched gold frame, a moon-and-star emblem, a name ribbon and a lore box. `--style wanted` is a weathered parchment poster: huge WANTED lettering, the photo in a heavy frame, a "dead or alive" line, the name and a reward.
+- The themed styles reuse the story fields: `headline` is the name, `kicker` the card type (wizard) or the "dead or alive" line (wanted), `caption` the subtitle (wizard) or the reward line (wanted), `story` the lore or description, and `byline` the footer. Without them, `wanted` prints "The Grinning Captain" with a reward of 1,000,000 gold.
+- Write your own story as JSON: `headline` and `story` are required, `kicker`, `caption` and `byline` are optional. Pass it with `--story-file story.json`. `--headline`, `--story`, `--kicker`, `--caption` and `--byline` override single fields.
+- The page uses the font that ships with Pillow, which covers basic Latin only. Accents print without their marks, and other scripts and emoji are refused with an error.
+- `--preview page.jpg` saves the page without printing.
+- The length limits (headline 120, story 2500, kicker 40, caption 200, byline 80 characters) are what the command accepts, not what always fits. `metro` has the least room: about 70 characters of headline on two full-size lines, about 100 on three smaller ones, and about 100 characters of caption under a portrait photo.
+- Text too long for its space is cut with `…` after the last whole word that fits, and `prt booth` warns on stderr naming the fields that were cut. Transparent parts of a PNG print as white paper.
+- The photo and story are checked before anything is sent, so an unreadable image or a bad story file exits with an error and prints nothing.
+
+To let an AI agent look at the photo and write a story that fits it, give it the [photo-booth skill](https://github.com/luongnv89/printer-cli/blob/main/skills/photo-booth/SKILL.md).
+
 ## Safety
 
 - **Head cleaning is refused** while any ink is at or below its low level, or while the waste ink pad is flagged. Cleaning flushes ink into the pad, and a full pad locks the printer until it's serviced. `--force` overrides this, and the TUI offers "Clean anyway".
-- Nozzle check, cleaning and the test page ask for confirmation first. In scripts, pass `--yes`.
+- Nozzle check, cleaning, the test page and the photo booth ask for confirmation first. In scripts, pass `--yes`.
 - printer-cli never resets the waste ink counter or writes to the printer's EEPROM.
 
 ## How it talks to printers
@@ -179,7 +197,7 @@ To add a vendor, subclass `IPPDriver`, declare its `capabilities`, override what
 
 ```bash
 uv sync
-uv run pytest            # 88 tests, no printer needed
+uv run pytest            # 215 tests, no printer needed
 uv run prt -p demo tui
 ```
 
