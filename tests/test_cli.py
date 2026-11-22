@@ -265,12 +265,12 @@ def test_booth_preview_writes_jpeg_and_never_creates_a_driver(capsys, tmp_path, 
     photo, out_file = _booth_photo(tmp_path), tmp_path / "page.jpg"
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "-s", "daily",
                          "--preview", str(out_file))
+    assert booth_printer.made == []
     assert code == 0 and "not printed" in err
     assert json.loads(out) == {"action": "booth", "style": "daily", "file": str(out_file),
                                "bytes": out_file.stat().st_size}
     assert out_file.read_bytes() == _expected_page(photo, style="daily")
     assert Image.open(out_file).size == (1240, 1754)
-    assert booth_printer.made == []
 
 
 def test_booth_preview_to_missing_folder(capsys, tmp_path, booth_printer):
