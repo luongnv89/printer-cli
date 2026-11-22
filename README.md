@@ -107,7 +107,7 @@ Exit codes: `0` ok · `1` runtime/network error (also when only cached status is
 | Key | Action |
 |---|---|
 | `r` | Refresh (auto-refreshes every 10 s) |
-| `n` / `c` / `i` | Nozzle check / head cleaning / identify (each asks first) |
+| `n` / `c` / `i` | Nozzle check / head cleaning (both ask first) / identify |
 | `p` / `s` / `j` | Print, Scan, Jobs tabs |
 | `1`–`9` | Switch between saved printers |
 | `q` | Quit |
@@ -115,7 +115,7 @@ Exit codes: `0` ok · `1` runtime/network error (also when only cached status is
 ## Safety
 
 - **Head cleaning is refused** while any ink is at or below its low level, or while the waste ink pad is flagged. Cleaning flushes ink into the pad, and a full pad locks the printer until it's serviced. `--force` overrides this, and the TUI offers "Clean anyway".
-- Every maintenance action asks for confirmation. In scripts, pass `--yes`.
+- Nozzle check, cleaning and the test page ask for confirmation first. In scripts, pass `--yes`.
 - printer-cli never resets the waste ink counter or writes to the printer's EEPROM.
 
 ## How it talks to printers
@@ -191,4 +191,4 @@ uv run prt -p demo tui
 
 ## License
 
-[MIT](LICENSE) © Luong NGUYEN
+[MIT](https://github.com/luongnv89/printer-cli/blob/main/LICENSE) © Luong NGUYEN
