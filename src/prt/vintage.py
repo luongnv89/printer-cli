@@ -1,0 +1,423 @@
+"""Vintage gazette: one photo or many, laid out as the pages of an old newspaper.
+
+The look follows the printed gazette at luongnv.com/news: cream paper and a single dark ink, a blackletter
+masthead between hairline and double rules, a small-caps dateline, headlines in Playfair Display capitals
+and Old Standard TT text in ruled columns, with no textures or colour. Photos are toned from ink to paper.
+
+The front page holds the masthead, the story and up to ``FIRST`` photos: the lead picture and a row of two
+plates. Each later page holds up to ``PER_PAGE`` plates in a ruled 2 × 3 grid, so every photo is printed.
+Pages are A4 at 150 dpi like the booth pages, and each one prints as its own JPEG job.
+
+Every word is drawn in a bundled font (``prt.fonts``), and every character is checked against the font that
+draws it: what a font lacks becomes a stand-in, its unaccented form, or "?", never an empty box.
+"""
+
+from __future__ import annotations
+
+import os
+import unicodedata
+from functools import lru_cache
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+from prt import booth, fonts
+from prt.booth import Story
+from prt.drivers.base import PrinterError
+from prt.layout import (BOTTOM, CONTENT_W, ELLIPSIS, _STAND_INS, _col_width, _ellipsize, _lead, _paragraphs, _rows,
+                        _text_block, _wrap, draw_columns, flow_columns)
+from prt.testpage import H, MARGIN, W
+
+PAPER = (244, 236, 216)  # #f4ecd8
+INK = (26, 26, 26)  # #1a1a1a
+RULE = 2  # a hairline: about one CSS pixel at 150 dpi
+
+FIRST = 3  # photos on the front page: the lead picture and a row of two plates
+PER_PAGE = 6  # plates on every later page, in a 2 × 3 grid
+MAX_PAGES = 10
+MAX_PHOTOS = FIRST + (MAX_PAGES - 1) * PER_PAGE  # more is refused, never cut short
+LEAD_LIMIT = CONTENT_W  # longest side a photo is kept at once decoded: the lead is never wider than the text
+PLATE_LIMIT = 540  # and a plate never wider than half of it
+
+MASTHEAD = "The Photo Gazette"
+TAGLINE = "Pictures, people, and matters of consequence"
+EDITION = "Vol. I · No. 1"
+PRICE = "Price: Complimentary"
+
+DEFAULT_GAZETTE_STORY = Story(
+    kicker="Special edition",
+    headline="Pictures From a Day Worth Remembering",
+    story=("The photographs on this page were brought to our offices this morning and set in type at once. "
+           "Readers will find the finest of them above, and the rest gathered as plates for closer study.\n"
+           "Our correspondents report fair weather, good company and not a single blurred frame. The editors "
+           "have printed every picture in full, in keeping with the custom of this paper.\n"
+           "Further editions will follow as more pictures arrive."),
+    caption="Our lead photograph, as it came off the press.",
+    byline="By the prt gazette desk",
+)
+
+GUTTER = 40
+BODY, BODY_MIN = 24, 16  # story type: design size, and the smallest it shrinks to before text is cut
+LEAD_MIN = 300  # lead photo height: never smaller, and grown into the room a short story leaves
+LEAD_MAX, LEAD_MAX_SOLO = 520, 760  # largest lead height with a row of plates under it, and alone
+PLATE_H = 270  # height of the plate row on the front page
+FRAME = 6  # the hairline frame sits this far outside a photo
+
+
+# --- which photo goes where --------------------------------------------------------------------
+
+
+def plan_pages(n: int) -> list[list[int]]:
+    """The photo numbers on each page: the first ``FIRST`` on page 1, then ``PER_PAGE`` a page, in order."""
+    if n < 1:
+        raise ValueError("a gazette needs at least one photo")
+    return [list(range(min(n, FIRST)))] + [list(range(i, min(n, i + PER_PAGE))) for i in range(FIRST, n, PER_PAGE)]
+
+
+def check_count(n: int) -> None:
+    """Refuse (exit code 3) more photos than ``MAX_PAGES`` pages hold, rather than leave any out."""
+    if n > MAX_PHOTOS:
+        raise PrinterError(f"gazette takes at most {MAX_PHOTOS} photos, got {n}",
+                           hint=f"print them in batches of up to {MAX_PHOTOS} ({MAX_PAGES} pages each)", exit_code=3)
+
+
+def page_paths(path: Path, fmt: str, count: int) -> list[Path]:
+    """The files ``article.page_files`` writes for ``count`` pages, named before any page exists."""
+    if fmt == "pdf" or count == 1:
+        return [path]
+    return [path.with_name(f"{path.stem}-{n}{path.suffix}") for n in range(1, count + 1)]
+
+
+def check_outputs(outputs: list[Path], photos: list[Path]) -> None:
+    """Refuse (exit code 2) an output file that is one of the photos, so saving a page never destroys one."""
+    for target in outputs:
+        for photo in photos:
+            if _same_file(target, photo):
+                raise PrinterError(f"output {target} would overwrite input photo {photo}",
+                                   hint="save the pages under another name", exit_code=2)
+
+
+def _same_file(target: Path, photo: Path) -> bool:
+    if target.exists():  # also catches hard links, and other spellings on a case-insensitive disk
+        return photo.exists() and os.path.samefile(target, photo)
+    a, b = (unicodedata.normalize("NFC", str(path.resolve())) for path in (target, photo))
+    return a == b or (a.casefold() == b.casefold() and _ignores_case(target.resolve().parent))
+
+
+def _ignores_case(folder: Path) -> bool:
+    flipped = Path(str(folder).swapcase())
+    return flipped != folder and flipped.exists() and os.path.samefile(folder, flipped)
+
+
+# --- photos ------------------------------------------------------------------------------------
+
+
+def _downscale(photo: Image.Image, limit: int) -> Image.Image:
+    """A copy whose longest side is at most ``limit`` px (never enlarged); ``photo`` itself is left as it is."""
+    small = photo.copy()
+    small.thumbnail((limit, limit))
+    return small
+
+
+def load_photos(paths: list[Path]) -> list[Image.Image]:
+    """Decode every photo now (exit code 3 on the first bad one), each shrunk to the most it prints at.
+
+    One at a time, and nothing keeps the full-size decode once its small copy exists, so a stack of large
+    photos never sits in memory at full size.
+    """
+    return [_downscale(booth.load_photo(path), LEAD_LIMIT if i == 0 else PLATE_LIMIT) for i, path in enumerate(paths)]
+
+
+def _treat(photo: Image.Image) -> Image.Image:
+    """Tone the photo from ink (shadows) to paper (highlights), like a halftone on newsprint."""
+    return ImageOps.colorize(ImageOps.grayscale(photo), black=INK, white=PAPER)
+
+
+def _place(page: Image.Image, photo: Image.Image, box: tuple[int, int, int, int]) -> None:
+    """Crop to fill the box (a little more off the bottom than the top, to keep heads), tone, frame."""
+    x0, y0, x1, y1 = box
+    fitted = ImageOps.fit(photo, (x1 - x0, y1 - y0), method=Image.Resampling.LANCZOS, centering=(0.5, 0.1))
+    page.paste(_treat(fitted), (x0, y0))
+    ImageDraw.Draw(page).rectangle([x0 - FRAME, y0 - FRAME, x1 + FRAME - 1, y1 + FRAME - 1], outline=INK,
+                                   width=RULE)
+
+
+def _contain(photo: Image.Image, top: int, x0: int, width: int, height: int) -> tuple[int, int, int, int]:
+    """The largest box of the photo's shape inside width × height at (x0, top), centred."""
+    scale = min(width / photo.width, height / photo.height)
+    w, h = max(1, round(photo.width * scale)), max(1, round(photo.height * scale))
+    bx, by = x0 + (width - w) // 2, top + (height - h) // 2
+    return bx, by, bx + w, by + h
+
+
+# --- type --------------------------------------------------------------------------------------
+
+
+@lru_cache(maxsize=64)
+def _notdef(face: ImageFont.FreeTypeFont) -> bytes:
+    return bytes(face.getmask("\U0010fffd"))
+
+
+def _has(face: ImageFont.FreeTypeFont, c: str) -> bool:
+    return bytes(face.getmask(c)) != _notdef(face)
+
+
+@lru_cache(maxsize=16384)
+def _char_in(face: ImageFont.FreeTypeFont, c: str) -> str:
+    """What ``face`` draws for ``c``: itself, a stand-in, its unaccented form, or "?"."""
+    if unicodedata.combining(c):
+        return ""  # a separate accent mark is dropped, like a composed one
+    if c.isspace():
+        return " "
+    if _has(face, c):
+        return c
+    base = "".join(b for b in unicodedata.normalize("NFKD", c) if not unicodedata.combining(b))
+    for other in (_STAND_INS.get(c, ""), base):
+        if other and all(_has(face, b) for b in other):
+            return other
+    return "?"
+
+
+def _printable_face(text: str, face: ImageFont.FreeTypeFont) -> str:
+    """``text`` with every character ``face`` cannot draw replaced (see ``_char_in``)."""
+    return "".join(_char_in(face, c) for c in text)
+
+
+def _fit_face(text: str, role: str, size: int, min_size: int, width: int, max_lines: int):
+    """Largest size (size → min_size) of ``role`` that wraps ``text`` into ``max_lines``; cut with "…" at the
+    smallest. Returns (font, size, lines, cut)."""
+    for s in range(size, min_size - 1, -2):
+        font = fonts.face(role, s)
+        lines = _wrap(_printable_face(text, font), font, width)
+        if len(lines) <= max_lines:
+            return font, s, lines, False
+    return font, s, lines[:max_lines - 1] + [_ellipsize(lines[max_lines - 1], font, width)], True
+
+
+def _centred(d: ImageDraw.ImageDraw, y: int, text: str, role: str, size: int, min_size: int, lines: int,
+             x0: int = MARGIN, width: int = CONTENT_W) -> tuple[int, bool]:
+    """Fit ``text`` in ``lines`` lines centred in ``width`` from ``x0``; returns (y below, cut)."""
+    font, s, wrapped, cut = _fit_face(text, role, size, min_size, width, lines)
+    return _text_block(d, x0, y, wrapped, font, s, INK, width=width), cut
+
+
+Runs = list[tuple[ImageFont.FreeTypeFont, str]]
+
+
+def _caps(text: str, role: str, size: int) -> Runs:
+    """Small capitals as (font, text) runs: capitals at ``size``, lower-case letters as capitals at 3/4 size."""
+    runs: Runs = []
+    for c in text:
+        font = fonts.face(role, round(size * 0.75) if c.islower() else size)
+        glyphs = _printable_face(c.upper(), font)  # upper first: it can give letters the font lacks
+        if runs and runs[-1][0] is font:
+            runs[-1] = (font, runs[-1][1] + glyphs)
+        else:
+            runs.append((font, glyphs))
+    return runs
+
+
+def _caps_width(runs: Runs) -> float:
+    return sum(font.getlength(text) for font, text in runs)
+
+
+def _draw_caps(d: ImageDraw.ImageDraw, x: float, baseline: float, runs: Runs) -> None:
+    for font, text in runs:
+        if text:
+            d.text((x, baseline), text, font=font, fill=INK, anchor="ls")  # one shared baseline
+        x += font.getlength(text)
+
+
+def _fit_caps(text: str, role: str, size: int, min_size: int, width: int) -> tuple[Runs, int, bool]:
+    """Small caps shrunk (size → min_size) to fit ``width``, then cut with "…". Returns (runs, size, cut)."""
+    for s in range(size, min_size - 1, -1):
+        runs = _caps(text, role, s)
+        if _caps_width(runs) <= width:
+            return runs, s, False
+    while text and _caps_width(_caps(text + ELLIPSIS, role, s)) > width:
+        text = text[:-1]
+    return _caps(text.rstrip() + ELLIPSIS, role, s), s, True
+
+
+def _rule(d: ImageDraw.ImageDraw, y: int, x0: int = MARGIN, x1: int = W - MARGIN) -> None:
+    d.line([(x0, y), (x1, y)], fill=INK, width=RULE)
+
+
+def _double(d: ImageDraw.ImageDraw, y: int) -> int:
+    """A double rule from y; returns the y below it."""
+    _rule(d, y)
+    _rule(d, y + 5)
+    return y + 7
+
+
+# --- pages -------------------------------------------------------------------------------------
+
+Placement = tuple[int, tuple[int, int, int, int]]  # (photo number, box it was printed in)
+
+
+def _story(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int]) -> bool:
+    """The story in two ruled columns, shrinking the type until it fits, else cut with "…"; True when cut."""
+    x0, y0, x1, y1 = box
+    col_w = _col_width(x1 - x0, 2, GUTTER)
+    for s in range(BODY, BODY_MIN - 1, -1):
+        font = fonts.face("body", s)
+        cols, left = flow_columns([_printable_face(p, font) for p in text.split("\n")], font, col_w,
+                                  (y1 - y0) // _lead(s), 2)
+        if not left:
+            break
+    if left:
+        last = cols[-1]
+        while len(last) > 1 and not last[-1]:  # end on text, not on a paragraph gap
+            last.pop()
+        last[-1] = _ellipsize(last[-1], font, col_w)
+    draw_columns(d, cols, x0, y0, col_w, GUTTER, font, s, INK, rule=INK)
+    return bool(left)
+
+
+def _story_height(text: str, size: int) -> int:
+    font = fonts.face("body", size)
+    lines = _paragraphs("\n".join(_printable_face(p, font) for p in text.split("\n")), font,
+                        _col_width(CONTENT_W, 2, GUTTER))
+    return _rows(len(lines), 2) * _lead(size)
+
+
+def _page_mark(d: ImageDraw.ImageDraw, number: int, total: int) -> None:
+    """Closing double rule and "Page n of N" at the foot of the page."""
+    y = _double(d, BOTTOM - 36)
+    text = f"Page {number} of {total}" + (f" · continued on page {number + 1}" if number < total else "")
+    runs = _caps(text, "body-bold", 18)
+    _draw_caps(d, (W - _caps_width(runs)) / 2, y + 24, runs)
+
+
+def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: list[int],
+           total: int) -> tuple[list[Placement], list[str]]:
+    """Masthead, dateline, headline, lead photo, a row of up to two plates, and the story in ruled columns."""
+    d = ImageDraw.Draw(page)
+    cut: list[str] = []
+    y = MARGIN
+    _rule(d, y)
+    y += 18
+    size = next(s for s in range(132, 40, -4) if fonts.face("masthead", s).getlength(MASTHEAD) <= CONTENT_W - 80)
+    mast = fonts.face("masthead", size)
+    top, bottom = mast.getbbox(MASTHEAD)[1::2]
+    d.text(((W - mast.getlength(MASTHEAD)) / 2, y - top), MASTHEAD, font=mast, fill=INK)
+    y += bottom - top + 16
+    y, _ = _centred(d, y, TAGLINE, "body-italic", 24, 24, 1)
+    y = _double(d, y + 4)
+    parts = [_caps(text, "body-bold", 18) for text in (booth._today(), EDITION, PRICE)]
+    baseline = y + 30
+    _draw_caps(d, MARGIN, baseline, parts[0])
+    _draw_caps(d, (W - _caps_width(parts[1])) / 2, baseline, parts[1])
+    _draw_caps(d, W - MARGIN - _caps_width(parts[2]), baseline, parts[2])
+    y = _double(d, baseline + 12) + 22
+
+    if story.kicker:
+        runs, ks, cut_kicker = _fit_caps(story.kicker, "body-bold", 24, 16, CONTENT_W)
+        _draw_caps(d, (W - _caps_width(runs)) / 2, y + ks, runs)
+        y += ks + 18
+        cut += ["kicker"] * cut_kicker
+    y, cut_headline = _centred(d, y, story.headline.upper(), "display-black", 64, 36, 3)
+    cut += ["headline"] * cut_headline
+    _rule(d, y + 4)
+    y += 18
+    if story.byline:
+        y, cut_byline = _centred(d, y, story.byline, "body-italic", 22, 18, 1)
+        cut += ["byline"] * cut_byline
+    y += 8
+
+    lead, plates = photos[indices[0]], indices[1:]
+    if story.caption:
+        cap = _fit_face(story.caption, "body-italic", 22, 18, CONTENT_W - 80, 2)
+        cut += ["caption"] * cap[3]
+    caption_h = len(cap[2]) * _lead(cap[1]) if story.caption else 0
+    plates_h = 10 + PLATE_H + 2 * FRAME + 6 + _lead(20) if plates else 0
+    story_bottom = BOTTOM - 52
+    # Room for the lead and the story: below the lead come its frame, caption, the plate row and a rule.
+    room = story_bottom - y - (2 * FRAME + 6 + caption_h + plates_h + 36)
+    # A short story leaves paper to spare: the lead grows into it, up to a 4:3 crop of a wide photo.
+    largest = min(LEAD_MAX if plates else LEAD_MAX_SOLO,
+                  round((CONTENT_W - 2 * FRAME) / min(lead.width / lead.height, 4 / 3)))
+    height = max(LEAD_MIN, min(largest, room - _story_height(story.story, BODY)))
+    width = max(CONTENT_W // 2, min(CONTENT_W - 2 * FRAME, round(height * lead.width / lead.height)))
+    x0 = (W - width) // 2
+    box = (x0, y + FRAME, x0 + width, y + FRAME + height)
+    _place(page, lead, box)
+    placements = [(indices[0], box)]
+    y = box[3] + FRAME + 6
+    if story.caption:
+        y = _text_block(d, MARGIN + 40, y, cap[2], cap[0], cap[1], INK, width=CONTENT_W - 80)
+
+    if plates:
+        y += 10
+        cell_w = _col_width(CONTENT_W, 2, GUTTER)
+        cells = [MARGIN, MARGIN + cell_w + GUTTER] if len(plates) == 2 else [(W - cell_w) // 2]
+        label_y = y + PLATE_H + 2 * FRAME + 6
+        for k, cx in zip(plates, cells):
+            box = _contain(photos[k], y + FRAME, cx + FRAME, cell_w - 2 * FRAME, PLATE_H)
+            _place(page, photos[k], box)
+            placements.append((k, box))
+            _centred(d, label_y, f"Fig. {k + 1}", "body-italic", 20, 20, 1, cx, cell_w)
+        if len(plates) == 2:
+            rx = MARGIN + cell_w + GUTTER // 2
+            d.line([(rx, y), (rx, label_y + _lead(20))], fill=INK, width=1)
+        y = label_y + _lead(20)
+
+    y += 16
+    _rule(d, y)
+    if _story(d, story.story, (MARGIN, y + 20, W - MARGIN, story_bottom)):
+        cut.append("story")
+    _page_mark(d, 1, total)
+    return placements, cut
+
+
+def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], number: int,
+            total: int) -> list[Placement]:
+    """Running head with the page mark, then up to six plates in a ruled 2 × 3 grid, each with its figure number."""
+    d = ImageDraw.Draw(page)
+    head = fonts.face("masthead", 48)
+    top, bottom = head.getbbox(MASTHEAD)[1::2]
+    d.text((MARGIN, MARGIN - top), MASTHEAD, font=head, fill=INK)
+    mark = _caps(f"{booth._today()} · Page {number} of {total}", "body-bold", 18)
+    _draw_caps(d, W - MARGIN - _caps_width(mark), MARGIN + bottom - top, mark)
+    y = _double(d, MARGIN + bottom - top + 14) + 20
+
+    cell_w = _col_width(CONTENT_W, 2, GUTTER)
+    cell_h = (BOTTOM - 16 - y) // 3
+    label = _lead(20) + 12
+    placements = []
+    for i, k in enumerate(indices):
+        row, col = divmod(i, 2)
+        cx, cy = MARGIN + col * (cell_w + GUTTER), y + row * cell_h
+        box = _contain(photos[k], cy + 16 + FRAME, cx + FRAME, cell_w - 2 * FRAME, cell_h - 32 - 2 * FRAME - label)
+        _place(page, photos[k], box)
+        placements.append((k, box))
+        _centred(d, box[3] + FRAME + 10, f"Fig. {k + 1}", "body-italic", 20, 20, 1, cx, cell_w)
+    rows = -(-len(indices) // 2)
+    for row in range(1, rows):
+        _rule(d, y + row * cell_h)
+    if len(indices) > 1:
+        rx = MARGIN + cell_w + GUTTER // 2
+        d.line([(rx, y), (rx, y + rows * cell_h)], fill=INK, width=1)
+    _double(d, BOTTOM - 7)
+    return placements
+
+
+def compose_pages(photos: list[Image.Image], story: Story | None = None
+                  ) -> tuple[list[Image.Image], list[list[Placement]], list[str]]:
+    """Lay the photos out over the pages ``plan_pages`` gives (with the default story if none is given).
+
+    Returns (pages, placements, cut): ``placements[p]`` lists (photo number, box) for page p, and ``cut``
+    names, in page order, the story fields shortened with "…" to fit the front page.
+    """
+    story = DEFAULT_GAZETTE_STORY if story is None else story
+    plan = plan_pages(len(photos))
+    pages, placements, cut = [], [], []
+    for number, indices in enumerate(plan, start=1):
+        page = Image.new("RGB", (W, H), PAPER)
+        if number == 1:
+            placed, cut = _front(page, photos, story, indices, len(plan))
+        else:
+            placed = _plates(page, photos, indices, number, len(plan))
+        pages.append(page)
+        placements.append(placed)
+    return pages, placements, cut
