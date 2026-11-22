@@ -46,7 +46,8 @@ def test_metro_keeps_colour_and_daily_is_black_and_white():
 
 @pytest.mark.parametrize("style", ["metro", "daily"])
 def test_longest_story_stays_inside_the_page_margins(style):
-    story = Story(headline="H" * LIMITS["headline"], story=("A" * 200 + " ") + "word " * 450,
+    # 141 paragraphs cannot fit even at the smallest type, so the end of the story is cut.
+    story = Story(headline="H" * LIMITS["headline"], story="A" * 200 + "\n" + "Wide paragraph.\n" * 140,
                   kicker="K" * LIMITS["kicker"], caption="c " * 100, byline="B" * LIMITS["byline"])
     page = booth.render(Image.new("RGB", (1600, 400), "red"), booth.check_story(story, 2), style)
     w, h = A4_150DPI
@@ -166,9 +167,17 @@ def test_check_story_strips_control_characters_but_keeps_paragraphs():
 def test_check_story_refuses_text_the_font_cannot_print():
     with pytest.raises(PrinterError) as exc:
         booth.check_story(Story(headline="日本 news", story="S"), 2)
-    assert "headline has characters the page font cannot print: 日 本" in str(exc.value)
+    assert "headline has characters the page font cannot print: 日 (U+65E5), 本 (U+672C)" in str(exc.value)
     assert exc.value.exit_code == 2
     assert booth.check_story(Story(headline="Zoë – Straße", story="S"), 2).headline == "Zoë – Straße"
+    assert booth.check_story(Story(headline="Café", story="S"), 2).headline == "Café"  # decomposed é
+
+
+def test_accents_print_without_their_marks():
+    def page(headline):
+        return booth.render(Image.new("RGB", (40, 40), "white"), Story(headline=headline, story="S"), "daily")
+    assert page("Café") == page("Café") == page("Cafe")
+    assert page("Café") != page("Cafe?")
 
 
 def test_with_overrides_replaces_only_given_fields():

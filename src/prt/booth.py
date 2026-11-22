@@ -80,6 +80,8 @@ def _has_glyph(c: str) -> bool:
 @lru_cache(maxsize=None)
 def _glyphs(c: str) -> str | None:
     """What to draw for one character: itself, its unaccented form, a stand-in, or None."""
+    if unicodedata.combining(c):
+        return ""  # a separate accent mark (decomposed text) is dropped like a composed one
     if c.isspace() or _has_glyph(c):
         return c
     if c in _STAND_INS:
@@ -89,7 +91,7 @@ def _glyphs(c: str) -> str | None:
 
 
 def _printable(text: str) -> str:
-    return "".join(_glyphs(c) or "?" for c in text)
+    return "".join("?" if (g := _glyphs(c)) is None else g for c in text)
 
 
 def check_story(story: Story, exit_code: int) -> Story:
@@ -105,7 +107,8 @@ def check_story(story: Story, exit_code: int) -> Story:
                                hint=f"shorten the {name} so it fits on the page", exit_code=exit_code)
         unprintable = sorted({c for c in value if _glyphs(c) is None})
         if unprintable:
-            raise PrinterError(f"{name} has characters the page font cannot print: {' '.join(unprintable[:10])}",
+            shown = ", ".join(f"{c} (U+{ord(c):04X})" for c in unprintable[:10])
+            raise PrinterError(f"{name} has characters the page font cannot print: {shown}",
                                hint="write it in Latin letters (accents are printed without their marks)",
                                exit_code=exit_code)
         clean[name] = value
