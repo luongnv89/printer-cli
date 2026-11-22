@@ -13,6 +13,7 @@ import io
 import json
 import re
 import unicodedata
+from collections import Counter
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from itertools import islice
@@ -106,7 +107,7 @@ def fetch(url: str, timeout: float, transport: httpx.BaseTransport | None = None
     except httpx.TimeoutException as exc:
         raise PrinterError(f"cannot fetch {url}: no answer within {timeout:g} s",
                            hint="try again, or allow longer with --timeout", exit_code=3) from exc
-    except (httpx.HTTPError, httpx.InvalidURL) as exc:
+    except (httpx.HTTPError, httpx.InvalidURL, UnicodeError) as exc:  # UnicodeError: a host IDNA refuses
         raise PrinterError(f"cannot fetch {url}: {exc}", hint="check the link and your connection",
                            exit_code=3) from exc
 
@@ -144,7 +145,7 @@ def _decode(content: bytes, charset: str | None) -> str:
         if encoding:
             try:
                 return content.decode(encoding, errors="replace")
-            except LookupError:  # a charset name Python does not know
+            except (LookupError, UnicodeError):  # a charset Python does not know, or not a page charset
                 continue
     return content.decode("utf-8", errors="replace")
 
@@ -207,7 +208,9 @@ _CLUTTER = re.compile(r"(?:^|[\s_-])(?:ads?|advert\w*|sponsor\w*|promo\w*|share|
 class _Node:
     tag: str
     id: int
-    skip: bool
+    skip: bool  # furniture by its tag (nav, aside, script…)
+    clutter: bool  # furniture by its class or id
+    outer_clutter: int = 0  # for <article>/<main>: the clutter count outside it, restored when it closes
 
 
 @dataclass(frozen=True)
@@ -217,15 +220,26 @@ class _Para:
     article: int | None  # innermost <article> around it
     main: int | None  # innermost <main> around it
     parent: int  # the element holding the paragraph
+    buried: int = 0  # class/id clutter around its <article>/<main> elements: a comment, a teaser…
 
 
 class _Extractor(HTMLParser):
-    """Collects the page's metadata and every paragraph outside page furniture, with where it sits."""
+    """Collects the page's metadata and every paragraph outside page furniture, with where it sits.
+
+    Elements left open (HTML lets </p>, </td>, </tr>… be omitted) can make the stack deep, so what each
+    event needs from it is kept up to date on push and pop instead of being searched for.
+    """
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.stack: list[_Node] = []
-        self.skipping = 0
+        self.open_tags: Counter[str] = Counter()  # tag -> how many are open
+        self.blocks: list[int] = []  # stack positions of the open _BLOCKS elements
+        self.articles: list[int] = []  # ids of the open <article> elements
+        self.mains: list[int] = []  # ids of the open <main> elements
+        self.skipped_tags = 0  # open elements dropped for their tag: dropped wherever they are
+        self.clutter = 0  # open elements dropped for their class or id, since the innermost <article>/<main>
+        self.buried = 0  # class/id clutter elements around the open <article>/<main> elements
         self.serial = 0
         self.buffer: list[str] = []
         self.paragraphs: list[_Para] = []
@@ -252,11 +266,20 @@ class _Extractor(HTMLParser):
             self._pop()
         if tag in _BLOCKS:
             self._flush()
-        skip = tag in _SKIP or (tag not in _NEVER_CLUTTER and any(
-            _CLUTTER.search(values.get(name, "")) for name in ("class", "id")))
+        skip = tag in _SKIP
+        clutter = tag not in _NEVER_CLUTTER and any(_CLUTTER.search(values.get(name, "")) for name in ("class", "id"))
         self.serial += 1
-        self.stack.append(_Node(tag, self.serial, skip))
-        self.skipping += skip
+        node = _Node(tag, self.serial, skip, clutter)
+        if tag in ("article", "main"):  # a sidebar-named wrapper must not hide the article inside it
+            node.outer_clutter, self.clutter = self.clutter, 0
+            self.buried += node.outer_clutter
+            (self.articles if tag == "article" else self.mains).append(node.id)
+        if tag in _BLOCKS:
+            self.blocks.append(len(self.stack))
+        self.stack.append(node)
+        self.open_tags[tag] += 1
+        self.skipped_tags += skip
+        self.clutter += clutter
         if tag == "title" and not self.page_title:
             self.title = []
         elif tag == "h1" and not self.first_h1:
@@ -266,8 +289,12 @@ class _Extractor(HTMLParser):
         elif tag == "li" and not self.skipping:
             self.buffer.append("- ")
 
+    @property
+    def skipping(self) -> bool:
+        return bool(self.skipped_tags or self.clutter)
+
     def handle_endtag(self, tag: str) -> None:
-        if any(node.tag == tag for node in self.stack):
+        if self.open_tags[tag]:
             while self._pop().tag != tag:
                 pass
 
@@ -275,8 +302,15 @@ class _Extractor(HTMLParser):
         node = self.stack[-1]
         if node.tag in _BLOCKS:
             self._flush()
+            self.blocks.pop()
         self.stack.pop()
-        self.skipping -= node.skip
+        self.open_tags[node.tag] -= 1
+        self.skipped_tags -= node.skip
+        self.clutter -= node.clutter
+        if node.tag in ("article", "main"):
+            self.clutter = node.outer_clutter
+            self.buried -= node.outer_clutter
+            (self.articles if node.tag == "article" else self.mains).pop()
         if node.tag == "title" and self.title is not None:
             self.page_title, self.title = "".join(self.title), None
         elif node.tag == "h1" and self.h1 is not None:
@@ -290,7 +324,7 @@ class _Extractor(HTMLParser):
         for part in (self.title, self.h1, self.byline):
             if part is not None:
                 part.append(data)
-        if not self.skipping and any(node.tag in _BLOCKS for node in self.stack):
+        if not self.skipping and self.blocks:
             self.buffer.append(data.replace("\r", " ").replace("\n", " "))  # only <br> breaks a line
 
     def _flush(self) -> None:
@@ -298,13 +332,12 @@ class _Extractor(HTMLParser):
         lines = [" ".join(line.split()) for line in text.split("\n")]
         if not any(line.strip("- ") for line in lines):
             return
-        blocks = [i for i, node in enumerate(self.stack) if node.tag in _BLOCKS]
-        at = blocks[-1] if blocks else len(self.stack)
-        tag = self.stack[at].tag if blocks else ""
+        at = self.blocks[-1] if self.blocks else len(self.stack)
+        tag = self.stack[at].tag if self.blocks else ""
         parent = self.stack[at - 1].id if at else 0
-        article = next((n.id for n in reversed(self.stack) if n.tag == "article"), None)
-        main = next((n.id for n in reversed(self.stack) if n.tag == "main"), None)
-        self.paragraphs += [_Para(line, tag, article, main, parent) for line in lines if line]
+        article = self.articles[-1] if self.articles else None
+        main = self.mains[-1] if self.mains else None
+        self.paragraphs += [_Para(line, tag, article, main, parent, self.buried) for line in lines if line]
 
     def close(self) -> None:
         super().close()
@@ -324,7 +357,9 @@ def _densest(paras: list[_Para], key) -> list[_Para]:
 
 def from_html(html: str, url: str = "", host: str = "") -> Article:
     """Title, author, site and body of a web page; the body comes from <article>, else <main>, else the
-    element with the most paragraph text. Navigation, ads, share bars, comments and the like are left out."""
+    element with the most paragraph text. Navigation, ads, share bars, comments and the like are left out.
+    An <article>/<main> inside class/id clutter (a comment, a related-post teaser, or a theme's sidebar-named
+    wrapper) is read only when no article or main under less clutter holds text."""
     parser = _Extractor()
     parser.feed(html)
     parser.close()
@@ -333,8 +368,12 @@ def from_html(html: str, url: str = "", host: str = "") -> Article:
     author = next((a for a in (meta.get("author"), meta.get("article:author"), parser.author_link)
                    if a and a.strip() and not _LINK.match(a.strip())), "")
     source = (meta.get("og:site_name") or meta.get("application-name") or host).strip()
-    paras = (_densest(parser.paragraphs, lambda p: p.article) or _densest(parser.paragraphs, lambda p: p.main)
-             or _densest(parser.paragraphs, lambda p: p.parent))
+    by_depth: dict[int, list[_Para]] = {}
+    for para in parser.paragraphs:
+        by_depth.setdefault(para.buried, []).append(para)
+    paras = next((found for _, group in sorted(by_depth.items())
+                  if (found := _densest(group, lambda p: p.article) or _densest(group, lambda p: p.main))),
+                 None) or _densest(parser.paragraphs, lambda p: p.parent)
     body = [p.text for p in paras if " ".join(p.text.split()) != " ".join(title.split())]
     return Article(title=title or source, body=tuple(body), author=author.strip(), source=source, url=url)
 

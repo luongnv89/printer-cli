@@ -118,6 +118,45 @@ def test_article_and_main_are_never_dropped_for_their_class():
     assert article.from_html(page).body == ("Inside the article.",)
 
 
+@pytest.mark.parametrize("wrapper", ['class="content-sidebar-wrap"', 'class="site-content has-comments"',
+                                     'class="with-sidebar"', 'id="ad-wrapper"'])
+def test_a_clutter_named_wrapper_does_not_hide_the_article_inside_it(wrapper):
+    page = (f"<div {wrapper}><main><article><h1>Title</h1><p>The story itself.</p>"
+            "<div class='share-bar'><p>Share on X</p></div><nav><p>Previous | Next</p></nav>"
+            "<p>Second paragraph.</p></article></main>"
+            "<aside><p>Related reading</p></aside><div class='sidebar'><p>Popular posts</p></div></div>")
+    assert article.from_html(page).body == ("The story itself.", "Second paragraph.")
+
+
+@pytest.mark.parametrize("page, body", [
+    ('<article><p>Short post.</p></article><div id="comments"><article class="comment-body"><p>A much longer '
+     'comment than the post itself, going on and on.</p></article></div>', ("Short post.",)),
+    ('<main><div><p>The post, long enough to be the densest block.</p><p>More.</p></div>'
+     '<div class="related"><article><p>Teaser.</p></article></div></main>',
+     ("The post, long enough to be the densest block.", "More.")),
+    ('<div class="site-content has-comments"><article><p>Short post.</p></article><div id="comments">'
+     '<article><p>A much longer comment than the post itself, going on and on.</p></article></div></div>',
+     ("Short post.",))])
+def test_an_article_inside_clutter_is_read_only_when_nothing_else_is(page, body):
+    assert article.from_html(page).body == body
+
+
+def test_tag_furniture_still_hides_an_article_inside_it():
+    page = "<article><p>The story itself.</p></article><aside><article><p>Teaser in the aside.</p></article></aside>"
+    assert article.from_html(page).body == ("The story itself.",)
+
+
+def test_a_deep_page_of_unclosed_elements_parses_in_linear_time():
+    import time
+    story = "<article><p>The story itself.</p></article>"
+    for filler in ("<tr><td>x<td>y", "<tr><td><p>z"):
+        page = f"<html><body>{story}<table>{filler * 20000}</table></body></html>"
+        started = time.perf_counter()
+        got = article.from_html(page)
+        assert time.perf_counter() - started < 5  # was 30 s and more: the stack was searched on every event
+        assert got.body == ("The story itself.",)
+
+
 def test_body_comes_from_the_largest_article_then_main_then_the_densest_block():
     teasers = "<article><p>Short teaser.</p></article>"
     story = "<article><p>The real story, much longer than any teaser.</p><p>Second paragraph.</p></article>"
@@ -155,6 +194,16 @@ def test_page_charset_is_honoured(web):
     web.routes[URL] = httpx.Response(200, headers={"content-type": "text/html"},
                                      content='<meta charset="windows-1252"><p>Na\xefve</p>'.encode("latin-1"))
     assert article.load(URL, 5).body == ("Naive",)
+
+
+@pytest.mark.parametrize("header, meta", [("undefined", ""), ("idna", ""), ("", "undefined"), ("", "idna"),
+                                          ("undefined", "idna"), ("no-such-charset", "")])
+def test_a_charset_that_cannot_decode_the_page_falls_back_to_utf8(web, header, meta):
+    content_type = "text/html" + (f"; charset={header}" if header else "")
+    head = f'<meta charset="{meta}">' if meta else ""
+    web.routes[URL] = httpx.Response(200, headers={"content-type": content_type},
+                                     content=f"{head}<p>Café crème.</p>".encode())
+    assert article.load(URL, 5).body == ("Cafe creme.",)
 
 
 def test_plain_text_page_uses_its_first_line_as_the_title(web):
@@ -579,6 +628,24 @@ def test_cli_fetch_or_convert_failure_sends_nothing(capsys, printer, web, failur
     assert code == 3 and out == ""
     assert "error:" in err and message in err and "hint:" in err
     assert printer.made == [] and printer.jobs() == []
+
+
+def test_cli_link_with_a_host_idna_refuses_sends_nothing(capsys, printer, web):
+    code, out, err = run(capsys, "-p", "demo", "article", "https://xn--a.com/post", "--yes")
+    assert code == 3 and out == "" and "error: cannot fetch https://xn--a.com/post" in err and "hint:" in err
+    assert printer.made == [] and printer.jobs() == [] and web.seen == []
+
+
+@pytest.mark.parametrize("page, code, jobs", [
+    ('<meta charset="undefined"><p>Hello from a badly labelled page.</p>', 0, 1),
+    ('<meta charset="idna"><nav><p>Home</p></nav>', 3, 0)])
+def test_cli_html_file_with_an_unusable_charset_never_crashes(capsys, tmp_path, printer, page, code, jobs):
+    path = tmp_path / "page.html"
+    path.write_text(page)
+    got, out, err = run(capsys, "-p", "demo", "article", str(path), "--yes")
+    assert got == code and len(printer.jobs()) == jobs
+    if code:
+        assert "error: no article text found" in err and printer.made == []
 
 
 @pytest.mark.parametrize("source, message", [("ftp://blog.example/post", "only http:// and https:// links"),
