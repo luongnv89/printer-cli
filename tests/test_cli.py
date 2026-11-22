@@ -26,7 +26,7 @@ def run(capsys, *args):
 @pytest.mark.parametrize("argv", [[], ["--help"], ["printers", "--help"], ["maintain", "--help"],
                                   ["jobs", "--help"], ["status", "--help"], ["scan", "--help"],
                                   ["print", "--help"], ["maintain", "clean", "--help"], ["tui", "--help"],
-                                  ["booth", "--help"]])
+                                  ["booth", "--help"], ["article", "--help"]])
 def test_help_everywhere(capsys, argv):
     code, out, err = run(capsys, *argv)
     assert code in (0, 2) if not argv else code == 0
@@ -516,6 +516,26 @@ def test_photo_booth_skill_matches_the_cli(capsys, tmp_path, monkeypatch, booth_
         assert run(capsys, "-p", "demo", *argv[1:])[0] == 0
     assert (tmp_path / "page.jpg").read_bytes()[:2] == b"\xff\xd8" and len(booth_printer.jobs()) == 2
     assert (tmp_path / "page.pdf").read_bytes().startswith(b"%PDF-")
+
+
+def test_article_print_skill_matches_the_cli(capsys, tmp_path, monkeypatch, booth_printer):
+    """Every flag the article skill names exists, and its example article and file commands work as written."""
+    import re
+    import shlex
+    from conftest import ROOT
+    skill = (ROOT / "skills" / "article-print" / "SKILL.md").read_text()
+    help_text = run(capsys, "article", "--help")[1] + run(capsys, "--help")[1]  # it also names --timeout
+    flags = set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", skill))
+    assert {"--style", "--preview", "--save", "--yes"} <= flags
+    assert [f for f in sorted(flags) if f not in help_text] == []
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "article.json").write_text(re.search(r"```json\n(.*?)```", skill, re.S).group(1))
+    commands = [shlex.split(line) for line in re.findall(r"^prt article article\.json .*$", skill, re.M)]
+    assert len(commands) == 3
+    assert {"magazine", "classic-magazine"} == {argv[argv.index("--style") + 1] for argv in commands}
+    for argv in commands:
+        assert run(capsys, "-p", "demo", *argv[1:])[0] == 0
+    assert (tmp_path / "page.pdf").read_bytes().startswith(b"%PDF-") and len(booth_printer.jobs()) == 2
 
 
 def test_status_header_has_page_count(capsys):
