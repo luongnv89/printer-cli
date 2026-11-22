@@ -794,3 +794,31 @@ def to_jpeg(page: Image.Image) -> bytes:
     page.save(buf, "JPEG", quality=92, dpi=(150, 150))
     return buf.getvalue()
 
+
+# File types a page can be saved as, keyed by file extension.
+SAVE_FORMATS = {".pdf": "pdf", ".png": "png", ".jpg": "jpeg", ".jpeg": "jpeg"}
+
+
+def format_for(path: Path) -> str:
+    """The file type to save the page as, from the extension of ``path`` (any case)."""
+    fmt = SAVE_FORMATS.get(path.suffix.lower())
+    if fmt is None:
+        reason = f"unknown file type {path.suffix}" if path.suffix else "no file extension"
+        raise PrinterError(f"cannot save {path}: {reason}",
+                           hint=f"end the file name in one of {', '.join(SAVE_FORMATS)}", exit_code=2)
+    return fmt
+
+
+def to_bytes(page: Image.Image, fmt: str) -> bytes:
+    """The page as a ``pdf`` (one A4 page), ``png`` (lossless) or ``jpeg`` file (the bytes that are printed)."""
+    if fmt == "jpeg":
+        return to_jpeg(page)
+    buf = io.BytesIO()
+    if fmt == "pdf":
+        page.save(buf, "PDF", resolution=150, quality=92)
+    elif fmt == "png":
+        page.save(buf, "PNG", dpi=(150, 150))
+    else:
+        raise ValueError(f"unknown page format {fmt!r}")
+    return buf.getvalue()
+
