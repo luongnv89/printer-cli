@@ -9,7 +9,7 @@ from functools import lru_cache
 from types import SimpleNamespace
 
 import pytest
-from PIL import Image, ImageDraw, ImageFont, ImageStat
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageStat
 
 from prt import article, booth, fonts, layout, testpage, vintage
 from prt.booth import LIMITS, Story
@@ -57,8 +57,18 @@ def _expected_pages(paths, story=vintage.DEFAULT_GAZETTE_STORY):
     return [booth.to_jpeg(page) for page in vintage.compose_pages(vintage.load_photos(paths), story)[0]]
 
 
+INSET, WHITE = 45, (255, 255, 255)  # the cream stops short of the edge the printer cannot reach
+
+
+def _blank_sheet():
+    sheet = Image.new("RGB", A4_150DPI, WHITE)
+    sheet.paste(PAPER, (INSET, INSET, A4_150DPI[0] - INSET, A4_150DPI[1] - INSET))
+    return sheet
+
+
 def _paper_only(page, band):
-    return page.crop(band).getextrema() == tuple((c, c) for c in vintage.PAPER)
+    """Nothing but the bare sheet in ``band``: white round the edge, cream inside it, no ink."""
+    return ImageChops.difference(page.crop(band), _blank_sheet().crop(band)).getbbox() is None
 
 
 def _longest_story(prefix=""):
@@ -274,6 +284,26 @@ def test_the_lead_photo_is_printed_whole(n, shape, story):
     assert k == 0 and min(shown / photo, photo / shown) >= 0.9, (shape, (x0, y0, x1, y1))
 
 
+@pytest.mark.parametrize("n", [4, 5, 9])  # page 2 holds 1, 2 and 6 plates
+def test_plates_in_a_row_share_a_foot_and_a_lone_last_plate_is_centred(n):
+    shapes = [(300, 400), (400, 300), (500, 500)]
+    _, placements, _ = vintage.compose_pages([Image.new("RGB", shapes[k % 3], "grey") for k in range(n)])
+    boxes = [box for _, box in placements[1]]
+    for left, right in zip(boxes[0::2], boxes[1::2]):
+        assert left[3] == right[3]  # one foot, so the two "Fig." labels sit on one line
+    if len(boxes) % 2:
+        x0, _, x1, _ = boxes[-1]
+        assert abs((x0 + x1) / 2 - A4_150DPI[0] / 2) <= 1
+    assert all(box[3] - box[1] <= vintage.PLATE_LIMIT for box in boxes)  # a plate is never blown up past its size
+
+
+@pytest.mark.parametrize("caption", ["A caption.", ""])
+def test_the_lead_photo_is_fig_1(strict_drawing, caption):
+    story = Story(headline="Headline", story="Story.", caption=caption)
+    vintage.compose_pages([Image.new("RGB", (400, 300), "grey")] * 3, story)
+    assert any(text.startswith("Fig. 1") for text in strict_drawing.drawn)
+
+
 # --- the page --------------------------------------------------------------------------------
 
 
@@ -295,8 +325,16 @@ def test_too_long_text_is_cut_and_named():
 
 def test_pages_are_cream_paper_with_dark_ink_rules():
     pages, _, _ = vintage.compose_pages([Image.new("RGB", (400, 300), "white")] * 4)
+    w, h = A4_150DPI
     for page in pages:
-        assert page.size == A4_150DPI and page.getpixel((5, 5)) == PAPER
+        assert page.size == A4_150DPI and page.getpixel((5, 5)) == WHITE  # no ink spent where the printer can't print
+        for x, y in [(INSET, INSET), (w - INSET - 1, INSET), (INSET, h - INSET - 1), (w - INSET - 1, h - INSET - 1)]:
+            assert page.getpixel((x, y)) == PAPER, (x, y)  # cream inside the inset
+            for dx, dy in [(-1, 0), (0, -1), (1, 0), (0, 1)]:
+                px, py = x + dx, y + dy
+                if not (INSET <= px < w - INSET and INSET <= py < h - INSET):
+                    assert page.getpixel((px, py)) == WHITE, (px, py)  # white outside it
+        assert ImageChops.difference(page.crop((0, 0, w, INSET)), Image.new("RGB", (w, INSET), WHITE)).getbbox() is None
         assert set(page.crop((0, 0, 1240, 1754)).getdata()) >= {PAPER, INK}
     assert pages[0].getpixel((620, 90)) == INK  # the hairline above the masthead
     closing = [pages[1].getpixel((620, y)) for y in range(A4_150DPI[1] - 110, A4_150DPI[1] - 90)]

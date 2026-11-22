@@ -31,6 +31,7 @@ from prt.testpage import H, MARGIN, W
 PAPER = (244, 236, 216)  # #f4ecd8
 INK = (26, 26, 26)  # #1a1a1a
 RULE = 2  # a hairline: about one CSS pixel at 150 dpi
+INSET = 45  # the cream stops this far inside the sheet: the printer cannot print to the edge, so it leaves white
 
 FIRST = 3  # photos on the front page: the lead picture and a row of two plates
 PER_PAGE = 6  # plates on every later page, in a 2 × 3 grid
@@ -47,8 +48,8 @@ PRICE = "Price: Complimentary"
 DEFAULT_GAZETTE_STORY = Story(
     kicker="Special edition",
     headline="Pictures From a Day Worth Remembering",
-    story=("The photographs on this page were brought to our offices this morning and set in type at once. "
-           "Readers will find the finest of them above, and the rest gathered as plates for closer study.\n"
+    story=("Every picture in this edition was brought to our offices this morning and set in type at once. "
+           "The first leads the page as Fig. 1, and any others follow as numbered plates for closer study.\n"
            "Our correspondents report fair weather, good company and not a single blurred frame. The editors "
            "have printed every picture in full, in keeping with the custom of this paper.\n"
            "Further editions will follow as more pictures arrive."),
@@ -270,7 +271,11 @@ def _story(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int]) ->
         while len(last) > 1 and not last[-1]:  # end on text, not on a paragraph gap
             last.pop()
         last[-1] = _ellipsize(last[-1], font, col_w)
-    draw_columns(d, cols, x0, y0, col_w, GUTTER, font, s, INK, rule=INK)
+    draw_columns(d, cols, x0, y0, col_w, GUTTER, font, s, INK)
+    depth = y0 + max(len(col) for col in cols) * _lead(s)  # the column rule, drawn here at the weight of the others
+    for c in range(1, len(cols)):
+        rx = x0 + c * (col_w + GUTTER) - GUTTER // 2
+        d.line([(rx, y0), (rx, depth)], fill=INK, width=RULE)
     return bool(left)
 
 
@@ -326,10 +331,10 @@ def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: 
     y += 8
 
     lead, plates = photos[indices[0]], indices[1:]
-    if story.caption:
-        cap = _fit_face(story.caption, "body-italic", 22, 18, CONTENT_W - 80, 2)
-        cut += ["caption"] * cap[3]
-    caption_h = len(cap[2]) * _lead(cap[1]) if story.caption else 0
+    cap = _fit_face(f"Fig. {indices[0] + 1}. {story.caption}" if story.caption else f"Fig. {indices[0] + 1}",
+                    "body-italic", 22, 18, CONTENT_W - 80, 2)
+    cut += ["caption"] * cap[3]
+    caption_h = len(cap[2]) * _lead(cap[1])
     plates_h = 10 + PLATE_H + 2 * FRAME + 6 + _lead(20) if plates else 0
     story_bottom = BOTTOM - 52
     # Room for the lead and the story: below the lead come its frame, caption, the plate row and a rule.
@@ -342,9 +347,7 @@ def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: 
     box = (x0, y + FRAME, x1, y + FRAME + bottom - top)  # set at the top: what it leaves goes to the story
     _place(page, lead, box)
     placements = [(indices[0], box)]
-    y = box[3] + FRAME + 6
-    if story.caption:
-        y = _text_block(d, MARGIN + 40, y, cap[2], cap[0], cap[1], INK, width=CONTENT_W - 80)
+    y = _text_block(d, MARGIN + 40, box[3] + FRAME + 6, cap[2], cap[0], cap[1], INK, width=CONTENT_W - 80)
 
     if plates:
         y += 10
@@ -358,7 +361,7 @@ def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: 
             _centred(d, label_y, f"Fig. {k + 1}", "body-italic", 20, 20, 1, cx, cell_w)
         if len(plates) == 2:
             rx = MARGIN + cell_w + GUTTER // 2
-            d.line([(rx, y), (rx, label_y + _lead(20))], fill=INK, width=1)
+            d.line([(rx, y), (rx, label_y + _lead(20))], fill=INK, width=RULE)
         y = label_y + _lead(20)
 
     y += 16
@@ -386,22 +389,27 @@ def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], nu
     y += 22
 
     cell_w = _col_width(CONTENT_W, 2, GUTTER)
-    cell_h = (BOTTOM - 16 - y) // 3
+    rows = -(-len(indices) // 2)  # only the rows in use share the page
+    cell_h = (BOTTOM - 16 - y) // rows
     label = _lead(20) + 12
+    # A photo box no taller than a plate is kept, so a page of one or two never blows a plate up soft.
+    box_h = min(cell_h - 32 - 2 * FRAME - label, PLATE_LIMIT)
     placements = []
     for i, k in enumerate(indices):
         row, col = divmod(i, 2)
-        cx, cy = MARGIN + col * (cell_w + GUTTER), y + row * cell_h
-        box = _contain(photos[k], cy + 16 + FRAME, cx + FRAME, cell_w - 2 * FRAME, cell_h - 32 - 2 * FRAME - label)
+        alone = i == len(indices) - 1 and col == 0  # a lone last plate is centred, as on the front page
+        cx = (W - cell_w) // 2 if alone else MARGIN + col * (cell_w + GUTTER)
+        foot = y + row * cell_h + (cell_h + box_h - label) // 2  # one foot, so one label line, a row
+        x0, top, x1, bottom = _contain(photos[k], foot - box_h, cx + FRAME, cell_w - 2 * FRAME, box_h)
+        box = (x0, foot - (bottom - top), x1, foot)
         _place(page, photos[k], box)
         placements.append((k, box))
-        _centred(d, box[3] + FRAME + 10, f"Fig. {k + 1}", "body-italic", 20, 20, 1, cx, cell_w)
-    rows = -(-len(indices) // 2)
+        _centred(d, foot + FRAME + 10, f"Fig. {k + 1}", "body-italic", 20, 20, 1, cx, cell_w)
     for row in range(1, rows):
         _rule(d, y + row * cell_h)
-    if len(indices) > 1:
+    if len(indices) > 1:  # between the pairs only, never through a lone plate
         rx = MARGIN + cell_w + GUTTER // 2
-        d.line([(rx, y), (rx, y + rows * cell_h)], fill=INK, width=1)
+        d.line([(rx, y), (rx, y + len(indices) // 2 * cell_h)], fill=INK, width=RULE)
     _double(d, BOTTOM - 7)
     return placements
 
@@ -417,7 +425,8 @@ def compose_pages(photos: list[Image.Image], story: Story | None = None
     plan = plan_pages(len(photos))
     pages, placements, cut = [], [], []
     for number, indices in enumerate(plan, start=1):
-        page = Image.new("RGB", (W, H), PAPER)
+        page = Image.new("RGB", (W, H), "white")
+        ImageDraw.Draw(page).rectangle([INSET, INSET, W - INSET - 1, H - INSET - 1], fill=PAPER)
         if number == 1:
             placed, cut = _front(page, photos, story, indices, len(plan))
         else:
