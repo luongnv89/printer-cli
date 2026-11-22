@@ -59,7 +59,7 @@ DEFAULT_GAZETTE_STORY = Story(
 
 GUTTER = 40
 BODY, BODY_MIN = 24, 16  # story type: design size, and the smallest it shrinks to before text is cut
-LEAD_MIN = 300  # lead photo height: never smaller, and grown into the room a short story leaves
+LEAD_MIN = 300  # room kept for the lead's height, grown into what a short story leaves (a wide lead may be shallower)
 LEAD_MAX, LEAD_MAX_SOLO = 520, 760  # largest lead height with a row of plates under it, and alone
 PLATE_H = 270  # height of the plate row on the front page
 FRAME = 6  # the hairline frame sits this far outside a photo
@@ -135,7 +135,7 @@ def _treat(photo: Image.Image) -> Image.Image:
 
 
 def _place(page: Image.Image, photo: Image.Image, box: tuple[int, int, int, int]) -> None:
-    """Crop to fill the box (a little more off the bottom than the top, to keep heads), tone, frame."""
+    """Fill the box (cropping, a little more off the bottom than the top, only if its shape differs), tone, frame."""
     x0, y0, x1, y1 = box
     fitted = ImageOps.fit(photo, (x1 - x0, y1 - y0), method=Image.Resampling.LANCZOS, centering=(0.5, 0.1))
     page.paste(_treat(fitted), (x0, y0))
@@ -272,7 +272,8 @@ def _story(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int]) ->
             last.pop()
         last[-1] = _ellipsize(last[-1], font, col_w)
     draw_columns(d, cols, x0, y0, col_w, GUTTER, font, s, INK)
-    depth = y0 + max(len(col) for col in cols) * _lead(s)  # the column rule, drawn here at the weight of the others
+    # The column rule is drawn here rather than by draw_columns, at the weight of every other rule.
+    depth = y0 + max((len(col) for col in cols), default=0) * _lead(s)
     for c in range(1, len(cols)):
         rx = x0 + c * (col_w + GUTTER) - GUTTER // 2
         d.line([(rx, y0), (rx, depth)], fill=INK, width=RULE)
@@ -395,16 +396,18 @@ def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], nu
     # A photo box no taller than a plate is kept, so a page of one or two never blows a plate up soft.
     box_h = min(cell_h - 32 - 2 * FRAME - label, PLATE_LIMIT)
     placements = []
-    for i, k in enumerate(indices):
-        row, col = divmod(i, 2)
-        alone = i == len(indices) - 1 and col == 0  # a lone last plate is centred, as on the front page
-        cx = (W - cell_w) // 2 if alone else MARGIN + col * (cell_w + GUTTER)
-        foot = y + row * cell_h + (cell_h + box_h - label) // 2  # one foot, so one label line, a row
-        x0, top, x1, bottom = _contain(photos[k], foot - box_h, cx + FRAME, cell_w - 2 * FRAME, box_h)
-        box = (x0, foot - (bottom - top), x1, foot)
-        _place(page, photos[k], box)
-        placements.append((k, box))
-        _centred(d, foot + FRAME + 10, f"Fig. {k + 1}", "body-italic", 20, 20, 1, cx, cell_w)
+    for row in range(rows):
+        pair = indices[2 * row:2 * row + 2]
+        # A lone last plate is centred, as on the front page.
+        xs = [(W - cell_w) // 2] if len(pair) == 1 else [MARGIN, MARGIN + cell_w + GUTTER]
+        sizes = [_contain(photos[k], 0, 0, cell_w - 2 * FRAME, box_h) for k in pair]
+        tallest = max(b[3] - b[1] for b in sizes)
+        foot = y + row * cell_h + (cell_h + tallest - label) // 2  # one foot a row, so its labels share a line
+        for k, cx, (x0, top, x1, bottom) in zip(pair, xs, sizes):
+            box = (cx + FRAME + x0, foot - (bottom - top), cx + FRAME + x1, foot)
+            _place(page, photos[k], box)
+            placements.append((k, box))
+            _centred(d, foot + FRAME + 10, f"Fig. {k + 1}", "body-italic", 20, 20, 1, cx, cell_w)
     for row in range(1, rows):
         _rule(d, y + row * cell_h)
     if len(indices) > 1:  # between the pairs only, never through a lone plate

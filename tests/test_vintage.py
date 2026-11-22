@@ -284,16 +284,17 @@ def test_the_lead_photo_is_printed_whole(n, shape, story):
     assert k == 0 and min(shown / photo, photo / shown) >= 0.9, (shape, (x0, y0, x1, y1))
 
 
-@pytest.mark.parametrize("n", [4, 5, 9])  # page 2 holds 1, 2 and 6 plates
+@pytest.mark.parametrize("n", [4, 5, 6, 8, 9])  # page 2 holds 1, 2, 3, 5 and 6 plates
 def test_plates_in_a_row_share_a_foot_and_a_lone_last_plate_is_centred(n):
     shapes = [(300, 400), (400, 300), (500, 500)]
-    _, placements, _ = vintage.compose_pages([Image.new("RGB", shapes[k % 3], "grey") for k in range(n)])
+    pages, placements, _ = vintage.compose_pages([Image.new("RGB", shapes[k % 3], "grey") for k in range(n)])
     boxes = [box for _, box in placements[1]]
     for left, right in zip(boxes[0::2], boxes[1::2]):
         assert left[3] == right[3]  # one foot, so the two "Fig." labels sit on one line
     if len(boxes) % 2:
         x0, _, x1, _ = boxes[-1]
         assert abs((x0 + x1) / 2 - A4_150DPI[0] / 2) <= 1
+        assert all(lo == hi for lo, hi in pages[1].crop(boxes[-1]).getextrema())  # no rule runs through it
     assert all(box[3] - box[1] <= vintage.PLATE_LIMIT for box in boxes)  # a plate is never blown up past its size
 
 
