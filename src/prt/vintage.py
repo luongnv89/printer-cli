@@ -372,14 +372,19 @@ def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: 
 
 def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], number: int,
             total: int) -> list[Placement]:
-    """Running head with the page mark, then up to six plates in a ruled 2 × 3 grid, each with its figure number."""
+    """Running head with the page mark, a section title, then up to six plates in a ruled 2 × 3 grid, each with
+    its figure number."""
     d = ImageDraw.Draw(page)
     head = fonts.face("masthead", 48)
     top, bottom = head.getbbox(MASTHEAD)[1::2]
     d.text((MARGIN, MARGIN - top), MASTHEAD, font=head, fill=INK)
     mark = _caps(f"{booth._today()} · Page {number} of {total}", "body-bold", 18)
     _draw_caps(d, W - MARGIN - _caps_width(mark), MARGIN + bottom - top, mark)
-    y = _double(d, MARGIN + bottom - top + 14) + 20
+    y = _double(d, MARGIN + bottom - top + 14) + 14
+    first, last = indices[0] + 1, indices[-1] + 1
+    y, _ = _centred(d, y, f"PLATES {first}–{last}" if last > first else f"PLATE {first}", "display-bold", 32, 32, 1)
+    _rule(d, y + 2)
+    y += 22
 
     cell_w = _col_width(CONTENT_W, 2, GUTTER)
     cell_h = (BOTTOM - 16 - y) // 3
