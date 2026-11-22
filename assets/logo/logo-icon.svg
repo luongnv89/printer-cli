@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="printer-cli icon">
+  <title>printer-cli icon</title>
+  <rect width="512" height="512" rx="112" fill="#0A0A0A"/>
+  <rect x="8" y="8" width="496" height="496" rx="104" fill="none" stroke="#262626" stroke-width="4"/>
+  <g transform="translate(64,64) scale(6)">
+    <path d="M14,6 H50 Q58,6 58,14 V50 Q58,58 50,58 H14 Q6,58 6,50 V14 Q6,6 14,6 Z" fill="#111111" stroke="#FAFAFA" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M16,15 L24,21 L16,27" fill="none" stroke="#00FF41" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M17,38 H23 V49 H17 Z" fill="#22D3EE"/>
+    <path d="M26,42 H32 V49 H26 Z" fill="#F472B6"/>
+    <path d="M35,33 H41 V49 H35 Z" fill="#FACC15"/>
+    <path d="M44,28 H50 V49 H44 Z" fill="#FAFAFA"/>
+  </g>
+</svg>

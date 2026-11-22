@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>printer-cli — Brand Identity</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0A0A0A;--surface:#111111;--border:#262626;--muted:#A1A1A1;--text:#FAFAFA;--green:#00FF41;
+        --cyan:#22D3EE;--magenta:#F472B6;--yellow:#FACC15;--light:#FAFAFA;--ink:#0A0A0A;
+        --sans:Inter,system-ui,-apple-system,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--sans);background:var(--light);color:var(--ink);line-height:1.6}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 24px}
+  section{padding:80px 0}
+  .label{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#059669;margin-bottom:16px}
+  .dark .label{color:var(--green)}
+  h2{font-size:32px;font-weight:700;letter-spacing:-.02em;margin-bottom:24px}
+  .dark{background:var(--bg);color:var(--text)}
+  .hero{text-align:center;padding:120px 0 100px}
+  .hero svg{width:160px;height:160px;filter:drop-shadow(0 0 32px rgba(0,255,65,.18))}
+  .hero h1{font-family:var(--mono);font-size:56px;font-weight:700;letter-spacing:-.02em;margin:32px 0 8px}
+  .hero p{color:var(--muted);font-size:18px;max-width:560px;margin:0 auto}
+  .concept{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+  .annot{background:var(--bg);border-radius:16px;padding:32px;position:relative}
+  .annot svg{width:100%;height:auto;display:block}
+  .annot text{font-family:var(--mono);font-size:3px;fill:var(--muted)}
+  .concept p{margin-bottom:16px;color:#404040}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .card{border-radius:16px;padding:24px;display:flex;flex-direction:column;min-height:240px;transition:transform .2s}
+  .card:hover{transform:translateY(-3px)}
+  .card.l{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.05);border:1px solid #EDEDED}
+  .card.d{background:var(--bg);color:var(--text);border:1px solid var(--border)}
+  .card.full{grid-column:1/-1}
+  .card .tag{font-size:12px;font-weight:600;color:var(--muted)}
+  .card .art{flex:1;display:flex;align-items:center;justify-content:center;padding:24px 0}
+  .card .art img{max-width:100%;max-height:120px}
+  .card.full .art img{max-height:110px}
+  .card .meta{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .card .meta a{color:inherit;text-decoration:none;border-bottom:1px dotted currentColor}
+  .card .meta a:hover{color:#059669}.card.d .meta a:hover{color:var(--green)}
+  .cap{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px;text-align:center}
+  .chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px}
+  .chip{border-radius:12px;overflow:hidden;border:1px solid #E5E5E5;background:#fff}
+  .chip .sw{height:96px;display:flex;align-items:flex-end;padding:10px;font-family:var(--mono);font-size:12px;font-weight:700}
+  .chip .nm{padding:10px 12px 2px;font-weight:600;font-size:14px}
+  .chip .rl{padding:0 12px 12px;font-size:12px;color:#737373}
+  .type{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .spec{background:#fff;border:1px solid #EDEDED;border-radius:16px;padding:32px}
+  .spec .big{font-family:var(--mono);font-size:44px;font-weight:700;letter-spacing:-.02em}
+  .spec .reg{font-size:18px;color:#404040}
+  .spec small{display:block;margin-top:12px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  pre{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:24px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.7}
+  .k{color:var(--cyan)}.s{color:var(--green)}.c{color:#737373}
+  .dev{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  footer{padding:40px 0;color:var(--muted);font-size:14px}
+  footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  @media (max-width:760px){.concept,.grid,.type,.dev{grid-template-columns:1fr}.hero h1{font-size:40px}section{padding:56px 0}}
+</style>
+</head>
+<body>
+
+<header class="dark hero">
+  <div class="wrap">
+    <svg viewBox="0 0 64 64" aria-label="printer-cli mark">
+      <path d="M14,6 H50 Q58,6 58,14 V50 Q58,58 50,58 H14 Q6,58 6,50 V14 Q6,6 14,6 Z" fill="#111111" stroke="#FAFAFA" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M16,15 L24,21 L16,27" fill="none" stroke="#00FF41" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M17,38 H23 V49 H17 Z" fill="#22D3EE"/>
+      <path d="M26,42 H32 V49 H26 Z" fill="#F472B6"/>
+      <path d="M35,33 H41 V49 H35 Z" fill="#FACC15"/>
+      <path d="M44,28 H50 V49 H44 Z" fill="#FAFAFA"/>
+    </svg>
+    <div class="label" style="margin-top:32px">Brand Identity</div>
+    <h1>printer-cli</h1>
+    <p>Your printer's dashboard, in the terminal. A prompt and four ink tanks — the whole product in one glance.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap concept">
+    <div class="annot">
+      <svg viewBox="-4 0 96 64" aria-label="Annotated mark">
+        <g>
+          <path d="M14,6 H50 Q58,6 58,14 V50 Q58,58 50,58 H14 Q6,58 6,50 V14 Q6,6 14,6 Z" fill="#111111" stroke="#FAFAFA" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M16,15 L24,21 L16,27" fill="none" stroke="#00FF41" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M17,38 H23 V49 H17 Z" fill="#22D3EE"/><path d="M26,42 H32 V49 H26 Z" fill="#F472B6"/>
+          <path d="M35,33 H41 V49 H35 Z" fill="#FACC15"/><path d="M44,28 H50 V49 H44 Z" fill="#FAFAFA"/>
+        </g>
+        <path d="M26,21 H64" stroke="#404040" stroke-width=".4"/><text x="65" y="22">shell prompt</text>
+        <path d="M58,10 H64" stroke="#404040" stroke-width=".4"/><text x="65" y="11">terminal / printer body</text>
+        <path d="M51,38 H64" stroke="#404040" stroke-width=".4"/><text x="65" y="39">C · M · Y · K tanks</text>
+        <text x="65" y="43.5">levels vary, like</text><text x="65" y="47.5">the live TUI</text>
+      </svg>
+    </div>
+    <div>
+      <div class="label">Design concept</div>
+      <h2>A terminal that knows its ink.</h2>
+      <p>The rounded square reads as both a terminal window and the front of a printer. The green chevron is the shell prompt: everything printer-cli does starts from a command.</p>
+      <p>The four bars are the ink tanks from the <code>prt tui</code> dashboard, in cyan, magenta, yellow and key, each at a different level. They double as a signal-strength glyph, a nod to the network protocols underneath (IPP, eSCL, SNMP).</p>
+      <p>The wordmark is set in JetBrains Mono Bold and outlined to paths, lowercase to match the package name and the command line it lives on.</p>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="label">Logo variants</div>
+    <h2>Seven files, one geometry.</h2>
+    <div class="grid">
+      <div class="card l full"><span class="tag">Full logo</span><div class="art"><img src="logo-full.svg" alt="printer-cli full logo"></div><div class="meta"><span>logo-full.svg</span><a href="png/logo-full.png" download>PNG 1280</a></div></div>
+      <div class="card d full"><span class="tag">White · for dark backgrounds</span><div class="art"><img src="logo-white.svg" alt="printer-cli white logo"></div><div class="meta"><span>logo-white.svg</span><a href="png/logo-white.png" download>PNG 1280</a></div></div>
+      <div class="card d"><span class="tag">Mark</span><div class="art"><img src="logo-mark.svg" alt="printer-cli mark" style="height:120px"></div><div class="meta"><span>logo-mark.svg</span><a href="png/logo-mark-512.png" download>PNG 512</a></div></div>
+      <div class="card l"><span class="tag">App icon</span><div class="art"><img src="logo-icon.svg" alt="printer-cli app icon" style="height:120px"></div><div class="meta"><span>logo-icon.svg</span><a href="png/logo-icon-512.png" download>PNG 512</a><a href="png/logo-icon-1024.png" download>PNG 1024</a></div></div>
+      <div class="card l"><span class="tag">Wordmark</span><div class="art"><img src="logo-wordmark.svg" alt="printer-cli wordmark" style="height:60px;filter:invert(1)"></div><div class="meta"><span>logo-wordmark.svg</span><a href="png/logo-wordmark.png" download>PNG 720</a></div></div>
+      <div class="card d"><span class="tag">Favicon</span><div class="art" style="flex-direction:column"><img src="favicon.svg" alt="printer-cli favicon" style="width:64px;height:64px"><div class="cap">16×16px</div></div><div class="meta"><span>favicon.svg</span><a href="png/favicon-16.png" download>16</a><a href="png/favicon-32.png" download>32</a><a href="png/favicon-48.png" download>48</a><a href="png/favicon.ico" download>ICO</a></div></div>
+      <div class="card l full"><span class="tag">Black · for light backgrounds</span><div class="art"><img src="logo-black.svg" alt="printer-cli black logo"></div><div class="meta"><span>logo-black.svg</span><a href="png/logo-black.png" download>PNG 1280</a></div></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="label">Color palette</div>
+    <h2>Dark base, ink accents.</h2>
+    <div class="chips">
+      <div class="chip"><div class="sw" style="background:#0A0A0A;color:#FAFAFA">#0A0A0A</div><div class="nm">Background</div><div class="rl">Primary base</div></div>
+      <div class="chip"><div class="sw" style="background:#111111;color:#FAFAFA">#111111</div><div class="nm">Surface</div><div class="rl">Mark body, cards</div></div>
+      <div class="chip"><div class="sw" style="background:#262626;color:#FAFAFA">#262626</div><div class="nm">Border</div><div class="rl">Hairlines, dividers</div></div>
+      <div class="chip"><div class="sw" style="background:#A1A1A1;color:#0A0A0A">#A1A1A1</div><div class="nm">Muted</div><div class="rl">Secondary text</div></div>
+      <div class="chip"><div class="sw" style="background:#FAFAFA;color:#0A0A0A;border-bottom:1px solid #EEE">#FAFAFA</div><div class="nm">Text / Key</div><div class="rl">Text, outline, K tank</div></div>
+      <div class="chip"><div class="sw" style="background:#00FF41;color:#0A0A0A">#00FF41</div><div class="nm">Prompt green</div><div class="rl">Highlights only</div></div>
+      <div class="chip"><div class="sw" style="background:#22D3EE;color:#0A0A0A">#22D3EE</div><div class="nm">Cyan</div><div class="rl">C tank</div></div>
+      <div class="chip"><div class="sw" style="background:#F472B6;color:#0A0A0A">#F472B6</div><div class="nm">Magenta</div><div class="rl">M tank</div></div>
+      <div class="chip"><div class="sw" style="background:#FACC15;color:#0A0A0A">#FACC15</div><div class="nm">Yellow</div><div class="rl">Y tank</div></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="label">Typography</div>
+    <h2>Monospace for the brand, Inter for prose.</h2>
+    <div class="type">
+      <div class="spec"><div class="big">prt status</div><small>JetBrains Mono Bold · wordmark, commands, code</small></div>
+      <div class="spec"><div class="reg">Ink levels, paper, alerts, nozzle checks, head cleaning, printing and scanning.</div><small>Inter Regular · body copy and documentation</small></div>
+    </div>
+  </div>
+</section>
+
+<section class="dark">
+  <div class="wrap">
+    <div class="label">Developer reference</div>
+    <h2>Drop-in tokens.</h2>
+    <div class="dev">
+<pre><span class="c">// tailwind.config.js</span>
+<span class="k">theme</span>: { <span class="k">extend</span>: { <span class="k">colors</span>: {
+  <span class="k">prt</span>: {
+    bg:      <span class="s">'#0A0A0A'</span>,
+    surface: <span class="s">'#111111'</span>,
+    border:  <span class="s">'#262626'</span>,
+    muted:   <span class="s">'#A1A1A1'</span>,
+    text:    <span class="s">'#FAFAFA'</span>,
+    green:   <span class="s">'#00FF41'</span>,
+    cyan:    <span class="s">'#22D3EE'</span>,
+    magenta: <span class="s">'#F472B6'</span>,
+    yellow:  <span class="s">'#FACC15'</span>,
+  },
+}, <span class="k">fontFamily</span>: {
+  mono: [<span class="s">'JetBrains Mono'</span>, <span class="s">'monospace'</span>],
+  sans: [<span class="s">'Inter'</span>, <span class="s">'system-ui'</span>],
+}}}</pre>
+<pre>assets/logo/
+├── logo-mark.svg      <span class="c">64×64 canonical mark</span>
+├── logo-full.svg      <span class="c">320×72 mark + wordmark</span>
+├── logo-wordmark.svg  <span class="c">180×40 text only</span>
+├── logo-icon.svg      <span class="c">512×512 app icon</span>
+├── favicon.svg        <span class="c">16×16 simplified</span>
+├── logo-white.svg     <span class="c">for dark backgrounds</span>
+├── logo-black.svg     <span class="c">for light backgrounds</span>
+├── png/               <span class="c">raster exports</span>
+│   ├── logo-icon-512/1024.png
+│   ├── logo-mark-512.png
+│   ├── logo-full/white/black.png
+│   ├── logo-wordmark.png
+│   └── favicon-16/32/48.png, favicon.ico
+└── brand-showcase.html</pre>
+    </div>
+  </div>
+</section>
+
+<footer class="dark"><div class="wrap"><span><strong style="color:#FAFAFA;font-family:var(--mono)">printer-cli</strong> · Brand Identity</span><span>Luong NGUYEN · MIT</span></div></footer>
+</body>
+</html>

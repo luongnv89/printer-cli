@@ -1,10 +1,28 @@
 [project]
-name = "prt"
+name = "printer-cli"
 version = "0.1.0"
-description = "prt — command-line and terminal dashboard for network printers (IPP, eSCL, SNMP, Epson ESC/P2)."
+description = "Your printer's dashboard in the terminal: ink, paper, alerts, nozzle checks, head cleaning, printing and scanning for network printers (IPP, eSCL, SNMP, Epson ESC/P2)."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Luong NGUYEN" }]
+keywords = ["printer", "cli", "tui", "ipp", "escl", "airprint", "snmp", "epson", "scanner", "ink"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: System Administrators",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Printing",
+    "Topic :: System :: Hardware",
+    "Topic :: Utilities",
+]
 dependencies = [
     "typer>=0.12",
     "rich>=13.7",
@@ -15,14 +33,21 @@ dependencies = [
     "shellingham>=1.5.4",
 ]
 
+[project.urls]
+Homepage = "https://github.com/luongnv89/printer-cli"
+Repository = "https://github.com/luongnv89/printer-cli"
+Issues = "https://github.com/luongnv89/printer-cli/issues"
+Changelog = "https://github.com/luongnv89/printer-cli/blob/main/CHANGELOG.md"
+
 [project.scripts]
 prt = "prt.cli:main"
+printer-cli = "prt.cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "pytest-asyncio>=0.23"]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]

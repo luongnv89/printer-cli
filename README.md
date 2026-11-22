@@ -1,8 +1,24 @@
-# prt
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/logo/logo-white.svg"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/logo/logo-black.svg" alt="printer-cli" width="360"></picture></p>
 
-**Your printer's dashboard, in the terminal.** Ink levels, paper, alerts, nozzle checks, head cleaning, printing and scanning for network printers, in a scriptable CLI and a full-screen TUI.
+<p align="center"><a href="https://pypi.org/project/printer-cli/"><img src="https://img.shields.io/pypi/v/printer-cli" alt="PyPI"></a> <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+"> <a href="https://github.com/luongnv89/printer-cli/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"></a></p>
 
-Built because the Epson XP-6000's web dashboard stopped working. prt talks to the printer directly over standard protocols (IPP, eSCL, SNMP, plus Epson's ESC/P2 remote mode for maintenance). It works with most AirPrint/Mopria printers from any brand, and you can manage several printers from one place.
+Check ink, paper and alerts, run nozzle checks and head cleaning, print and scan on network printers, from a scriptable CLI or a full-screen TUI.
+
+## Install
+
+```bash
+uv tool install printer-cli
+```
+
+Requires Python 3.11+. Puts `prt` on your PATH (`printer-cli` works too). Other methods: [Install options](#install-options).
+
+## Quick start
+
+Check a printer's ink, paper and alerts. No printer handy? The built-in `demo` printer replays a real Epson XP-6000:
+
+```bash
+prt -p demo status
+```
 
 ```
 ╭─┐EPSON XP-6000 Series · office┌──────────────────────────────────────────╮
@@ -20,6 +36,23 @@ Built because the Epson XP-6000's web dashboard stopped working. prt talks to th
 ╰─┘4 alerts · checked 17:42└───────────────────────────────────────────────╯
 ```
 
+Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Safety](#safety)
+
+## Why printer-cli
+
+It started because the Epson XP-6000's web dashboard stopped working. printer-cli talks to the printer directly over standard protocols (IPP, eSCL, SNMP, plus Epson's ESC/P2 remote mode for maintenance). It works with most AirPrint/Mopria printers from any brand, and you can manage several printers from one place.
+
+## Use your own printer
+
+```bash
+prt discover                                        # find printers on the LAN
+prt printers add office EPSON721655.local --default # save one under a short name
+prt status                                          # ink, paper, alerts
+prt tui                                             # full-screen dashboard
+```
+
+Every command also works against the built-in replay: `prt -p demo status`, `prt -p demo tui`.
+
 ## Status
 
 | | Verified against the real XP-6000 | Covered by tests (replay of its data) |
@@ -31,27 +64,6 @@ Built because the Epson XP-6000's web dashboard stopped working. prt talks to th
 | Printing (IPP / CUPS) | ⏳ not yet | ✅ (fake transport) |
 | Nozzle check / head cleaning (ESC/P2 on 9100) | ⏳ not yet: bytes match gutenprint `escputil`, port 9100 is open | ✅ (byte-exact) |
 
-## Install
-
-Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
-
-```bash
-git clone git@github.com:luongnv89/printer-epson-6000.git && cd printer-epson-6000
-uv tool install .          # puts `prt` on your PATH (add --editable to track local changes)
-prt --install-completion   # optional: tab completion for your shell
-```
-
-## Quick start
-
-```bash
-prt discover                                        # find printers on the LAN
-prt printers add office EPSON721655.local --default # save one under a short name
-prt status                                          # ink, paper, alerts
-prt tui                                             # full-screen dashboard
-```
-
-No printer handy? Every command works against a built-in replay of a real XP-6000: `prt -p demo status`, `prt -p demo tui`.
-
 ## Commands
 
 | Command | What it does |
@@ -62,7 +74,7 @@ No printer handy? Every command works against a built-in replay of a real XP-600
 | `prt discover` | mDNS scan for printers and scanners |
 | `prt printers list/add/remove/default` | Manage saved printers |
 | `prt maintain nozzle-check` | Print the nozzle check pattern |
-| `prt maintain clean [--force]` | Head cleaning, with a safety check first (see below) |
+| `prt maintain clean [--force]` | Head cleaning, with a safety check first (see [Safety](#safety)) |
 | `prt maintain test-page` | Colour test page: ink bars, gradients, grey steps, fine lines |
 | `prt maintain identify` | Flash the printer's panel |
 | `prt print FILE… [-n 2] [--media 4x6] [--tray photo] [--quality high] [--mono] [--duplex]` | Print |
@@ -104,7 +116,7 @@ Exit codes: `0` ok · `1` runtime/network error (also when only cached status is
 
 - **Head cleaning is refused** while any ink is at or below its low level, or while the waste ink pad is flagged. Cleaning flushes ink into the pad, and a full pad locks the printer until it's serviced. `--force` overrides this, and the TUI offers "Clean anyway".
 - Every maintenance action asks for confirmation. In scripts, pass `--yes`.
-- prt never resets the waste ink counter or writes to the printer's EEPROM.
+- printer-cli never resets the waste ink counter or writes to the printer's EEPROM.
 
 ## How it talks to printers
 
@@ -133,6 +145,27 @@ host = "192.168.1.80"
 driver = "ipp"
 ```
 
+## Install options
+
+With pipx:
+
+```bash
+pipx install printer-cli
+```
+
+From source (add `--editable` to track local changes):
+
+```bash
+git clone https://github.com/luongnv89/printer-cli.git && cd printer-cli
+uv tool install .
+```
+
+Optional tab completion for your shell:
+
+```bash
+prt --install-completion
+```
+
 ## Adding a printer brand
 
 Drivers live in `src/prt/drivers/`:
@@ -146,7 +179,7 @@ To add a vendor, subclass `IPPDriver`, declare its `capabilities`, override what
 
 ```bash
 uv sync
-uv run pytest            # 84 tests, no printer needed
+uv run pytest            # 88 tests, no printer needed
 uv run prt -p demo tui
 ```
 
@@ -155,3 +188,7 @@ uv run prt -p demo tui
 - **"cannot reach printer"**: the printer is probably asleep. Press any button on it, or check `prt discover`.
 - **Shell completion isn't detected**: write the script out manually, e.g. `_PRT_COMPLETE=source_zsh prt > ~/.zfunc/_prt`.
 - **PDF won't print**: add the printer in System Settings → Printers so a CUPS queue exists, or print a JPEG.
+
+## License
+
+[MIT](LICENSE) © Luong NGUYEN
