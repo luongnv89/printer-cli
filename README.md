@@ -122,6 +122,7 @@ Exit codes: `0` ok · `1` runtime/network error (also when only cached status is
 - Write your own story as JSON: `headline` and `story` are required, `kicker`, `caption` and `byline` are optional. Pass it with `--story-file story.json`. `--headline`, `--story`, `--kicker`, `--caption` and `--byline` override single fields.
 - The page uses the font that ships with Pillow, which covers basic Latin only. Accents print without their marks, and other scripts and emoji are refused with an error.
 - `--preview page.jpg` saves the page without printing.
+- Text too long for its space is cut with `…`, and `prt booth` warns on stderr naming the fields that were cut. Transparent parts of a PNG print as white paper.
 - The photo and story are checked before anything is sent, so an unreadable image or a bad story file exits with an error and prints nothing.
 
 To let an AI agent look at the photo and write a story that fits it, give it the [photo-booth skill](https://github.com/luongnv89/printer-cli/blob/main/skills/photo-booth/SKILL.md).

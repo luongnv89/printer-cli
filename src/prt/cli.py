@@ -678,7 +678,11 @@ def booth_cmd(
     base = booth.load_story(story_file) if story_file else booth.DEFAULT_STORY
     text = booth.with_overrides(base, headline=headline, story=story, kicker=kicker, caption=caption,
                                 byline=byline)
-    data = booth.render_jpeg(image, text, paper.value)
+    page, cut = booth.compose(image, text, paper.value)
+    data = booth.to_jpeg(page)
+    if cut:
+        STATE.note("warn", f"{', '.join(cut)} cut to fit the {paper.value} page",
+                   "shorten it, or check the page with --preview")
     if preview:
         try:
             preview.write_bytes(data)

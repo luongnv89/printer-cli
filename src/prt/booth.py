@@ -35,7 +35,8 @@ class Story:
 
 FIELDS = tuple(f.name for f in fields(Story))
 REQUIRED = ("headline", "story")
-# Upper bounds that keep a story on one page; text that still overflows its box ends in "…".
+# Upper bounds that keep a story on one page; text that still overflows its box ends in "…",
+# and compose() names the fields that were cut so the command can warn about them.
 LIMITS = {"headline": 120, "story": 2500, "kicker": 40, "caption": 200, "byline": 80}
 MAX_STORY_FILE = 64 * 1024
 
@@ -166,7 +167,10 @@ def load_photo(path: Path) -> Image.Image:
     try:
         with Image.open(path) as img:
             img.load()
-            return ImageOps.exif_transpose(img).convert("RGB")
+            img = ImageOps.exif_transpose(img)
+            if img.has_transparency_data:  # e.g. a cut-out portrait: see-through parts print as paper
+                img = Image.alpha_composite(Image.new("RGBA", img.size, "white"), img.convert("RGBA"))
+            return img.convert("RGB")
     except UnidentifiedImageError as exc:
         raise PrinterError(f"cannot read photo {path.name}: not a supported image format",
                            hint=PHOTO_HINT, exit_code=3) from exc
@@ -214,13 +218,16 @@ def _ellipsize(line: str, font, width: int) -> str:
 
 
 def _fit(text: str, size: int, min_size: int, width: int, max_lines: int):
-    """Largest font (size → min_size) that wraps ``text`` into ``max_lines``; cut with "…" at the minimum."""
+    """Largest font (size → min_size) that wraps ``text`` into ``max_lines``; cut with "…" at the minimum.
+
+    Returns (font, size, lines, cut), where ``cut`` says the text had to be shortened.
+    """
     for s in range(size, min_size - 1, -2):
         font = _font(s)
         lines = _wrap(text, font, width)
         if len(lines) <= max_lines:
-            return font, s, lines
-    return font, s, lines[:max_lines - 1] + [_ellipsize(lines[max_lines - 1], font, width)]
+            return font, s, lines, False
+    return font, s, lines[:max_lines - 1] + [_ellipsize(lines[max_lines - 1], font, width)], True
 
 
 def _lead(size: int) -> int:
@@ -238,8 +245,11 @@ def _text_block(d: ImageDraw.ImageDraw, x: int, y: int, lines: list[str], font, 
 
 
 def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], columns: int, gutter: int,
-             size: int, min_size: int, fill, rule=None) -> None:
-    """Flow paragraphs down ``columns`` columns, shrinking the type until it fits, else cutting with "…"."""
+             size: int, min_size: int, fill, rule=None) -> bool:
+    """Flow paragraphs down ``columns`` columns, shrinking the type until it fits, else cutting with "…".
+
+    Returns True when the text was cut.
+    """
     x0, y0, x1, y1 = box
     col_w = (x1 - x0 - gutter * (columns - 1)) // columns
     for s in range(size, min_size - 1, -1):
@@ -252,7 +262,8 @@ def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], 
         if len(lines) <= per_col * columns:
             break
     capacity = per_col * columns
-    if len(lines) > capacity:
+    cut = len(lines) > capacity
+    if cut:
         lines = lines[:capacity]
         lines[-1] = _ellipsize(lines[-1], font, col_w)
     rows = -(-len(lines) // columns)  # balance the columns, like a real page
@@ -268,6 +279,7 @@ def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], 
         for c in range(1, columns):
             rx = x0 + c * (col_w + gutter) - gutter // 2
             d.line([(rx, y0), (rx, y0 + rows * _lead(s))], fill=rule, width=1)
+    return cut
 
 
 def _photo_box(photo: Image.Image, top: int, height: int, max_w: int) -> tuple[int, int, int, int]:
@@ -278,9 +290,13 @@ def _photo_box(photo: Image.Image, top: int, height: int, max_w: int) -> tuple[i
 
 
 def _photo(page: Image.Image, photo: Image.Image, box: tuple[int, int, int, int], mono: bool) -> None:
-    """Crop to fill the box (biased upwards, where faces are) and paste it."""
+    """Crop to fill the box and paste it.
+
+    Only photos taller than the box lose height (full-length portraits); those are cut mostly from
+    the bottom, so the head stays in the picture.
+    """
     x0, y0, x1, y1 = box
-    fitted = ImageOps.fit(photo, (x1 - x0, y1 - y0), method=Image.Resampling.LANCZOS, centering=(0.5, 0.35))
+    fitted = ImageOps.fit(photo, (x1 - x0, y1 - y0), method=Image.Resampling.LANCZOS, centering=(0.5, 0.1))
     if mono:
         fitted = ImageOps.autocontrast(ImageOps.grayscale(fitted), cutoff=1).convert("RGB")
     page.paste(fitted, (x0, y0))
@@ -295,9 +311,10 @@ CONTENT_W = W - 2 * MARGIN
 BOTTOM = H - MARGIN
 
 
-def _metro(page: Image.Image, photo: Image.Image, story: Story) -> None:
+def _metro(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
     """Colour tabloid: reversed black masthead, red accents, shouting headline, full-width photo, 2 columns."""
     d = ImageDraw.Draw(page)
+    cut = []
     left, right = MARGIN, W - MARGIN
     y = MARGIN
     d.rectangle([left, y, right, y + 150], fill=INK)
@@ -308,39 +325,45 @@ def _metro(page: Image.Image, photo: Image.Image, story: Story) -> None:
     y += 150
     d.rectangle([left, y, right, y + 12], fill=RED)
     y += 36
-    if story.kicker:
-        font = _font(30)
-        label = story.kicker.upper()
+    if story.kicker.strip():
+        font, size, [label], cut_kicker = _fit(story.kicker.upper(), 30, 20, CONTENT_W - 32, 1)
         d.rectangle([left, y, left + font.getlength(label) + 32, y + 46], fill=RED)
-        d.text((left + 16, y + 6), label, font=font, fill=WHITE)
+        d.text((left + 16, y + 6 + (30 - size) // 2), label, font=font, fill=WHITE)
         y += 62
-    font, size, lines = _fit(story.headline.upper(), 80, 48, CONTENT_W, 2)
+        cut += ["kicker"] * cut_kicker
+    font, size, lines, cut_headline = _fit(story.headline.upper(), 80, 48, CONTENT_W, 2)
     y = _text_block(d, left, y, lines, font, size, INK, bold=2) + 14
+    cut += ["headline"] * cut_headline
     px0, py0, px1, py1 = _photo_box(photo, y, 560, CONTENT_W)
     _photo(page, photo, (px0, py0, px1, py1), mono=False)
     d.rectangle([px0 - 4, py0 - 4, px1 + 4, py1 + 4], outline=INK, width=10)
     y = py1 + 4
     if story.caption:
-        font, size, lines = _fit(story.caption, 24, 20, px1 - px0 - 40, 2)
+        font, size, lines, cut_caption = _fit(story.caption, 24, 20, px1 - px0 - 40, 2)
         bar = len(lines) * _lead(size) + 20
         d.rectangle([px0 - 4, y, px1 + 4, y + bar], fill=INK)
         _text_block(d, px0 + 20, y + 10, lines, font, size, WHITE)
         y += bar
+        cut += ["caption"] * cut_caption
     y += 26
     if story.byline:
-        font, size, lines = _fit(story.byline.upper(), 26, 20, CONTENT_W, 1)
+        font, size, lines, cut_byline = _fit(story.byline.upper(), 26, 20, CONTENT_W, 1)
         y = _text_block(d, left, y, lines, font, size, RED, bold=1) + 6
+        cut += ["byline"] * cut_byline
     d.rectangle([left, BOTTOM - 8, right, BOTTOM], fill=RED)
-    _columns(d, story.story, (left, y, right, BOTTOM - 24), 2, 44, 28, 16, INK)
+    if _columns(d, story.story, (left, y, right, BOTTOM - 24), 2, 44, 28, 16, INK):
+        cut.append("story")
+    return cut
 
 
 GREY = (95, 95, 95)
 DAILY_INK = (25, 25, 25)
 
 
-def _daily(page: Image.Image, photo: Image.Image, story: Story) -> None:
+def _daily(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
     """Black-and-white broadsheet: centred masthead, double rules, grey photo with a mat, 3 ruled columns."""
     d = ImageDraw.Draw(page)
+    cut = []
     left, right = MARGIN, W - MARGIN
     y = MARGIN
     tiny = _font(20)
@@ -358,36 +381,52 @@ def _daily(page: Image.Image, photo: Image.Image, story: Story) -> None:
     d.line([(left, y), (right, y)], fill=DAILY_INK, width=1)
     y += 28
     if story.kicker:
-        y = _text_block(d, left, y, [story.kicker.upper()], _font(24), 24, GREY, width=CONTENT_W)
-    font, size, lines = _fit(story.headline, 64, 40, CONTENT_W, 3)
-    y = _text_block(d, left, y, lines, font, size, DAILY_INK, width=CONTENT_W, bold=1) + 4
-    if story.byline:
-        font, size, lines = _fit(story.byline, 22, 18, CONTENT_W, 1)
+        font, size, lines, cut_kicker = _fit(story.kicker.upper(), 24, 18, CONTENT_W, 1)
         y = _text_block(d, left, y, lines, font, size, GREY, width=CONTENT_W)
+        cut += ["kicker"] * cut_kicker
+    font, size, lines, cut_headline = _fit(story.headline, 64, 40, CONTENT_W, 3)
+    y = _text_block(d, left, y, lines, font, size, DAILY_INK, width=CONTENT_W, bold=1) + 4
+    cut += ["headline"] * cut_headline
+    if story.byline:
+        font, size, lines, cut_byline = _fit(story.byline, 22, 18, CONTENT_W, 1)
+        y = _text_block(d, left, y, lines, font, size, GREY, width=CONTENT_W)
+        cut += ["byline"] * cut_byline
     y += 16
     px0, py0, px1, py1 = _photo_box(photo, y + 12, 460, CONTENT_W * 2 // 3)
     _photo(page, photo, (px0, py0, px1, py1), mono=True)
     d.rectangle([px0 - 12, y, px1 + 12, py1 + 12], outline=DAILY_INK, width=2)  # thin frame with a white mat
     y = py1 + 24
     if story.caption:
-        font, size, lines = _fit(story.caption, 20, 18, CONTENT_W, 2)
+        font, size, lines, cut_caption = _fit(story.caption, 20, 18, CONTENT_W, 2)
         y = _text_block(d, left, y, lines, font, size, GREY, width=CONTENT_W)
+        cut += ["caption"] * cut_caption
     y += 14
     d.line([(left, y), (right, y)], fill=DAILY_INK, width=1)
     d.line([(left, BOTTOM), (right, BOTTOM)], fill=DAILY_INK, width=1)
-    _columns(d, story.story, (left, y + 20, right, BOTTOM - 16), 3, 34, 24, 14, DAILY_INK, rule=GREY)
+    if _columns(d, story.story, (left, y + 20, right, BOTTOM - 16), 3, 34, 24, 14, DAILY_INK, rule=GREY):
+        cut.append("story")
+    return cut
 
 
-STYLES: dict[str, Callable[[Image.Image, Image.Image, Story], None]] = {"metro": _metro, "daily": _daily}
+STYLES: dict[str, Callable[[Image.Image, Image.Image, Story], list[str]]] = {"metro": _metro, "daily": _daily}
+
+
+def compose(photo: Image.Image, story: Story = DEFAULT_STORY, style: str = "metro") -> tuple[Image.Image, list[str]]:
+    """Lay out the page; also returns the fields (in page order) that were cut with "…" to fit."""
+    page = Image.new("RGB", (W, H), "white")
+    cut = STYLES[style](page, photo, Story(**{name: _printable(getattr(story, name)) for name in FIELDS}))
+    return page, cut
+
+
+def to_jpeg(page: Image.Image) -> bytes:
+    buf = io.BytesIO()
+    page.save(buf, "JPEG", quality=92, dpi=(150, 150))
+    return buf.getvalue()
 
 
 def render(photo: Image.Image, story: Story = DEFAULT_STORY, style: str = "metro") -> Image.Image:
-    page = Image.new("RGB", (W, H), "white")
-    STYLES[style](page, photo, Story(**{name: _printable(getattr(story, name)) for name in FIELDS}))
-    return page
+    return compose(photo, story, style)[0]
 
 
 def render_jpeg(photo: Image.Image, story: Story = DEFAULT_STORY, style: str = "metro") -> bytes:
-    buf = io.BytesIO()
-    render(photo, story, style).save(buf, "JPEG", quality=92, dpi=(150, 150))
-    return buf.getvalue()
+    return to_jpeg(render(photo, story, style))

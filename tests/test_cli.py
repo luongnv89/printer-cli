@@ -278,6 +278,20 @@ def test_booth_preview_to_missing_folder(capsys, tmp_path, booth_printer):
     assert code == 1 and "cannot write" in err and booth_printer.made == []
 
 
+def test_booth_warns_when_text_is_cut_to_fit(capsys, tmp_path, booth_printer):
+    photo, out_file = _booth_photo(tmp_path), tmp_path / "page.jpg"
+    code, _, err = run(capsys, "-p", "demo", "--no-color", "booth", str(photo), "--yes",
+                       "--caption", "A caption that runs on and on " * 6)
+    assert code == 0 and "queued as job" in err
+    assert "caption cut to fit the metro page" in err and "--preview" in err
+    code, _, err = run(capsys, "--no-color", "booth", str(photo), "-o", str(out_file),
+                       "--headline", "Wide headline words " * 6, "--story", "Wide paragraph.\n" * 140)
+    assert code == 0 and "headline, story cut to fit the metro page" in err
+    assert len(booth_printer.made) == 1  # the preview created no driver
+    code, _, err = run(capsys, "-p", "demo", "booth", str(photo), "-o", str(out_file))
+    assert code == 0 and "cut to fit" not in err
+
+
 @pytest.mark.parametrize("content", [b"not a picture", b"", b"\xff\xd8\xff\xe0 truncated jpeg"])
 def test_booth_unreadable_photo_sends_nothing(capsys, tmp_path, booth_printer, content):
     bad = tmp_path / "photo.jpg"

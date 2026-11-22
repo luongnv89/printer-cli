@@ -47,12 +47,61 @@ def test_metro_keeps_colour_and_daily_is_black_and_white():
 @pytest.mark.parametrize("style", ["metro", "daily"])
 def test_longest_story_stays_inside_the_page_margins(style):
     # 141 paragraphs cannot fit even at the smallest type, so the end of the story is cut.
+    # W is the widest capital, so the kicker only fits by shrinking.
     story = Story(headline="H" * LIMITS["headline"], story="A" * 200 + "\n" + "Wide paragraph.\n" * 140,
-                  kicker="K" * LIMITS["kicker"], caption="c " * 100, byline="B" * LIMITS["byline"])
+                  kicker="W" * LIMITS["kicker"], caption="c " * 100, byline="B" * LIMITS["byline"])
     page = booth.render(Image.new("RGB", (1600, 400), "red"), booth.check_story(story, 2), style)
     w, h = A4_150DPI
     for band in [(0, 0, w, 80), (0, h - 80, w, h), (0, 0, 80, h), (w - 80, 0, w, h)]:
         assert page.crop(band).getextrema() == ((255, 255),) * 3, band
+
+
+@pytest.mark.parametrize("style", ["metro", "daily"])
+def test_full_length_portrait_keeps_the_top_of_the_photo(monkeypatch, style):
+    # A 9:16 photo whose top 8% (where the head is) is black and the rest white.
+    photo = Image.new("RGB", (360, 640), "white")
+    photo.paste((0, 0, 0), (0, 0, 360, 51))
+    boxes = []
+    real = booth._photo
+    monkeypatch.setattr(booth, "_photo", lambda page, img, box, mono: boxes.append(box) or real(page, img, box, mono))
+    page = booth.render(photo, style=style).convert("L")
+    [(x0, y0, x1, _)] = boxes
+    top = page.crop((x0 + 20, y0 + 10, x1 - 20, y0 + 20))  # just inside metro's thick frame
+    assert top.getextrema()[1] < 60
+
+
+@pytest.mark.parametrize("style", ["metro", "daily"])
+@pytest.mark.parametrize("shape", [(300, 400), (360, 640), (1600, 900)])
+def test_default_story_is_never_cut(style, shape):
+    page, cut = booth.compose(Image.new("RGB", shape, "blue"), booth.DEFAULT_STORY, style)
+    assert cut == [] and page == booth.render(Image.new("RGB", shape, "blue"), style=style)
+
+
+def test_compose_names_the_fields_cut_to_fit():
+    portrait = Image.new("RGB", (300, 400), "blue")
+    long = Story(headline="Wide headline words " * 6, story="Wide paragraph.\n" * 140, kicker="W" * 40,
+                 caption="caption words " * 14, byline="B" * 80)
+    assert booth.compose(portrait, booth.check_story(long, 2), "metro")[1] == ["headline", "caption", "story"]
+    assert booth.compose(portrait, booth.check_story(long, 2), "daily")[1] == ["story"]
+    # Text that already ends in "…" is not mistaken for a cut.
+    assert booth.compose(portrait, Story(headline="Wait for it…", story="Line one…"), "metro")[1] == []
+
+
+@pytest.mark.parametrize("style", ["metro", "daily"])
+def test_kicker_fits_the_page_even_when_stand_ins_widen_it(style):
+    # Each "€" prints as "EUR", so this 40-character kicker is 120 capitals wide: cut, not overflowing.
+    story = booth.check_story(Story(headline="H", story="S", kicker="€" * LIMITS["kicker"]), 2)
+    page, cut = booth.compose(Image.new("RGB", (300, 400), "blue"), story, style)
+    w, h = A4_150DPI
+    for band in [(0, 0, 80, h), (w - 80, 0, w, h)]:
+        assert page.crop(band).getextrema() == ((255, 255),) * 3, band
+    assert cut == ["kicker"]
+
+
+@pytest.mark.parametrize("style", ["metro", "daily"])
+def test_kicker_of_only_an_accent_mark_renders(style):
+    story = booth.check_story(Story(headline="H", story="S", kicker="¨"), 2)  # prints as a blank
+    assert booth.compose(Image.new("RGB", (40, 40), "white"), story, style)[1] == []
 
 
 def test_empty_optional_fields_render(tmp_path):
@@ -70,6 +119,18 @@ def test_load_photo_decodes_to_rgb_and_applies_exif_rotation(tmp_path):
     img = booth.load_photo(path)
     assert img.mode == "RGB" and img.size == (20, 40)
     assert booth.load_photo(_photo(tmp_path / "plain.png", (40, 20))).size == (40, 20)
+
+
+def test_load_photo_prints_transparent_parts_as_white_paper(tmp_path):
+    cutout = tmp_path / "cutout.png"
+    Image.new("RGBA", (20, 20), (0, 0, 0, 0)).save(cutout)
+    assert booth.load_photo(cutout).getcolors() == [(400, (255, 255, 255))]
+    palette = tmp_path / "palette.png"
+    img = Image.new("P", (20, 20), 0)
+    img.putpalette([0, 0, 0, 255, 0, 0])
+    img.paste(1, (0, 0, 10, 20))
+    img.save(palette, transparency=0)  # the black half is see-through, the red half is not
+    assert sorted(booth.load_photo(palette).getcolors()) == [(200, (255, 0, 0)), (200, (255, 255, 255))]
 
 
 def _bad_photo(tmp_path, kind):

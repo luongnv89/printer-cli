@@ -51,13 +51,15 @@ A longer story still fits: the body type gets smaller, and only text that cannot
 
 All values are strings, and other fields are rejected. Use Latin letters: accents print without their marks, and other scripts or emoji are refused. A headline of about 4–8 words looks best.
 
+The maximums are what the command accepts, not what always fits. The `metro` page has the least room: it holds a headline of about 70 characters, and under a portrait photo a caption of about 100. Longer text is cut with `…`.
+
 ### 4. Preview without printing
 
 ```bash
 prt booth photo.jpg --style metro --story-file story.json --preview page.jpg
 ```
 
-`--preview` (also `-o` or `--output`) writes the finished page as a JPEG and sends nothing to the printer. Open `page.jpg` and check it. If a line ends in `…`, the text was cut to fit: shorten the story or headline and preview again.
+`--preview` (also `-o` or `--output`) writes the finished page as a JPEG and sends nothing to the printer. Open `page.jpg` and check it. When text had to be cut to fit, its last line ends in `…` and the command warns on stderr, naming the fields, for example `caption cut to fit the metro page`. Shorten those fields and preview again.
 
 ### 5. Print
 
@@ -65,7 +67,7 @@ prt booth photo.jpg --style metro --story-file story.json --preview page.jpg
 prt booth photo.jpg --style metro --story-file story.json --yes
 ```
 
-`--yes` skips the confirmation prompt, which is required when there is no terminal. Add `-f json` to get `{"action": "booth", "style": "metro", "job_id": N}` on stdout.
+`--yes` skips the confirmation prompt, which is required when there is no terminal. The cut-to-fit warning also appears before printing, but the page is still printed. Add `-f json` to get `{"action": "booth", "style": "metro", "job_id": N}` on stdout.
 
 For a one-off tweak, override any field from the command line: `--headline`, `--story`, `--kicker`, `--caption`, `--byline`. These flags win over the story file. With no story at all, `prt booth photo.jpg` prints a built-in default story.
 
