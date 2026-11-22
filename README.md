@@ -120,6 +120,7 @@ Exit codes: `0` ok · `1` runtime/network error (also when only cached status is
 
 - `--style metro` (default) is a colour tabloid with two columns. `--style daily` is a black-and-white broadsheet with three columns.
 - Write your own story as JSON: `headline` and `story` are required, `kicker`, `caption` and `byline` are optional. Pass it with `--story-file story.json`. `--headline`, `--story`, `--kicker`, `--caption` and `--byline` override single fields.
+- The page uses the font that ships with Pillow, which covers basic Latin only. Accents print without their marks, and other scripts and emoji are refused with an error.
 - `--preview page.jpg` saves the page without printing.
 - The photo and story are checked before anything is sent, so an unreadable image or a bad story file exits with an error and prints nothing.
 
@@ -192,7 +193,7 @@ To add a vendor, subclass `IPPDriver`, declare its `capabilities`, override what
 
 ```bash
 uv sync
-uv run pytest            # 137 tests, no printer needed
+uv run pytest            # 138 tests, no printer needed
 uv run prt -p demo tui
 ```
 

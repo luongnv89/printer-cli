@@ -75,6 +75,6 @@ Nothing is sent to the printer when an error occurs; the message and a hint go t
 
 | Exit | Cause | Fix |
 |---|---|---|
-| `2` | Bad flag value: unknown `--style`, empty or too long `--headline`/`--story`, unprintable characters, or no `--yes` without a terminal | Correct the flag |
-| `3` | The photo is missing or not a readable image, or `story.json` is missing, not valid JSON, has unknown, missing or non-string fields, or text that is too long | Fix the file the message names |
+| `2` | Bad flag value: unknown `--style`; an empty, too long or unprintable `--headline`, `--story`, `--kicker`, `--caption` or `--byline`; or no `--yes` without a terminal | Correct the flag |
+| `3` | The photo is missing or not a readable image, or `story.json` is missing, not valid JSON, or has unknown, missing or non-string fields, an empty `headline` or `story`, text that is too long, or characters the font cannot print | Fix the file the message names |
 | `1` | Printer unreachable, or the preview file cannot be written | Wake the printer (`prt status`) or pick another output path |
