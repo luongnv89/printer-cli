@@ -334,13 +334,12 @@ def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: 
     story_bottom = BOTTOM - 52
     # Room for the lead and the story: below the lead come its frame, caption, the plate row and a rule.
     room = story_bottom - y - (2 * FRAME + 6 + caption_h + plates_h + 36)
-    # A short story leaves paper to spare: the lead grows into it, up to a 4:3 crop of a wide photo.
-    largest = min(LEAD_MAX if plates else LEAD_MAX_SOLO,
-                  round((CONTENT_W - 2 * FRAME) / min(lead.width / lead.height, 4 / 3)))
+    # A short story leaves paper to spare: the lead grows into it, up to the full width of a wide photo.
+    largest = min(LEAD_MAX if plates else LEAD_MAX_SOLO, round((CONTENT_W - 2 * FRAME) * lead.height / lead.width))
     height = max(LEAD_MIN, min(largest, room - _story_height(story.story, BODY)))
-    width = max(CONTENT_W // 2, min(CONTENT_W - 2 * FRAME, round(height * lead.width / lead.height)))
-    x0 = (W - width) // 2
-    box = (x0, y + FRAME, x0 + width, y + FRAME + height)
+    # The whole photo, never cropped: a portrait lead is narrower, a panorama shallower.
+    x0, top, x1, bottom = _contain(lead, y + FRAME, MARGIN + FRAME, CONTENT_W - 2 * FRAME, height)
+    box = (x0, y + FRAME, x1, y + FRAME + bottom - top)  # set at the top: what it leaves goes to the story
     _place(page, lead, box)
     placements = [(indices[0], box)]
     y = box[3] + FRAME + 6

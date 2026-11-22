@@ -262,6 +262,18 @@ def test_every_photo_is_printed_in_its_own_box_on_its_planned_page(n):
             assert all(abs(m - e) <= 2 for m, e in zip(mean, expected)), (k, mean, expected)
 
 
+@pytest.mark.parametrize("n", [1, 3])
+@pytest.mark.parametrize("shape", [(900, 1200), (900, 1600), (600, 1200), (2400, 800)])  # 3:4, 9:16, 1:2, 3:1
+@pytest.mark.parametrize("story", ["default", "longest"])
+def test_the_lead_photo_is_printed_whole(n, shape, story):
+    lead = vintage._downscale(Image.new("RGB", shape, "grey"), vintage.LEAD_LIMIT)
+    photos = [lead] + [Image.new("RGB", (400, 300), "grey")] * (n - 1)
+    _, placements, _ = vintage.compose_pages(photos, None if story == "default" else _longest_story())
+    k, (x0, y0, x1, y1) = placements[0][0]
+    shown, photo = (x1 - x0) / (y1 - y0), lead.width / lead.height
+    assert k == 0 and min(shown / photo, photo / shown) >= 0.9, (shape, (x0, y0, x1, y1))
+
+
 # --- the page --------------------------------------------------------------------------------
 
 
