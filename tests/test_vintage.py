@@ -19,6 +19,7 @@ from prt.drivers.fake import FakeDriver
 from prt.transport import ipp
 
 A4_150DPI = (1240, 1754)
+PAPER, INK = (244, 236, 216), (26, 26, 26)  # #f4ecd8 and #1a1a1a, the reference gazette's two tones
 FAMILIES = {"Old Standard TT", "Playfair Display", "UnifrakturMaguntia"}
 DRAWN_ROLES = ["body", "body-bold", "body-italic", "display-bold", "display-black"]  # the masthead is fixed ASCII
 DIVERGENT = "Ǆ Ǫ Ĳ ſ Ǎ ǆ Ǧ "  # each one is missing from at least one bundled face
@@ -67,6 +68,15 @@ def _longest_story(prefix=""):
                                    kicker=(prefix + "W" * LIMITS["kicker"])[:LIMITS["kicker"]],
                                    caption=(prefix + "c " * 100)[:LIMITS["caption"]],
                                    byline=(prefix + "B" * LIMITS["byline"])[:LIMITS["byline"]]), 2)
+
+
+def _overfull_story():
+    """Every field too wide for its place, so each one ends in "…" drawn in its own face."""
+    return booth.check_story(Story(headline=(DIVERGENT + "W" * LIMITS["headline"])[:LIMITS["headline"]],
+                                   story=DIVERGENT + "A" * 200 + "\n" + "Wide paragraph.\n" * 140,
+                                   kicker=("Ǆ " + "㎑" * LIMITS["kicker"])[:LIMITS["kicker"]],  # ㎑ prints as "kHz"
+                                   caption=(DIVERGENT + "W" * LIMITS["caption"])[:LIMITS["caption"]],
+                                   byline=(DIVERGENT + "W" * LIMITS["byline"])[:LIMITS["byline"]]), 2)
 
 
 # --- bundled fonts ---------------------------------------------------------------------------
@@ -161,11 +171,17 @@ def test_vintage_module_has_no_page_font():
 @pytest.mark.parametrize("n", [1, 10])
 def test_every_word_is_drawn_in_a_bundled_font_that_has_its_glyphs(strict_drawing, n):
     story = _longest_story(DIVERGENT)
-    assert all(DIVERGENT.split()[0] in getattr(story, name) for name in booth.FIELDS)
+    assert all(c in getattr(story, name) for c in DIVERGENT.split() for name in booth.FIELDS)
     photos = [Image.new("RGB", (400 + 50 * k, 300), (20 * k, 80, 160)) for k in range(n)]
     pages, _, _ = vintage.compose_pages(photos, story)
     assert len(pages) == len(vintage.plan_pages(n)) and strict_drawing.fallbacks == []
     assert any("DZ" in text for text in strict_drawing.drawn)  # a divergent letter was replaced, not dropped
+
+
+def test_text_cut_to_fit_ends_in_a_glyph_every_face_has(strict_drawing):
+    _, _, cut = vintage.compose_pages([Image.new("RGB", (400, 300), "grey")] * 3, _overfull_story())
+    assert sorted(cut) == sorted(booth.FIELDS) and strict_drawing.fallbacks == []
+    assert sum(text.endswith("…") for text in strict_drawing.drawn) >= len(booth.FIELDS)
 
 
 # --- glyph coverage --------------------------------------------------------------------------
@@ -265,11 +281,20 @@ def test_too_long_text_is_cut_and_named():
     assert cut == ["headline", "story"]
 
 
-def test_pages_are_a4_cream_and_the_longest_story_stays_inside_the_margins():
+def test_pages_are_cream_paper_with_dark_ink_rules():
+    pages, _, _ = vintage.compose_pages([Image.new("RGB", (400, 300), "white")] * 4)
+    for page in pages:
+        assert page.size == A4_150DPI and page.getpixel((5, 5)) == PAPER
+        assert set(page.crop((0, 0, 1240, 1754)).getdata()) >= {PAPER, INK}
+    assert pages[0].getpixel((620, 90)) == INK  # the hairline above the masthead
+    closing = [pages[1].getpixel((620, y)) for y in range(A4_150DPI[1] - 110, A4_150DPI[1] - 90)]
+    assert closing.count(INK) >= 4  # the double rule closing a plate page: two lines of ink
+
+
+def test_the_longest_story_stays_inside_the_margins():
     pages, _, _ = vintage.compose_pages([Image.new("RGB", (1600, 400), "red")] * 10, _longest_story())
     w, h = A4_150DPI
     for page in pages:
-        assert page.size == A4_150DPI and page.getpixel((5, 5)) == vintage.PAPER
         for band in [(0, 0, w, 80), (0, h - 80, w, h), (0, 0, 80, h), (w - 80, 0, w, h)]:
             assert _paper_only(page, band), band
 
@@ -289,6 +314,12 @@ def test_unbroken_story_renders_quickly_inside_the_margins():
 def test_small_caps_set_lower_case_letters_as_smaller_capitals():
     runs = vintage._caps("Price", "body-bold", 20)
     assert [(font.size, text) for font, text in runs] == [(20, "P"), (15, "RICE")]
+
+
+def test_small_caps_shrink_then_cut_to_fit():
+    assert vintage._fit_caps("W" * 40, "body-bold", 24, 16, 1060)[1:] == (24, False)
+    runs, size, cut = vintage._fit_caps("㎑" * 40, "body-bold", 24, 16, 1060)  # 120 letters once spelt out
+    assert (size, cut) == (16, True) and runs[-1][1].endswith("…") and vintage._caps_width(runs) <= 1060
 
 
 # --- photos are shrunk, only for the gazette -------------------------------------------------
