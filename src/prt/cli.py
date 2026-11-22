@@ -677,7 +677,11 @@ def booth_cmd(
     byline: Optional[str] = typer.Option(None, "--byline",
                                          help="Author line, e.g. 'By Jo Smith'; the footer on wizard and wanted."),
     preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
-                                           help="Save the page as a JPEG here instead of printing."),
+                                           help="Save the page here instead of printing; the extension picks "
+                                                "the file type: .pdf, .png, .jpg or .jpeg."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of the page here (.pdf, .png, .jpg or "
+                                                   ".jpeg) before printing it; repeat for more files."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ) -> None:
     """Photo booth: print a photo as a newspaper front page, a wizard card or a wanted poster (A4).
@@ -685,34 +689,51 @@ def booth_cmd(
     Without a story each style uses its own built-in one. Story flags override --story-file.
     """
     from prt import booth
-    # Decode and check every input before a driver exists, so bad input never reaches the printer.
+    # Decode and check every input before a file is written or a driver exists, so a bad file name or
+    # bad input never leaves a partial result or reaches the printer.
+    preview_format = booth.format_for(preview) if preview else None
+    copies = [(path, booth.format_for(path)) for path in save or []]
     image = booth.load_photo(photo)
     base = booth.load_story(story_file) if story_file else booth.default_story(paper.value)
     text = booth.with_overrides(base, headline=headline, story=story, kicker=kicker, caption=caption,
                                 byline=byline)
     page, cut = booth.compose(image, text, paper.value)
-    data = booth.to_jpeg(page)
     if cut:
         STATE.note("warn", f"{', '.join(cut)} cut to fit the {paper.value} page",
                    "shorten it, or check the page with --preview")
     if preview:
-        try:
-            preview.write_bytes(data)
-        except OSError as exc:
-            raise PrinterError(f"cannot write {preview}: {exc.strerror}",
-                               hint="check that the folder exists and is writable") from exc
-        STATE.note("ok", f"saved {preview}", f"{paper.value} page · {len(data) / 1024:,.0f} KiB · not printed")
+        preview_size = _save_booth_page(booth.to_bytes(page, preview_format), preview)
+        STATE.note("ok", f"saved {preview}", f"{paper.value} page · {preview_format.upper()} · "
+                                             f"{preview_size / 1024:,.0f} KiB · not printed")
+    # Copies are written before connecting, so they exist even when the printer is unreachable.
+    saved = []
+    for path, fmt in copies:
+        size = _save_booth_page(booth.to_bytes(page, fmt), path)
+        STATE.note("ok", f"saved {path}", f"{paper.value} page · {fmt.upper()} · {size / 1024:,.0f} KiB")
+        saved.append({"file": str(path), "format": fmt, "bytes": size})
+    extra = {"saved": saved} if save else {}
+    if preview:
         if STATE.json:
             STATE.write(json.dumps({"action": "booth", "style": paper.value, "file": str(preview),
-                                    "bytes": len(data)}) + "\n")
+                                    "bytes": preview_size, **extra}) + "\n")
         return
     d = STATE.driver()
     d.require(Capability.PRINT)
     _confirm(f"Print {photo.name} as a {booth.KINDS[paper.value]} on {d.display_name}?", yes)
-    job = d.submit(data, "image/jpeg", PrintOptions(job_name=f"prt booth {photo.name}", media="a4"))
+    job = d.submit(booth.to_jpeg(page), "image/jpeg",
+                   PrintOptions(job_name=f"prt booth {photo.name}", media="a4"))
     STATE.note("ok", f"booth page queued as job {job}", d.display_name)
     if STATE.json:
-        STATE.write(json.dumps({"action": "booth", "style": paper.value, "job_id": job}) + "\n")
+        STATE.write(json.dumps({"action": "booth", "style": paper.value, "job_id": job, **extra}) + "\n")
+
+
+def _save_booth_page(data: bytes, path: Path) -> int:
+    try:
+        path.write_bytes(data)
+    except OSError as exc:
+        raise PrinterError(f"cannot write {path}: {exc.strerror}",
+                           hint="check that the folder exists and is writable") from exc
+    return len(data)
 
 
 @jobs_app.callback()
