@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `prt booth PHOTO`: photo booth that prints a photo as an A4 newspaper front page with a short news story. Two styles, `--style metro` (colour tabloid) and `--style daily` (black-and-white broadsheet); a built-in default story; your own story via `--story-file story.json` or `--headline`/`--story`/`--kicker`/`--caption`/`--byline`; `--preview FILE` to render without printing. Unreadable photos and bad story files are rejected before anything is sent to the printer.
+- `skills/photo-booth/SKILL.md`: an agent skill that looks at the photo, writes a fitting story, previews it and prints it with `prt booth`.
+
 ## [0.1.0] - 2026-11-22
 
 First public release of printer-cli (command: `prt`), a CLI and full-screen TUI for network printers.
