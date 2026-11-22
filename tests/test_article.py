@@ -141,6 +141,32 @@ def test_an_article_inside_clutter_is_read_only_when_nothing_else_is(page, body)
     assert article.from_html(page).body == body
 
 
+STORY = ("<p>The post itself, paragraph one, which says what the article is about at some length.</p>"
+        "<p>Paragraph two of the post carries on the argument with a few more sentences.</p>")
+STORY_BODY = ("The post itself, paragraph one, which says what the article is about at some length.",
+             "Paragraph two of the post carries on the argument with a few more sentences.")
+
+
+@pytest.mark.parametrize("page", [
+    f'<div class="entry">{STORY}</div><div id="comments"><article><p>Great post, thanks!</p></article></div>',
+    f'<div class="entry">{STORY}</div><div class="related-posts"><article><h3>Other story</h3>'
+    '<p>Teaser excerpt for another story.</p></article></div>',
+    f'<div class="content-sidebar-wrap"><main><article>{STORY}</article></main>'
+    '<div class="sidebar"><p>Popular posts</p></div></div>'
+    '<section class="more-stories"><article><p>Short teaser.</p></article></section>',
+    f'<div class="content-sidebar-wrap"><article>{STORY * 3}</article></div>'
+    '<section class="more-stories"><article><p>Short teaser.</p></article></section>'])
+def test_a_post_outweighs_a_comment_or_teaser_wherever_each_sits(page):
+    body = article.from_html(page).body
+    assert body[:2] == STORY_BODY and set(body) == set(STORY_BODY)
+
+
+def test_a_main_holding_several_articles_gives_the_largest_one():
+    teasers = "<article><p>Short teaser.</p></article>"
+    page = f"<main>{teasers}<article>{STORY}</article>{teasers}</main>"
+    assert article.from_html(page).body == STORY_BODY
+
+
 def test_tag_furniture_still_hides_an_article_inside_it():
     page = "<article><p>The story itself.</p></article><aside><article><p>Teaser in the aside.</p></article></aside>"
     assert article.from_html(page).body == ("The story itself.",)

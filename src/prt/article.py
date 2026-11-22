@@ -211,6 +211,7 @@ class _Node:
     skip: bool  # furniture by its tag (nav, aside, script…)
     clutter: bool  # furniture by its class or id
     outer_clutter: int = 0  # for <article>/<main>: the clutter count outside it, restored when it closes
+    outer_buried: int = 0  # for <article>/<main>: the burial outside it, restored when it closes
 
 
 @dataclass(frozen=True)
@@ -220,7 +221,8 @@ class _Para:
     article: int | None  # innermost <article> around it
     main: int | None  # innermost <main> around it
     parent: int  # the element holding the paragraph
-    buried: int = 0  # class/id clutter around its <article>/<main> elements: a comment, a teaser…
+    buried: int = 0  # class/id clutter around its <article> elements (not outside a <main>): a comment, a teaser…
+    in_main: bool = False  # its innermost <article>/<main> is a <main>: it is not in one of main's articles
 
 
 class _Extractor(HTMLParser):
@@ -237,9 +239,10 @@ class _Extractor(HTMLParser):
         self.blocks: list[int] = []  # stack positions of the open _BLOCKS elements
         self.articles: list[int] = []  # ids of the open <article> elements
         self.mains: list[int] = []  # ids of the open <main> elements
+        self.sections: list[str] = []  # the open <article>/<main> tags, outermost first
         self.skipped_tags = 0  # open elements dropped for their tag: dropped wherever they are
         self.clutter = 0  # open elements dropped for their class or id, since the innermost <article>/<main>
-        self.buried = 0  # class/id clutter elements around the open <article>/<main> elements
+        self.buried = 0  # class/id clutter elements around the open <article> elements, since the innermost <main>
         self.serial = 0
         self.buffer: list[str] = []
         self.paragraphs: list[_Para] = []
@@ -272,8 +275,11 @@ class _Extractor(HTMLParser):
         node = _Node(tag, self.serial, skip, clutter)
         if tag in ("article", "main"):  # a sidebar-named wrapper must not hide the article inside it
             node.outer_clutter, self.clutter = self.clutter, 0
-            self.buried += node.outer_clutter
+            node.outer_buried = self.buried
+            # A <main> is the page's main content, never a comment or teaser: clutter around it is layout.
+            self.buried = 0 if tag == "main" else self.buried + node.outer_clutter
             (self.articles if tag == "article" else self.mains).append(node.id)
+            self.sections.append(tag)
         if tag in _BLOCKS:
             self.blocks.append(len(self.stack))
         self.stack.append(node)
@@ -308,9 +314,9 @@ class _Extractor(HTMLParser):
         self.skipped_tags -= node.skip
         self.clutter -= node.clutter
         if node.tag in ("article", "main"):
-            self.clutter = node.outer_clutter
-            self.buried -= node.outer_clutter
+            self.clutter, self.buried = node.outer_clutter, node.outer_buried
             (self.articles if node.tag == "article" else self.mains).pop()
+            self.sections.pop()
         if node.tag == "title" and self.title is not None:
             self.page_title, self.title = "".join(self.title), None
         elif node.tag == "h1" and self.h1 is not None:
@@ -337,7 +343,8 @@ class _Extractor(HTMLParser):
         parent = self.stack[at - 1].id if at else 0
         article = self.articles[-1] if self.articles else None
         main = self.mains[-1] if self.mains else None
-        self.paragraphs += [_Para(line, tag, article, main, parent, self.buried) for line in lines if line]
+        in_main = bool(self.sections) and self.sections[-1] == "main"
+        self.paragraphs += [_Para(line, tag, article, main, parent, self.buried, in_main) for line in lines if line]
 
     def close(self) -> None:
         super().close()
@@ -346,20 +353,32 @@ class _Extractor(HTMLParser):
         self._flush()
 
 
-def _densest(paras: list[_Para], key) -> list[_Para]:
-    """The paragraphs of the group (by ``key``) holding the most text; [] when no paragraph has a group."""
-    groups: dict[int, list[_Para]] = {}
+BURIED = 0.1  # weight of text per level of class/id clutter around its <article>: a comment, a teaser…
+BARE = 0.8  # weight of text in a plain block: an <article>/<main> wins unless a block holds clearly more
+
+
+def _body(paras: list[_Para]) -> list[_Para]:
+    """The paragraphs of the candidate holding the most weighted text: each <article>, each <main> (its text
+    outside its articles) and each block of paragraphs, every one weighted down by BURIED per level of
+    clutter around it, and a plain block by BARE. Ties go to an article, then a main, then a block."""
+    groups: dict[tuple[int, int, int], list[_Para]] = {}
     for para in paras:
-        if (group := key(para)) is not None:
-            groups.setdefault(group, []).append(para)
-    return max(groups.values(), key=lambda group: sum(len(p.text) for p in group), default=[])
+        for rank, group in ((0, para.article), (1, para.main if para.in_main else None), (2, para.parent)):
+            if group is not None:
+                groups.setdefault((rank, group, para.buried), []).append(para)
+
+    def weight(item: tuple[tuple[int, int, int], list[_Para]]) -> float:
+        (rank, _, buried), group = item
+        return sum(len(p.text) for p in group) * BURIED ** buried * (BARE if rank == 2 else 1)
+    return max(sorted(groups.items(), key=lambda item: item[0][0]), key=weight, default=(None, []))[1]
 
 
 def from_html(html: str, url: str = "", host: str = "") -> Article:
-    """Title, author, site and body of a web page; the body comes from <article>, else <main>, else the
-    element with the most paragraph text. Navigation, ads, share bars, comments and the like are left out.
-    An <article>/<main> inside class/id clutter (a comment, a related-post teaser, or a theme's sidebar-named
-    wrapper) is read only when no article or main under less clutter holds text."""
+    """Title, author, site and body of a web page. Navigation, ads, share bars, comments and the like are left
+    out; the body is the article, main or block holding the most text (see ``_body``). An <article> inside
+    class/id clutter (a comment, a related-post teaser) counts a tenth as much per level of clutter, so it
+    wins only when it holds far more than anything else; clutter around a <main> (a theme's sidebar-named
+    wrapper) is ignored."""
     parser = _Extractor()
     parser.feed(html)
     parser.close()
@@ -368,13 +387,7 @@ def from_html(html: str, url: str = "", host: str = "") -> Article:
     author = next((a for a in (meta.get("author"), meta.get("article:author"), parser.author_link)
                    if a and a.strip() and not _LINK.match(a.strip())), "")
     source = (meta.get("og:site_name") or meta.get("application-name") or host).strip()
-    by_depth: dict[int, list[_Para]] = {}
-    for para in parser.paragraphs:
-        by_depth.setdefault(para.buried, []).append(para)
-    paras = next((found for _, group in sorted(by_depth.items())
-                  if (found := _densest(group, lambda p: p.article) or _densest(group, lambda p: p.main))),
-                 None) or _densest(parser.paragraphs, lambda p: p.parent)
-    body = [p.text for p in paras if " ".join(p.text.split()) != " ".join(title.split())]
+    body = [p.text for p in _body(parser.paragraphs) if " ".join(p.text.split()) != " ".join(title.split())]
     return Article(title=title or source, body=tuple(body), author=author.strip(), source=source, url=url)
 
 
