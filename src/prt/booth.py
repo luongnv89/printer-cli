@@ -808,8 +808,15 @@ def _sports(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     page.paste(card, panel[:2], shape)
 
     if story.kicker.strip():
-        font, size, [label], cut_kicker = _fit(story.kicker.upper(), 44, 20, 780, 1)
-        d.text((x0 + 70, y0 + 52 + (44 - size) // 2), label, font=font, fill=WHITE, stroke_width=1, stroke_fill=WHITE)
+        # The team name stays left of the corner stripes (their left edge at the card's top, less a small gap).
+        kicker_x = x0 + 70
+        kicker_w = panel[0] + card_size[0] - 380 - 16 - kicker_x
+        kicker = _fit(story.kicker.upper(), 44, 20, kicker_w, 1)
+        if kicker[3]:  # too long for one line even at the smallest size: allow a second
+            kicker = _fit(story.kicker.upper(), 20, 20, kicker_w, 2)
+        font, size, lines, cut_kicker = kicker
+        top = y0 + 52 + (44 - size) // 2 if len(lines) == 1 else y0 + 48
+        _text_block(d, kicker_x, top, lines, font, size, WHITE, bold=1)
         if cut_kicker:
             cut["kicker"] = cut_kicker
 

@@ -545,6 +545,27 @@ def test_sports_card_name_bar_is_scarlet_across_the_photo(monkeypatch):
     assert (x1 - x0, y1 - y0) == (booth.CARD_W - 128, booth.SPORTS_PHOTO)
 
 
+@pytest.mark.parametrize("kicker", ["Real Madrid Club de Futbol", "Booth City Flashing Stars", "W" * 40, "€" * 40])
+def test_sports_card_team_name_stays_left_of_the_corner_stripes(kicker):
+    grey = Image.new("RGB", (300, 400), (128, 128, 128))
+    story = booth.check_story(replace(booth.default_story("sports"), kicker=kicker), 2)
+    page, cut = booth.compose(grey, story, "sports")
+    bare = _render(grey, replace(story, kicker=""), "sports")
+    x0, y0 = (booth.W - booth.CARD_W) // 2, (booth.H - booth.CARD_H) // 2
+    stripes = (x0 + booth.CARD_W - 28 - 380 - 4, y0 + 28, x0 + booth.CARD_W - 28, y0 + 120)
+    assert page.crop(stripes).tobytes() == bare.crop(stripes).tobytes()  # nothing drawn over the stripes
+    band = (x0 + 60, y0 + 28, stripes[0], y0 + 110)
+    assert page.crop(band).tobytes() != bare.crop(band).tobytes()  # the team name is printed beside them
+    # A 40-character name fits (on two lines at the smallest size); one that prints longer is cut, and
+    # cut to max_fit characters it fits.
+    if kicker.startswith("€"):  # each "€" prints as "EUR"
+        assert cut["kicker"].given == 40 and 0 < cut["kicker"].max_fit < 40
+        assert "kicker" not in booth.compose(grey, replace(story, kicker=kicker[:cut["kicker"].max_fit]),
+                                             "sports")[1]
+    else:
+        assert "kicker" not in cut
+
+
 # --- saving a copy -------------------------------------------------------------------------------
 
 def _pdf_page_image(pdf):
