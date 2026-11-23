@@ -23,8 +23,8 @@ from typing import Callable
 from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 
 from prt.drivers.base import PrinterError
-from prt.layout import (BOTTOM, CONTENT_W, Cuts, _clean, _columns, _columns_height, _fit, _glyphs, _lead,
-                        _printable, _text_block)
+from prt.layout import (BOTTOM, CONTENT_W, Cuts, _clean, _columns, _columns_height, _fit, _glyphs, _in_source,
+                        _lead, _printable, _text_block)
 from prt.layout import _col_width, _ellipsize, _rows, _wrap  # noqa: F401  (still reachable as booth.<name>)
 from prt.testpage import H, MARGIN, W, _font
 
@@ -640,7 +640,9 @@ def compose(photo: Image.Image, story: Story | None = None, style: str = "metro"
     story = default_story(style) if story is None else story
     page = Image.new("RGB", (W, H), "white")
     cut = STYLES[style](page, photo, Story(**{name: _printable(getattr(story, name)) for name in FIELDS}))
-    return page, cut
+    # The styles count on the printed text (stand-ins such as "EUR" for "€"); report the characters given.
+    # Their .upper() keeps the length of every character the page font draws, so the count holds there too.
+    return page, {name: _in_source(c, getattr(story, name), _printable) for name, c in cut.items()}
 
 
 def to_jpeg(page: Image.Image) -> bytes:

@@ -26,8 +26,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 from prt import booth, fonts
 from prt.booth import Story
 from prt.drivers.base import PrinterError
-from prt.layout import (BOTTOM, CONTENT_W, ELLIPSIS, _STAND_INS, Cut, Cuts, _col_width, _cut, _ellipsize, _lead,
-                        _paragraphs, _rows, _text_block, _wrap, draw_columns, flow_columns)
+from prt.layout import (BOTTOM, CONTENT_W, ELLIPSIS, _STAND_INS, Cut, Cuts, _col_width, _cut, _ellipsize,
+                        _in_source, _lead, _paragraphs, _rows, _text_block, _wrap, draw_columns, flow_columns)
 from prt.testpage import H, MARGIN, W
 
 PAPER = (244, 236, 216)  # #f4ecd8
@@ -209,23 +209,27 @@ def _printable_face(text: str, face: ImageFont.FreeTypeFont) -> str:
     return "".join(_char_in(face, c) for c in text)
 
 
-def _fit_face(text: str, role: str, size: int, min_size: int, width: int, max_lines: int):
-    """Largest size (size → min_size) of ``role`` that wraps ``text`` into ``max_lines``; cut with "…" at the
-    smallest. Returns (font, size, lines, cut), ``cut`` being None or the ``Cut`` (see ``layout._fit``)."""
+def _fit_face(text: str, role: str, size: int, min_size: int, width: int, max_lines: int, caps: bool = False):
+    """Largest size (size → min_size) of ``role`` that wraps ``text`` (in capitals with ``caps``) into
+    ``max_lines``; cut with "…" at the smallest. Returns (font, size, lines, cut), ``cut`` being None or the
+    ``Cut`` (see ``layout._fit``), counted in the characters of ``text`` rather than in the printed ones."""
+    def shown(c: str) -> str:
+        return _printable_face(c.upper() if caps else c, font)
     for s in range(size, min_size - 1, -2):
         font = fonts.face(role, s)
-        printable = _printable_face(text, font)
+        printable = _printable_face(text.upper() if caps else text, font)
         lines = _wrap(printable, font, width)
         if len(lines) <= max_lines:
             return font, s, lines, None
     lines = lines[:max_lines - 1] + [_ellipsize(lines[max_lines - 1], font, width)]
-    return font, s, lines, _cut(printable, lines)
+    return font, s, lines, _in_source(_cut(printable, lines), text, shown)
 
 
 def _centred(d: ImageDraw.ImageDraw, y: int, text: str, role: str, size: int, min_size: int, lines: int,
-             x0: int, width: int) -> tuple[int, Cut | None]:
-    """Fit ``text`` in ``lines`` lines centred in ``width`` from ``x0``; returns (y below, cut)."""
-    font, s, wrapped, cut = _fit_face(text, role, size, min_size, width, lines)
+             x0: int, width: int, caps: bool = False) -> tuple[int, Cut | None]:
+    """Fit ``text`` (in capitals with ``caps``) in ``lines`` lines centred in ``width`` from ``x0``; returns
+    (y below, cut)."""
+    font, s, wrapped, cut = _fit_face(text, role, size, min_size, width, lines, caps)
     return _text_block(d, x0, y, wrapped, font, s, INK, width=width), cut
 
 
@@ -304,7 +308,8 @@ def _story(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], co
         while len(last) > 1 and not last[-1]:  # end on text, not on a paragraph gap
             last.pop()
         last[-1] = _ellipsize(last[-1], font, col_w)
-        cut = _cut("\n".join(paras), [line for col in cols for line in col])
+        cut = _in_source(_cut("\n".join(paras), [line for col in cols for line in col]), text,
+                         lambda c: _printable_face(c, font))
     draw_columns(d, cols, x0, y0, col_w, GUTTER, font, s, INK)
     # The column rule is drawn here rather than by draw_columns, at the weight of every other rule.
     depth = y0 + max((len(col) for col in cols), default=0) * _lead(s)
@@ -380,8 +385,8 @@ def _head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet) -> tuple[int, Cuts
         y += ks + 18
         if cut_kicker:
             cut["kicker"] = cut_kicker
-    y, cut_headline = _centred(d, y, story.headline.upper(), "display-black", 64, 36, sheet.headline_lines, left,
-                                width)
+    y, cut_headline = _centred(d, y, story.headline, "display-black", 64, 36, sheet.headline_lines, left, width,
+                                caps=True)
     if cut_headline:
         cut["headline"] = cut_headline
     _rule(d, y + 4, sheet)

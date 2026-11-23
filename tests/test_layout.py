@@ -176,3 +176,16 @@ def test_cut_follows_the_lines_over_paragraph_gaps_left_out():
 
 def test_cut_reports_as_json_fields():
     assert layout.Cut(68, 92).to_dict() == {"max_fit": 68, "given": 92}
+
+
+def test_in_source_recounts_a_cut_in_the_characters_given():
+    def expand(c):
+        return {"€": "EUR", "ß": "ss", "\u0301": ""}.get(c, c)
+    # "a € b" prints as "a EUR b": 5 of those 7 printed characters cover "a €" (3 given), not 5 given.
+    assert layout._in_source(layout.Cut(5, 7), "a € b", expand) == layout.Cut(3, 5)
+    # A stand-in only part of which fitted is left out; an accent mark costs nothing.
+    assert layout._in_source(layout.Cut(4, 7), "a € b", expand) == layout.Cut(2, 5)
+    assert layout._in_source(layout.Cut(3, 4), "e\u0301ß b", expand) == layout.Cut(3, 5)
+    # Whitespace and paragraphs are normalised as _cut does.
+    assert layout._in_source(layout.Cut(7, 9), "  ß  ß \n\n ß ", expand) == layout.Cut(4, 5)
+    assert layout._in_source(layout.Cut(5, 5), "plain", expand) == layout.Cut(5, 5)

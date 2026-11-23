@@ -253,6 +253,24 @@ def test_compose_reports_how_much_of_each_cut_field_was_printed(style):
         assert name not in booth.compose(portrait, shorter, style)[1], name
 
 
+# Stand-ins ("EUR" for "€", "ss" for "ß") and dropped accent marks print more or fewer characters than given.
+STAND_IN_STORY = Story(headline=("Prix € Straße " * 20)[:120], kicker="€ß" * 20, caption=("Straße € " * 30)[:200],
+                       byline="€" * 80, story=("Die Straße kostet € 5. Cafe\u0301. " * 90)[:2500])
+
+
+@pytest.mark.parametrize("style", STYLES)
+def test_cut_counts_the_characters_given_not_their_stand_ins(style):
+    portrait = Image.new("RGB", (300, 400), "blue")
+    story = booth.check_story(STAND_IN_STORY, 2)
+    cut = booth.compose(portrait, story, style)[1]
+    assert cut and (style != "metro" or {"headline", "byline"} <= set(cut))
+    for name, fit in cut.items():
+        assert fit.given == len(getattr(story, name)) and 0 < fit.max_fit <= fit.given, name
+        # Cut to max_fit characters, the field fits where it is (the rest of the page left as it was).
+        shorter = replace(story, **{name: getattr(story, name)[:fit.max_fit]})
+        assert name not in booth.compose(portrait, shorter, style)[1], name
+
+
 @pytest.mark.parametrize("style", STYLES)
 def test_kicker_fits_the_page_even_when_stand_ins_widen_it(style):
     # Each "€" prints as "EUR", so this 40-character kicker is 120 capitals wide: cut, not overflowing.

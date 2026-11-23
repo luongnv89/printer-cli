@@ -165,6 +165,24 @@ def _cut(text: str, lines: list[str]) -> Cut:
     return Cut(min(done + pos, given), given)
 
 
+def _in_source(cut: Cut, source: str, expand: Callable[[str], str]) -> Cut:
+    """``cut``, counted on the printed form of ``source``, recounted in the characters of ``source`` itself.
+
+    ``expand`` gives what one character of ``source`` prints as (itself, a stand-in such as "EUR" for "€", or
+    nothing for an accent mark). ``source`` is normalised like ``_cut`` does, and ``max_fit`` becomes the number
+    of its characters whose printed form fits in the ``cut.max_fit`` printed ones, so the source cut to that many
+    characters prints no more than the part that fitted.
+    """
+    text = "\n".join(" ".join(p.split()) for p in source.split("\n") if p.strip())
+    printed = n = 0
+    for c in text:
+        printed += 1 if c.isspace() else len(expand(c))
+        if printed > cut.max_fit:
+            break
+        n += 1
+    return Cut(n, len(text))
+
+
 def _fit(text: str, size: int, min_size: int, width: int, max_lines: int):
     """Largest font (size → min_size) that wraps ``text`` into ``max_lines``; cut with "…" at the minimum.
 

@@ -350,6 +350,20 @@ def test_the_figure_number_is_not_counted_as_caption():
     assert vintage._figure_caption(3, "Short", 400)[3] is None
 
 
+@pytest.mark.parametrize("landscape", [False, True])
+def test_cut_counts_the_characters_given_not_their_capitals_or_stand_ins(landscape):
+    # "ß" prints as "SS" in the capitals of the headline; a separate accent mark prints as nothing.
+    photos = [Image.new("RGB", (400, 300), "grey")] * 3
+    story = booth.check_story(Story(headline="Straßeß " * 15, byline="€ß" * 40,
+                                    story=("Die Straße kostet € 5. Cafe\u0301. " * 90)[:2500]), 2)
+    cut = vintage.compose_pages(photos, story, landscape=landscape)[2]
+    assert {"headline", "story"} <= set(cut)
+    for name, fit in cut.items():
+        assert fit.given == len(getattr(story, name)) and 0 < fit.max_fit <= fit.given, name
+        shorter = replace(story, **{name: getattr(story, name)[:fit.max_fit]})
+        assert name not in vintage.compose_pages(photos, shorter, landscape=landscape)[2], name
+
+
 def test_small_caps_cut_counts_the_letters_printed():
     runs, _, cut = vintage._fit_caps("W" * 120, "body-bold", 24, 16, 1060)
     printed = "".join(text for _, text in runs).removesuffix("…")
