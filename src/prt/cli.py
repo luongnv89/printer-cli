@@ -740,10 +740,15 @@ def print_cmd(
     failure = None
     if wait:
         finished = []
-        for r in results:
-            job = _await_job(d, r["job_id"], wait_timeout)
-            r["state"] = job.state
-            finished.append(job)
+        try:
+            for r in results:
+                job = _await_job(d, r["job_id"], wait_timeout)
+                r["state"] = job.state
+                finished.append(job)
+        except (PrinterError, KeyboardInterrupt):
+            if STATE.json:  # every job was sent: name them all, with the state reached so far (or null)
+                STATE.write(json.dumps([{"state": None, **r} for r in results]) + "\n")
+            raise
         failure = _job_failure(finished)
     if STATE.json:
         STATE.write(json.dumps(results) + "\n")
@@ -1254,8 +1259,9 @@ def main(argv: list[str] | None = None) -> int:
             if as_json:
                 code = int(exc.exit_code)
                 ctx = getattr(exc, "ctx", None)
-                hint = f"see `{ctx.command_path} --help`" if ctx is not None else "see `prt --help`"
-                return _report(PrinterError(exc.format_message(), hint, exit_code=code,  # type: ignore[attr-defined]
+                path = ctx.command_path if ctx is not None else "prt"
+                message = exc.format_message() or f"missing command for `{path}`"  # type: ignore[attr-defined]
+                return _report(PrinterError(message, f"see `{path} --help`", exit_code=code,
                                             kind=KIND_BY_EXIT_CODE.get(code, "error")), True)
             exc.show()
             return int(exc.exit_code)

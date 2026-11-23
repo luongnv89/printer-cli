@@ -1023,6 +1023,27 @@ def test_jobs_wait_follows_a_queued_job_to_its_end(capsys, printer, photo):
     assert code == 1 and json.loads(out)["state"] == "canceled" and _error(err)["kind"] == "job_canceled"
 
 
+def test_print_wait_still_names_every_sent_job_when_waiting_fails(capsys, printer, photo, monkeypatch):
+    monkeypatch.setattr(printer.client, "_advance", lambda: None)
+    real_job = printer.job
+    monkeypatch.setattr(printer, "job", lambda job_id: None if job_id == 102 else real_job(job_id))
+    real_request = printer.client.request
+
+    def request(operation, **kw):  # job 101 finishes; the printer has forgotten job 102
+        if operation == ipp.OP_GET_JOBS and 101 in printer.client.submitted:
+            printer.client.submitted[101]["job-state"] = 9
+        return real_request(operation, **kw)
+    monkeypatch.setattr(printer.client, "request", request)
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "print", str(photo), str(photo), "--wait")
+    assert code == 1 and _error(err)["kind"] == "job_not_found"
+    assert [(r["job_id"], r["state"]) for r in json.loads(out)] == [(101, "completed"), (102, None)]
+
+
+def test_json_error_for_a_group_called_without_a_command(capsys):
+    code, _, err = run(capsys, "-f", "json", "printers")
+    assert code == 2 and _error(err)["kind"] == "usage" and _error(err)["message"]
+
+
 def test_jobs_wait_unknown_job(capsys, printer):
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "jobs", "wait", "999")
     assert code == 1 and out == "" and _error(err)["kind"] == "job_not_found"
