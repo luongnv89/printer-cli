@@ -283,6 +283,47 @@ def test_number_of_images_is_capped(tmp_path, monkeypatch):
         _parse({"blocks": [{"type": "image", "path": "a.jpg"}, {"type": "image", "path": "b.png"}]}, tmp_path)
 
 
+def _count_decodes(monkeypatch):
+    decoded = []
+    real = compose.load_image
+    monkeypatch.setattr(compose, "load_image", lambda path, where: decoded.append(path) or real(path, where))
+    return decoded
+
+
+def test_too_many_images_are_refused_before_any_is_decoded(tmp_path, monkeypatch):
+    monkeypatch.setattr(compose, "MAX_IMAGES", 2)
+    decoded = _count_decodes(monkeypatch)
+    for n in range(4):
+        _photo(tmp_path, f"{n}.jpg")
+    images = [{"type": "image", "path": f"{n}.jpg"} for n in range(3)]
+    page = {"blocks": [images[0], {"type": "columns", "columns": [[images[1]], [images[2]]]}]}
+    with pytest.raises(PrinterError, match="3 images, max 2") as exc:
+        _parse(page, tmp_path)
+    assert exc.value.exit_code == 3 and decoded == []
+
+
+def test_an_image_file_swapped_in_after_counting_is_not_decoded_past_the_cap(tmp_path, monkeypatch):
+    monkeypatch.setattr(compose, "MAX_IMAGES", 1)
+    monkeypatch.setattr(compose, "_image_paths", lambda blocks, base: [])  # as if counted before the swap
+    decoded = _count_decodes(monkeypatch)
+    _photo(tmp_path, "a.jpg"), _photo(tmp_path, "b.jpg")
+    with pytest.raises(PrinterError, match="2 images, max 1"):
+        _parse({"blocks": [{"type": "image", "path": "a.jpg"}, {"type": "image", "path": "b.jpg"}]}, tmp_path)
+    assert len(decoded) == 1
+
+
+def test_one_file_named_many_ways_is_decoded_once_and_counts_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(compose, "MAX_IMAGES", 1)
+    decoded = _count_decodes(monkeypatch)
+    photo = _photo(tmp_path)
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "link.jpg").symlink_to(photo)
+    spellings = ["photo.jpg", "./photo.jpg", "sub/../photo.jpg", "sub/.././photo.jpg", str(photo), "link.jpg"]
+    page = _parse({"blocks": [{"type": "image", "path": p} for p in spellings]}, tmp_path)
+    assert len(decoded) == 1 and page.inputs == [photo]
+    assert all(block["image"] is page.blocks[0]["image"] for block in page.blocks)
+
+
 def test_images_are_kept_no_larger_than_they_print(tmp_path):
     _photo(tmp_path, size=(4000, 3000))
     img = _parse({"blocks": [{"type": "image", "path": "photo.jpg"}]}, tmp_path).blocks[0]["image"]
@@ -299,10 +340,22 @@ def test_transparent_image_prints_on_white(tmp_path):
     (b"{", "is not valid JSON"),
     (b'{"blocks": [{"type": "qr", "data": "d", "size": NaN}]}', "is not valid JSON"),
     ("{}".encode("utf-16"), "is not UTF-8 text"),
+    (b"[" * 100000 + b"]" * 100000, "is not valid JSON: nested too deeply"),
 ])
 def test_unreadable_page_files_are_refused(content, message):
     with pytest.raises(PrinterError, match=message) as exc:
         compose.parse(content, "page.json")
+    assert exc.value.exit_code == 3
+
+
+@pytest.mark.parametrize("template", ['{"blocks": %s}', '{"title": %s, "blocks": []}',
+                                      '{"blocks": [{"type": %s}]}', '{"blocks": [{"type": "text", "text": %s}]}',
+                                      '{"blocks": [{"type": "heading", "text": "H", "level": %s}]}',
+                                      '{"blocks": [{"type": "columns", "columns": [[%s], []]}]}'])
+def test_deeply_nested_values_are_refused_by_the_schema(template):
+    nested = "[" * 5000 + "]" * 5000
+    with pytest.raises(PrinterError) as exc:
+        compose.parse((template % nested).encode(), "page.json")
     assert exc.value.exit_code == 3
 
 

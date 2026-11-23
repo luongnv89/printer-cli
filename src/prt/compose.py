@@ -22,9 +22,10 @@ from __future__ import annotations
 import json
 import math
 import re
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, NoReturn
 
 from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 
@@ -336,6 +337,8 @@ def parse(content: bytes, name: str = "the page file", base: Path | None = None)
         data = json.loads(content.decode("utf-8"), parse_constant=_reject_constant)
     except UnicodeDecodeError as exc:
         raise PrinterError(f"{name} is not UTF-8 text", hint="save it as UTF-8 JSON", exit_code=3) from exc
+    except RecursionError as exc:
+        raise PrinterError(f"{name} is not valid JSON: nested too deeply", hint=SCHEMA_HINT, exit_code=3) from exc
     except json.JSONDecodeError as exc:
         raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=SCHEMA_HINT,
                            exit_code=3) from exc
@@ -343,13 +346,44 @@ def parse(content: bytes, name: str = "the page file", base: Path | None = None)
         raise PrinterError(f"{name} is not valid JSON: {exc}", hint=SCHEMA_HINT, exit_code=3) from exc
     check(data, name)
     base = Path.cwd() if base is None else base
-    images: dict[Path, Image.Image] = {}
+    count = len({_identity(path) for path in _image_paths(data["blocks"], base)})
+    if count > MAX_IMAGES:  # before any image is decoded
+        _too_many_images(name, count)
+    images: dict[object, tuple[Path, Image.Image]] = {}
     blocks = [_ready(block, f"blocks[{i}]", base, images, name) for i, block in enumerate(data["blocks"])]
-    if len(images) > MAX_IMAGES:
-        raise PrinterError(f"{name} has {len(images)} images, max {MAX_IMAGES}", hint="split it into several pages",
-                           exit_code=3)
     title = " ".join(data.get("title", "").split()) or _first_heading(blocks) or "page"
-    return Page(title, blocks, list(images))
+    return Page(title, blocks, [path for path, _ in images.values()])
+
+
+def _too_many_images(name: str, count: int) -> NoReturn:
+    raise PrinterError(f"{name} has {count} images, max {MAX_IMAGES}", hint="split it into several pages",
+                       exit_code=3)
+
+
+def _image_path(block: dict[str, Any], base: Path) -> Path:
+    path = Path(block["path"])
+    return path if path.is_absolute() else base / path
+
+
+def _image_paths(blocks: list[dict[str, Any]], base: Path) -> list[Path]:
+    """The path of every image block in ``blocks``, columns included, in order."""
+    paths = []
+    for block in blocks:
+        if block["type"] == "image":
+            paths.append(_image_path(block, base))
+        elif block["type"] == "columns":
+            paths += [p for cell in block["columns"] for p in _image_paths(cell, base)]
+    return paths
+
+
+def _identity(path: Path) -> object:
+    """What one image file is, however its path is spelled (``a.jpg``, ``./a.jpg``, ``sub/../a.jpg``, a link
+    to it): its device and inode. A path that names no regular file is its own identity."""
+    try:
+        info = path.stat()
+    except (OSError, ValueError):
+        return path
+    return (info.st_dev, info.st_ino) if stat.S_ISREG(info.st_mode) else path
 
 
 def _first_heading(blocks: list[dict[str, Any]]) -> str:
@@ -366,9 +400,10 @@ def _printable_text(text: str, where: str, name: str, keep_newlines: bool = Fals
     return value
 
 
-def _ready(block: dict[str, Any], where: str, base: Path, images: dict[Path, Image.Image],
+def _ready(block: dict[str, Any], where: str, base: Path, images: dict[object, tuple[Path, Image.Image]],
            name: str) -> dict[str, Any]:
-    """A checked block with its text cleaned and its image decoded."""
+    """A checked block with its text cleaned and its image decoded (once per file, in ``images``: identity to
+    the first path naming it and its picture)."""
     ready = dict(block)
     kind = block["type"]
     if kind in ("heading", "text"):
@@ -376,11 +411,13 @@ def _ready(block: dict[str, Any], where: str, base: Path, images: dict[Path, Ima
     if "caption" in block:
         ready["caption"] = _printable_text(block["caption"], f"{where}.caption", name)
     if kind == "image":
-        path = Path(block["path"])
-        path = path if path.is_absolute() else base / path
-        if path not in images:
-            images[path] = load_image(path, f"{name}: {where}")
-        ready["image"] = images[path]
+        path = _image_path(block, base)
+        key = _identity(path)
+        if key not in images:
+            if len(images) >= MAX_IMAGES:  # a file changed since it was counted: never decode past the cap
+                _too_many_images(name, len(images) + 1)
+            images[key] = (path, load_image(path, f"{name}: {where}"))
+        ready["image"] = images[key][1]
     if kind == "columns":
         ready["columns"] = [[_ready(b, f"{where}.columns[{c}][{i}]", base, images, name) for i, b in enumerate(cell)]
                             for c, cell in enumerate(block["columns"])]
