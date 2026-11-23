@@ -259,6 +259,28 @@ def test_compose_reports_how_much_of_each_cut_field_was_printed(style):
         assert name not in booth.compose(portrait, shorter, style)[1], name
 
 
+@pytest.mark.parametrize("style", ["wizard", "wanted", "certificate", "sports", "missing", "movie"])
+@pytest.mark.parametrize("seed", range(6))
+def test_cutting_every_reported_field_at_once_makes_the_card_or_poster_fit(style, seed):
+    # Shortened together, no field may grow back into the room another one needs (a two-line fallback is set
+    # at its smallest size, so a shorter headline or caption never takes more height).
+    import random
+    rng = random.Random(seed)
+    words = "wide words fill the whole page with WWW and more text in it".split()
+
+    def text(limit):
+        out = " ".join(rng.choice(words) for _ in range(limit))
+        return out[:limit].strip()
+    story = booth.check_story(Story(headline=text(LIMITS["headline"]), kicker=text(LIMITS["kicker"]),
+                                    caption=text(LIMITS["caption"]), byline=text(LIMITS["byline"]),
+                                    story="\n".join(text(120) for _ in range(20))[:LIMITS["story"]]), 2)
+    portrait = Image.new("RGB", (300, 400), "blue")
+    cut = booth.compose(portrait, story, style)[1]
+    assert cut
+    shorter = replace(story, **{name: getattr(story, name)[:fit.max_fit] for name, fit in cut.items()})
+    assert booth.compose(portrait, shorter, style)[1] == {}
+
+
 # Stand-ins ("EUR" for "€", "ss" for "ß") and dropped accent marks print more or fewer characters than given.
 STAND_IN_STORY = Story(headline=("Prix € Straße " * 20)[:120], kicker="€ß" * 20, caption=("Straße € " * 30)[:200],
                        byline="€" * 80, story=("Die Straße kostet € 5. Cafe\u0301. " * 90)[:2500])

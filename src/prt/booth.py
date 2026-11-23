@@ -744,7 +744,11 @@ def _certificate(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     d.line([(mid - 300, y + 8), (mid + 300, y + 8)], fill=GOLD, width=3)
     y += 28
     if story.caption.strip():
-        y, cut_caption = _centred(d, y, story.caption, 36, LAUREL, bold=1, min_size=24, width=text_w, lines=2)
+        award = _fit(story.caption, 36, 24, text_w, 1)
+        if award[3]:  # a second line at the smallest size, so a shorter award never takes more room
+            award = _fit(story.caption, 24, 24, text_w, 2)
+        font, size, lines, cut_caption = award
+        y = _text_block(d, (W - text_w) // 2, y, lines, font, size, LAUREL, width=text_w, bold=1)
         if cut_caption:
             cut["caption"] = cut_caption
     y += 18
@@ -880,7 +884,9 @@ def _missing(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
         name = _fit(story.headline.upper(), 52, 52, text_w, 2)
     reward = None
     if story.caption.strip():
-        reward = _fit(story.caption.upper(), 44, 28, text_w, 2)
+        reward = _fit(story.caption.upper(), 44, 28, text_w, 1)
+        if reward[3]:  # a second line at the smallest size, so a shorter reward never takes more room
+            reward = _fit(story.caption.upper(), 28, 28, text_w, 2)
     tabs_top = BOTTOM - TAB_H if story.byline.strip() else BOTTOM
     # The photo grows into whatever a short description leaves (up to a 4:3 crop of a wide photo).
     words = len(name[2]) * _lead(name[1]) + (6 + len(reward[2]) * _lead(reward[1]) if reward else 0)
@@ -943,9 +949,13 @@ def _movie(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     d.rectangle([left, top, right, bottom], fill=SCREEN)
 
     title = _fit(story.headline.upper(), 120, 72, text_w, 1)
-    if title[3]:  # too long for one line even at the smallest size: allow a second, smaller
-        title = _fit(story.headline.upper(), 72, 48, text_w, 2)
-    release = _fit(story.caption.upper(), 40, 24, text_w, 2) if story.caption.strip() else None
+    if title[3]:  # too long for one line even at the smallest size: allow a second, smaller and fixed
+        title = _fit(story.headline.upper(), 48, 48, text_w, 2)
+    release = None
+    if story.caption.strip():
+        release = _fit(story.caption.upper(), 40, 24, text_w, 1)
+        if release[3]:  # a second line at the smallest size, so a shorter release line never takes more room
+            release = _fit(story.caption.upper(), 24, 24, text_w, 2)
     rating = _fit(story.byline, 22, 16, 760, 2) if story.byline.strip() else None
     title_h = len(title[2]) * _lead(title[1])
     foot = bottom - 30 - (len(rating[2]) * _lead(rating[1]) + 18 + 24 if rating else 0)
