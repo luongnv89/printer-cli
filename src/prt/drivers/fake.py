@@ -7,7 +7,9 @@ paths as a live printer — only the transport is replaced.
 from __future__ import annotations
 
 import copy
+import io
 import json
+from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -23,7 +25,55 @@ _PDF = (b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
         b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
         b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]>>endobj\n"
         b"trailer<</Root 1 0 R>>\n%%EOF\n")
-_JPEG = bytes.fromhex("ffd8ffe000104a46494600010100000100010000ffd9")
+
+# The demo JPEG scan: a short handwritten-style letter on a sheet of A4, so the scan-a-letter workflow
+# (`prt scan --format jpeg`, transcribe it, `prt gazette`) can be tried with `-p demo`.
+DEMO_LETTER = (
+    "Sunday, 22 November",
+    "Dear Editor,",
+    "Our street held its first bake sale last Saturday. Mrs. Alder's lemon cake was gone before ten, "
+    "the twins ran the lemonade stand, and the brass band from the school played until it rained.",
+    "Together we raised 212 euros for the new library roof. Thank you to everyone who came, baked or "
+    "carried tables.",
+    "Please tell your readers, so next year is even bigger.",
+    "Yours sincerely,",
+    "Margot Lane",
+)
+
+
+@lru_cache(maxsize=2)
+def demo_letter_jpeg(gray: bool = False) -> bytes:
+    """The demo scan as a JPEG: :data:`DEMO_LETTER` written in blue ink on a lined A4 sheet at 100 dpi."""
+    from PIL import Image, ImageDraw
+
+    from prt import fonts
+
+    width, height, margin, line = 827, 1169, 90, 46
+    page = Image.new("RGB", (width, height), (250, 248, 240))
+    draw = ImageDraw.Draw(page)
+    for y in range(150, height - 60, line):  # the ruled lines of the writing paper
+        draw.line([(40, y), (width - 40, y)], fill=(196, 210, 228), width=1)
+    font, ink = fonts.face("body-italic", 30), (28, 44, 112)
+    y = 150 - 6
+    for number, paragraph in enumerate(DEMO_LETTER):
+        words, current = paragraph.split(), ""
+        rows = []
+        for word in words:
+            trial = f"{current} {word}".strip()
+            if current and font.getlength(trial) > width - 2 * margin:
+                rows.append(current)
+                current = word
+            else:
+                current = trial
+        rows.append(current)
+        indent = width - margin - font.getlength(rows[0]) if number == 0 else margin  # the date sits right
+        for row in rows:
+            draw.text((indent, y), row, font=font, fill=ink, anchor="ls")
+            indent, y = margin, y + line
+        y += line if number < 5 else 0  # a blank line after each paragraph, none inside the sign-off
+    out = io.BytesIO()
+    (page.convert("L") if gray else page).save(out, "JPEG", quality=85)
+    return out.getvalue()
 
 
 def load_fixture(name: str = FIXTURE) -> dict[str, Any]:
@@ -101,7 +151,7 @@ class FakeDriver(EpsonDriver):
         for stage in ("starting", "scanning", "receiving", "done"):
             if progress:
                 progress(stage)
-        return _PDF if settings.format == "pdf" else _JPEG
+        return _PDF if settings.format == "pdf" else demo_letter_jpeg(settings.mode != "color")
 
     def scanner_info(self) -> dict[str, Any]:
         return dict(self.fixture.get("scanner", {}))

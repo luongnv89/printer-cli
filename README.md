@@ -207,6 +207,8 @@ prt scan -o photo.jpg --type jpeg --dpi 600 --area full  # whole glass as a JPEG
 prt scan --mode gray -o letter.pdf                       # greyscale
 ```
 
+With `-p demo` the scanner answers too: a PDF scan is a blank page, and a JPEG scan is a sample handwritten letter, so the [letter gazette](#vintage-gazette) workflow can be tried without hardware.
+
 ### Scripting
 
 ```bash
@@ -357,6 +359,14 @@ Both samples: `prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file s
 - Every photo is read before anything is written or sent, so an unreadable or unsupported photo exits with code 3, names the file and prints nothing. Each page prints as its own job after one confirmation (`--yes` skips it). If a later page fails, the jobs already queued are named so you can cancel them with `prt jobs cancel`.
 - The type is UnifrakturMaguntia, Playfair Display and Old Standard TT, which ship with printer-cli (see [License](#license)). Letters these fonts lack print without their accents, and other scripts and emoji are refused as in the photo booth.
 
+**A letter as a gazette edition.** Scan and print work together: scan a handwritten letter as a JPEG, type it out as the story, and print the scan as the lead picture. The [letter-gazette skill](https://github.com/luongnv89/printer-cli/blob/main/skills/letter-gazette/SKILL.md) has an AI agent do the reading and writing (`prt skills install` installs it). With `-p demo` the scan is a sample letter, so the whole workflow runs without a printer:
+
+```bash
+prt -p demo scan --format jpeg -o letter.jpg                                          # scan the letter as a JPEG
+prt -p demo gazette letter.jpg --story-file story.json --preview edition.pdf -f json   # the transcription as the story
+prt -p demo gazette letter.jpg --story-file story.json --yes                           # print it
+```
+
 ## Compose a page
 
 `prt compose page.json` prints a page you describe as a list of blocks, for printables no other command makes: a flyer, a sign, a label sheet, a Wi-Fi card. The blocks are laid out top to bottom on A4 and run on to more pages when one is full.
@@ -457,7 +467,7 @@ The preview tools return the rendered page image in the tool result (scaled to 1
 
 ## Agent skills
 
-Two [agent skills](https://github.com/luongnv89/printer-cli/tree/main/skills) come with prt: `photo-booth`, which looks at a photo, writes a story that fits it and prints it with `prt booth`, and `article-print`, which prints an article with `prt article` and fetches the text itself when the command cannot. `prt skills install` copies them where agents look for skills:
+Three [agent skills](https://github.com/luongnv89/printer-cli/tree/main/skills) come with prt: `photo-booth`, which looks at a photo, writes a story that fits it and prints it with `prt booth`; `article-print`, which prints an article with `prt article` and fetches the text itself when the command cannot; and `letter-gazette`, which scans a handwritten letter with `prt scan`, transcribes it and prints it as a vintage newspaper edition with `prt gazette`. `prt skills install` copies them where agents look for skills:
 
 ```bash
 prt skills list                          # the bundled skills (-f json for name, version, description, files)
@@ -469,7 +479,7 @@ prt skills install photo-booth --dir ~/my-agent/skills   # one skill, into any s
 
 Name skills to install only those; the default is all of them. Installing again leaves skills that match the bundled ones alone. An installed file that differs from the bundled one, because you edited it or it came from another prt version, is never replaced: the command lists the files, installs nothing, and exits with code 1 (kind `skill_exists`). After upgrading prt, run `prt skills install --force` to replace the old skills with the new ones; this also replaces any edits you made to them. Files in a skill folder that prt does not ship are always left alone. With `-f json` the output is `{"action": "skills_install", "skills": [{"name": "photo-booth", "target": "claude", "path": "...", "status": "installed"}]}`, where `status` is `installed`, `updated`, `unchanged` or `replaced`.
 
-**Claude Code plugin.** The repository is also a Claude Code plugin with both skills and the [MCP server](#mcp-server):
+**Claude Code plugin.** The repository is also a Claude Code plugin with the three skills and the [MCP server](#mcp-server):
 
 ```text
 /plugin install printer-cli --marketplace luongnv89/printer-cli

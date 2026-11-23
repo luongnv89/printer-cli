@@ -17,7 +17,7 @@ from prt.cli import main
 
 from conftest import ROOT
 
-NAMES = ["article-print", "photo-booth"]
+NAMES = ["article-print", "letter-gazette", "photo-booth"]
 
 
 def run(capsys, *args):
@@ -106,7 +106,7 @@ def test_install_claude(home, capsys):
     result = json.loads(out)
     assert result["action"] == "skills_install"
     assert [(s["name"], s["target"], s["status"]) for s in result["skills"]] == [
-        ("article-print", "claude", "installed"), ("photo-booth", "claude", "installed")]
+        (name, "claude", "installed") for name in NAMES]
     for name in NAMES:
         installed = home / ".claude" / "skills" / name / "SKILL.md"
         assert installed.read_bytes() == bundled_bytes(name)
@@ -200,7 +200,8 @@ def test_force_replaces_changed_files(home, capsys):
     (home / ".claude" / "skills" / "photo-booth" / "notes.txt").write_text("kept\n")
     code, out, err = run(capsys, "-f", "json", "skills", "install", "--force")
     assert code == 0
-    assert [s["status"] for s in json.loads(out)["skills"]] == ["unchanged", "replaced"]
+    assert {s["name"]: s["status"] for s in json.loads(out)["skills"]} == {
+        name: "replaced" if name == "photo-booth" else "unchanged" for name in NAMES}
     assert mine.read_bytes() == bundled_bytes("photo-booth")
     assert (mine.parent / "notes.txt").read_text() == "kept\n"  # files prt does not ship are left alone
 

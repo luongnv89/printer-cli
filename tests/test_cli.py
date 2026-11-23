@@ -399,6 +399,23 @@ def test_scan_format_option_matches_design(capsys, tmp_path):
     assert hoist_globals(["scan", "--format", "jpeg"]) == ["scan", "--format", "jpeg"]
 
 
+def test_demo_jpeg_scan_is_a_readable_letter(capsys, tmp_path):
+    from PIL import Image
+
+    from prt.drivers.fake import DEMO_LETTER
+    colour, gray = tmp_path / "c.jpg", tmp_path / "g.jpg"
+    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "scan", "--format", "jpeg", "-o", str(colour))
+    assert code == 0 and json.loads(out) == {"file": str(colour), "bytes": colour.stat().st_size}
+    with Image.open(colour) as img:  # a real image the gazette can use, not just a JPEG header
+        img.load()
+        assert img.format == "JPEG" and img.mode == "RGB" and img.size == (827, 1169)
+    code, _, _ = run(capsys, "-p", "demo", "scan", "--format", "jpeg", "--mode", "gray", "-o", str(gray))
+    with Image.open(gray) as img:
+        img.load()
+        assert code == 0 and img.mode == "L" and img.size == (827, 1169)
+    assert DEMO_LETTER[1] == "Dear Editor," and DEMO_LETTER[-1] == "Margot Lane"
+
+
 # --- photo booth -----------------------------------------------------------------------------
 
 
