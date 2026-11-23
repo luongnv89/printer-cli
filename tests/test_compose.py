@@ -1,6 +1,7 @@
 """`prt compose`: a page file of blocks (heading, text, image, QR code, columns, rule), its schema and its checks."""
 
 import json
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -359,6 +360,39 @@ def test_deeply_nested_values_are_refused_by_the_schema(template):
     assert exc.value.exit_code == 3
 
 
+@pytest.mark.parametrize("template", ['{"title": %s, "blocks": []}', '{"blocks": [{"type": %s}]}',
+                                      '{"blocks": [{"type": "text", "text": %s}]}'])
+def test_nesting_near_the_recursion_limit_is_refused_cleanly(template):
+    limit = sys.getrecursionlimit()
+    for depth in range(limit - 60, limit + 1):
+        nested = "[" * depth + "]" * depth
+        with pytest.raises(PrinterError) as exc:  # refused by the schema or as too deep, never another error
+            compose.parse((template % nested).encode(), "page.json")
+        assert exc.value.exit_code == 3
+
+
+def test_checker_names_a_nested_value_without_printing_it(monkeypatch):
+    monkeypatch.setattr(compose.json, "dumps", lambda *a, **k: pytest.fail("serialised the nested value"))
+    deep = []
+    for _ in range(100_000):
+        deep = [deep]
+    assert compose.problem({"blocks": [{"type": "text", "text": deep}]}) == "blocks[0].text must be text, not a list"
+    assert compose.problem({"blocks": [{"type": {"a": deep}}]}) == "blocks[0] has an unknown type an object (use one " \
+        "of heading, text, image, qr, columns, rule)"
+
+
+@pytest.mark.parametrize("page, where", [
+    (b'{"blocks": [{"type": "qr", "data": "\\ud800"}]}', "blocks[0].data"),
+    (b'{"blocks": [{"type": "columns", "columns": [[{"type": "qr", "data": "a\\udfffb"}], []]}]}',
+     "blocks[0].columns[0][0].data"),
+    (b'{"title": "\\ud800", "blocks": [{"type": "rule"}]}', "title"),
+])
+def test_a_lone_surrogate_is_refused_before_layout(page, where):
+    with pytest.raises(PrinterError) as exc:
+        compose.parse(page, "page.json")
+    assert exc.value.exit_code == 3 and str(exc.value) == f"page.json: {where} is not valid text"
+
+
 def test_load_refuses_missing_and_oversized_files(tmp_path, monkeypatch):
     with pytest.raises(PrinterError, match="page file not found"):
         compose.load(tmp_path / "nope.json")
@@ -565,6 +599,13 @@ def test_an_invalid_page_file_is_refused_before_anything_is_printed(capsys, tmp_
         assert code == 3 and out == ""
         assert _error(err)["kind"] == "invalid_input" and kind_of_problem in _error(err)["message"]
     assert printer.made == [] and printer.jobs() == [] and not copy.exists() and not preview.exists()
+
+
+def test_qr_data_that_is_not_text_is_refused_by_the_cli(capsys, printer, stdin):
+    stdin(b'{"blocks": [{"type": "qr", "data": "\\ud800"}]}')
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "compose", "-", "--yes")
+    assert code == 3 and out == "" and printer.made == []
+    assert _error(err)["kind"] == "invalid_input" and "blocks[0].data is not valid text" in _error(err)["message"]
 
 
 def test_bad_stdin_prints_nothing(capsys, printer, stdin):

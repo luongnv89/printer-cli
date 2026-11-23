@@ -205,6 +205,10 @@ def _equal(a: Any, b: Any) -> bool:
 
 
 def _shown(value: Any) -> str:
+    """A value as an error message shows it. A list or object is only named: printing it could recurse as deep
+    as the page file nests it."""
+    if isinstance(value, (list, dict)):
+        return _TYPE_NAMES["array" if isinstance(value, list) else "object"]
     return json.dumps(value, ensure_ascii=False)
 
 
@@ -344,7 +348,11 @@ def parse(content: bytes, name: str = "the page file", base: Path | None = None)
                            exit_code=3) from exc
     except ValueError as exc:  # NaN or Infinity
         raise PrinterError(f"{name} is not valid JSON: {exc}", hint=SCHEMA_HINT, exit_code=3) from exc
-    check(data, name)
+    try:
+        check(data, name)
+    except RecursionError as exc:  # json.loads took it, but checking it nests deeper still
+        raise PrinterError(f"{name} is not valid JSON: nested too deeply", hint=SCHEMA_HINT, exit_code=3) from exc
+    _check_text(data, "", name)
     base = Path.cwd() if base is None else base
     count = len({_identity(path) for path in _image_paths(data["blocks"], base)})
     if count > MAX_IMAGES:  # before any image is decoded
@@ -353,6 +361,24 @@ def parse(content: bytes, name: str = "the page file", base: Path | None = None)
     blocks = [_ready(block, f"blocks[{i}]", base, images, name) for i, block in enumerate(data["blocks"])]
     title = " ".join(data.get("title", "").split()) or _first_heading(blocks) or "page"
     return Page(title, blocks, [path for path, _ in images.values()])
+
+
+def _check_text(value: Any, where: str, name: str) -> None:
+    """Refuse (exit code 3) a string that is not text: a lone UTF-16 surrogate (``"\\ud800"`` in JSON) passes the
+    schema but cannot be encoded, so a QR code, a job title or a file name could not use it. ``value`` has passed
+    the schema, so this nests only as deep as the schema does."""
+    if isinstance(value, str):
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise PrinterError(f"{name}: {where or 'the page'} is not valid text", hint=SCHEMA_HINT,
+                               exit_code=3) from exc
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            _check_text(item, f"{where}[{i}]", name)
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            _check_text(item, f"{where}.{key}" if where else key, name)
 
 
 def _too_many_images(name: str, count: int) -> NoReturn:
