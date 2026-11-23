@@ -1,0 +1,15 @@
+{
+  "title": "Why the Apollo Guidance Computer Still Matters",
+  "author": "A. Writer",
+  "source": "Example Engineering Blog",
+  "url": "https://example.com/blog/apollo-guidance-computer",
+  "body": [
+    "The computer that flew to the Moon had about 4 KB of erasable memory and ran at roughly 1 MHz. A modern phone is millions of times faster, yet the Apollo Guidance Computer landed two people on another world and brought them home.",
+    "Its software was woven by hand into core rope memory: a wire passing through a magnetic core stored a one, a wire passing around it stored a zero. Once a rope was built, the program could not change, so every routine had to be right before the hardware was made.",
+    "That constraint shaped the whole team. Code was reviewed line by line, simulated for months, and tested against failures nobody expected to see in flight.",
+    "During the final descent the computer raised a string of 1202 and 1201 alarms. It was overloaded by radar data it did not need. Instead of crashing, it dropped its lowest-priority jobs, restarted the important ones, and kept flying the lander.",
+    "The design choice behind that recovery, a priority scheduler that sheds work under load, is one engineers still reach for today in operating systems, web servers and spacecraft.",
+    "Small, well-understood systems fail in ways you can reason about. Software that knows what matters most can survive surprises. And careful review, done before launch rather than after, is still the cheapest way to make something reliable.",
+    "Half a century later, the Apollo Guidance Computer is a reminder that good engineering is less about how much power you have than about how carefully you use it."
+  ]
+}

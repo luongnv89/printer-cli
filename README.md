@@ -53,6 +53,23 @@ prt tui                                             # full-screen dashboard
 
 Every command also works against the built-in replay: `prt -p demo status`, `prt -p demo tui`.
 
+Printers that `discover` can't see (another subnet, mDNS blocked) can be added by hand. `prt list` then shows which saved printers answer (here `office` points at the demo printer):
+
+```bash
+prt discover --wait 5                               # listen longer on a busy network
+prt printers add pantum 192.168.1.80 --driver ipp   # save a printer by host or IP
+prt printers remove pantum
+prt list
+```
+
+```
+╭─┐printers┌───────────────────────────────────────────────────────────────────╮
+│    name    host          driver  state                                       │
+│ ●  office  demo          fake    ● online                                    │
+│    pantum  192.168.1.80  ipp     ○ offline                                   │
+╰─┘2 saved · ● default└────────────────────────────────────────────────────────╯
+```
+
 ## Status
 
 | | Verified against the real XP-6000 | Covered by tests (replay of its data) |
@@ -78,7 +95,7 @@ Every command also works against the built-in replay: `prt -p demo status`, `prt
 | `prt maintain clean [--force]` | Head cleaning, with a safety check first (see [Safety](#safety)) |
 | `prt maintain test-page` | Colour test page: ink bars, gradients, grey steps, fine lines |
 | `prt maintain identify` | Flash the printer's panel |
-| `prt print FILE… [-n 2] [--media 4x6] [--tray photo] [--quality high] [--mono] [--duplex]` | Print |
+| `prt print FILE… [-n 2] [--media 4x6] [--tray photo] [--quality high] [--mono] [--duplex] [--direct]` | Print |
 | `prt booth PHOTO [--style metro\|daily\|wizard\|wanted] [--story-file story.json] [--preview page.jpg] [--save page.pdf]` | Photo booth: print the photo as an A4 newspaper front page, wizard card or wanted poster (see [Photo booth](#photo-booth)) |
 | `prt article URL\|FILE [--style magazine\|classic-magazine] [--preview page.pdf] [--save page.pdf]` | Print a blog post, news article or X post as A4 magazine pages (see [Article printing](#article-printing)) |
 | `prt gazette PHOTO… [--landscape] [--story-file story.json] [--preview page.pdf] [--save page.pdf]` | Print one or more photos as a vintage newspaper, over as many A4 pages as the photos need (see [Vintage gazette](#vintage-gazette)) |
@@ -93,6 +110,95 @@ Every command also works against the built-in replay: `prt -p demo status`, `prt
 - `-q` hides notes and prints only results.
 - `--timeout S` sets the network timeout in seconds.
 - `--config PATH` uses a different config file.
+
+### Examples
+
+The outputs below come from the built-in `demo` printer.
+
+**Ink levels**: `prt ink`
+
+```
+╭─┐ink · demo┌─────────────────────────────────────────────────────────────────╮
+│ Photo Black  ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■····  92%                   │
+│ Cyan         ········································   1%  ✗ replace        │
+│ Magenta      ········································   1%  ✗ replace        │
+│ Yellow       ■■■■····································  12%  ▲ low            │
+│ Black        ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■·····  89%                   │
+╰─┘15:39└──────────────────────────────────────────────────────────────────────╯
+```
+
+**Watch status**: `prt status --watch 2` prints one line per sample until Ctrl-C.
+
+```
+15:39:31  ● idle       PB  92 C   1 M   1 Y  12 BK  89   4 alerts
+15:39:33  ● idle       PB  92 C   1 M   1 Y  12 BK  89   4 alerts
+15:39:35  ● idle       PB  92 C   1 M   1 Y  12 BK  89   4 alerts
+```
+
+**Overview**: `prt overview` (trimmed; it goes on with network, scanner and capabilities)
+
+```
+╭─┐EPSON XP-6000 Series · demo┌────────────────────────────────────────────────╮
+│ system                                                                       │
+│   model          EPSON XP-6000 Series                                        │
+│   vendor         Epson                                                       │
+│   serial         X00000000                                                   │
+│   uuid           00000000-0000-4000-8000-000000000000                        │
+│   driver         fake                                                        │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ software                                                                     │
+│   firmware       20.50.NU30Q6                                                │
+│   ipp            1.0, 1.1, 2.0                                               │
+│   formats        octet-stream, pwg-raster, urf, jpeg                         │
+│   admin page     http://printer.local:80/PRESENTATION/BONJOUR                │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ hardware                                                                     │
+│   uptime         4h02m                                                       │
+│   pages printed  1,538                                                       │
+│   colour         yes                                                         │
+│   duplex         yes                                                         │
+│   speed          9 ppm                                                       │
+│   resolutions    360dpi, 720dpi, 5760x1440dpi                                │
+│   trays          main, photo, disc                                           │
+│   media          A4, 4×6, 5×7, 8×10, A5, A6, Letter, Legal, L (3.5×5), B5 …  │
+…
+```
+
+**Maintenance**
+
+```bash
+prt maintain nozzle-check     # print the pattern; a gap in a line means clogged nozzles
+prt maintain clean            # head cleaning, refused while ink is low or the waste pad is near full
+prt maintain test-page --yes  # colour test page, no prompt
+prt maintain identify         # flash the panel to find the printer
+```
+
+**Printing**
+
+```bash
+prt print boarding-pass.pdf                                    # PDF goes through the local CUPS queue
+prt print holiday.jpg --media 4x6 --tray photo --quality high  # photo paper from the photo tray
+prt print notes.pdf -n 2 --duplex --mono                       # two double-sided black-and-white copies
+prt print poster.png --direct                                  # straight to the printer, never via CUPS
+```
+
+**Jobs**: `prt jobs --all` includes finished jobs; cancel one by its id with `prt jobs cancel 42`.
+
+```
+╭─┐jobs · demo┌────────────────────────────────────────────────────────────────╮
+│ id  name               state        user  pages                              │
+│ 41  boarding-pass.pdf  ● completed  alex      1                              │
+│ 42  nozzle-check       ● completed  prt       1                              │
+╰─┘2 jobs└─────────────────────────────────────────────────────────────────────╯
+```
+
+**Scanning**
+
+```bash
+prt scan -o receipt.pdf                                  # A4, colour, 300 dpi PDF
+prt scan -o photo.jpg --type jpeg --dpi 600 --area full  # whole glass as a JPEG
+prt scan --mode gray -o letter.pdf                       # greyscale
+```
 
 ### Scripting
 
@@ -110,6 +216,8 @@ Exit codes: `0` ok · `1` runtime/network error (also when only cached status is
 
 `prt tui` opens a keyboard-driven dashboard. Inks are drawn as vertical tanks in their real cartridge colours, alongside system info, paper and alerts. Tabs: **Dashboard · Maintain · Print · Scan · Jobs**.
 
+<p align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/tui.jpg" width="760" alt="prt tui dashboard showing ink tanks, system info, paper trays and alerts for the demo printer"></p>
+
 | Key | Action |
 |---|---|
 | `r` | Refresh (auto-refreshes every 10 s) |
@@ -121,6 +229,17 @@ Exit codes: `0` ok · `1` runtime/network error (also when only cached status is
 ## Photo booth
 
 `prt booth photo.jpg` prints the photo as a newspaper front page with a short news story, or as a themed card or poster. With no story each style uses its own built-in text.
+
+```bash
+prt booth astronaut.jpg --story-file story.json --preview metro.jpg         # metro, the default
+prt booth astronaut.jpg --style daily --story-file story.json -o daily.jpg  # -o is short for --preview
+prt booth astronaut.jpg --style wizard -o wizard.jpg                        # built-in story
+prt booth astronaut.jpg --style wanted --headline "Captain Moonboots" --yes # print it, no prompt
+```
+
+<table><tr><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/booth-metro.jpg" width="190" alt="metro sample page"><br><code>metro</code></td><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/booth-daily.jpg" width="190" alt="daily sample page"><br><code>daily</code></td><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/booth-wizard.jpg" width="190" alt="wizard sample page"><br><code>wizard</code></td><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/booth-wanted.jpg" width="190" alt="wanted sample page"><br><code>wanted</code></td></tr></table>
+
+The `metro` and `daily` samples use [story.json](https://github.com/luongnv89/printer-cli/blob/main/assets/samples/story.json); `wizard` and `wanted` use their built-in text.
 
 - `--style metro` (default) is a colour tabloid with two columns. `--style daily` is a black-and-white broadsheet with three columns.
 - `--style wizard` is an ornate trading card: a dark card with a gold double border and cut marks, the photo in an arched gold frame, a moon-and-star emblem, a name ribbon and a lore box. `--style wanted` is a weathered parchment poster: huge WANTED lettering, the photo in a heavy frame, a "dead or alive" line, the name and a reward.
@@ -138,6 +257,17 @@ To let an AI agent look at the photo and write a story that fits it, give it the
 ## Article printing
 
 `prt article https://example.com/blog/post` prints a web article as A4 magazine pages. It keeps the title, author, site name and the full text, and leaves out navigation, ads, share bars, comments and other page clutter.
+
+```bash
+prt article https://example.com/blog/post                          # fetch, confirm, print
+prt article article.json --preview article.png                     # one PNG per page, nothing printed
+prt article article.json --style classic-magazine -o article.pdf   # every page in one PDF
+prt article https://x.com/user/status/1234567890 --yes             # one public X post
+```
+
+<table><tr><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/article-magazine.jpg" width="300" alt="magazine sample page"><br><code>magazine</code></td><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/article-classic.jpg" width="300" alt="classic-magazine sample page"><br><code>classic-magazine</code></td></tr></table>
+
+Both samples are page 1 of [article.json](https://github.com/luongnv89/printer-cli/blob/main/assets/samples/article.json).
 
 - `--style magazine` (default) is a white page with a blue accent bar and section label, a big bold headline and three ruled columns. `--style classic-magazine` is an ivory page in a double-rule frame with a centred headline between fleurons, one centred column and a drop cap.
 - Long articles run on over as many pages as they need, up to 30; nothing is cut. Each page is printed as its own job, after one confirmation prompt (`--yes` skips it).
@@ -158,6 +288,10 @@ prt gazette trip-1.jpg trip-2.jpg trip-3.jpg trip-4.jpg --save trip.pdf   # four
 prt gazette a.jpg b.jpg c.jpg --landscape -o page.pdf                     # A4 on its side, nothing printed
 ```
 
+<table><tr><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/gazette.jpg" width="270" alt="portrait sample page"><br><code>portrait</code></td><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/gazette-landscape.jpg" width="382" alt="--landscape sample page"><br><code>--landscape</code></td></tr></table>
+
+Both samples: `prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file story.json -o gazette.png`, the second with `--landscape`.
+
 - Give several photos to print them all. The first is the lead picture, and the front page also holds the next two as plates. Each further page holds up to six more in a ruled grid, numbered Fig. 4, Fig. 5 and so on. No photo is left out: 4 photos make 2 pages, 10 make 3.
 - `--landscape` lays the pages out on A4 turned on its side: the lead photo stands beside the story, the two plates sit under the story, and further pages hold their six plates three abreast. Saved pages stay landscape; each page is turned upright only for the printer, so it prints sideways on the sheet.
 - One run takes at most 57 photos (10 pages). More are refused with exit code 3 before any photo is read, written or printed, so print them in batches.
@@ -171,6 +305,17 @@ prt gazette a.jpg b.jpg c.jpg --landscape -o page.pdf                     # A4 o
 - **Head cleaning is refused** while any ink is at or below its low level, or while the waste ink pad is flagged. Cleaning flushes ink into the pad, and a full pad locks the printer until it's serviced. `--force` overrides this, and the TUI offers "Clean anyway".
 - Nozzle check, cleaning, the test page, the photo booth, article printing and the gazette ask for confirmation first. In scripts, pass `--yes`.
 - printer-cli never resets the waste ink counter or writes to the printer's EEPROM.
+
+With the demo printer's low inks and nearly full pad, `prt -p demo maintain clean` refuses and exits with code 1:
+
+```
+✗ Cyan ink is at 1% (low level 15%) — cleaning may empty it; replace the cartridge first
+✗ Magenta ink is at 1% (low level 15%) — cleaning may empty it; replace the cartridge first
+✗ Yellow ink is at 12% (low level 15%) — cleaning may empty it; replace the cartridge first
+✗ waste ink pad is almost full — each cleaning adds to it; the printer may lock up when it is full
+✗ error: head cleaning refused for safety
+hint: replace low cartridges first, or pass --force if you understand the risk
+```
 
 ## How it talks to printers
 
@@ -248,3 +393,5 @@ uv run prt -p demo tui
 [MIT](https://github.com/luongnv89/printer-cli/blob/main/LICENSE) © Luong NGUYEN
 
 The fonts used by `prt gazette`, [UnifrakturMaguntia](https://github.com/google/fonts/tree/main/ofl/unifrakturmaguntia), [Playfair Display](https://github.com/google/fonts/tree/main/ofl/playfairdisplay) and [Old Standard TT](https://github.com/google/fonts/tree/main/ofl/oldstandardtt), are under the SIL Open Font License 1.1. Their licence texts ship with them in [`src/prt/fonts`](https://github.com/luongnv89/printer-cli/tree/main/src/prt/fonts) as `OFL-*.txt`.
+
+The photos in the sample pages ([`assets/samples`](https://github.com/luongnv89/printer-cli/tree/main/assets/samples)) are public-domain NASA images from Apollo 8 and Apollo 11, via Wikimedia Commons.
