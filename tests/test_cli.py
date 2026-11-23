@@ -464,7 +464,7 @@ def test_booth_needs_yes_without_tty(capsys, tmp_path, monkeypatch, booth_printe
     assert code == 2 and "--yes" in err and booth_printer.jobs() == []
 
 
-BOOTH_STYLES = ("metro", "daily", "wizard", "wanted")
+BOOTH_STYLES = ("metro", "daily", "wizard", "wanted", "certificate", "sports", "missing", "movie")
 
 
 def test_booth_styles(capsys, tmp_path, booth_printer):
@@ -486,7 +486,9 @@ def test_booth_style_choices_match_renderer():
     assert {s.value for s in BoothStyle} == set(booth.STYLES) == set(BOOTH_STYLES)
 
 
-@pytest.mark.parametrize("style, kind", [("wizard", "wizard card"), ("wanted", "wanted poster")])
+@pytest.mark.parametrize("style, kind", [("wizard", "wizard card"), ("wanted", "wanted poster"),
+                                         ("certificate", "certificate"), ("sports", "sports card"),
+                                         ("missing", "missing-pet poster"), ("movie", "movie poster")])
 def test_booth_themed_style_prints_its_own_default(capsys, tmp_path, monkeypatch, booth_printer, style, kind):
     from prt import booth
     photo = _booth_photo(tmp_path)
@@ -522,7 +524,7 @@ def test_booth_themed_style_story_file_replaces_the_default(capsys, tmp_path, bo
     assert booth_printer.jobs() == [_expected_page(photo, expected, "wizard")]
 
 
-@pytest.mark.parametrize("style", ["wizard", "wanted"])
+@pytest.mark.parametrize("style", ["wizard", "wanted", "certificate", "sports", "missing", "movie"])
 def test_booth_themed_style_preview_never_creates_a_driver(capsys, tmp_path, booth_printer, style):
     from PIL import Image
     photo, out_file = _booth_photo(tmp_path), tmp_path / f"{style}.jpg"
@@ -534,7 +536,7 @@ def test_booth_themed_style_preview_never_creates_a_driver(capsys, tmp_path, boo
     assert Image.open(out_file).size == (1240, 1754)
 
 
-@pytest.mark.parametrize("style", ["wizard", "wanted"])
+@pytest.mark.parametrize("style", ["wizard", "wanted", "certificate", "sports", "missing", "movie"])
 def test_booth_themed_style_bad_input_sends_nothing(capsys, tmp_path, booth_printer, style):
     bad = tmp_path / "photo.jpg"
     bad.write_bytes(b"not a picture")

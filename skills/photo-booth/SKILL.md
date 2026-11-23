@@ -1,6 +1,6 @@
 ---
 name: photo-booth
-description: "Turn a photo of a person into a printed newspaper front page, wizard trading card or wanted poster with short text written for that photo, using printer-cli's `prt booth`. Use when asked for a photo-booth print, a newspaper clipping, a front page, a themed card or a wanted poster made from someone's picture. Don't use for plain photo printing (use `prt print`), editing the photo itself, or real news reporting."
+description: "Turn a photo of a person or pet into a printed newspaper front page, wizard or sports trading card, certificate, or wanted, missing-pet or movie poster with short text written for that photo, using printer-cli's `prt booth`. Use when asked for a photo-booth print, a newspaper clipping, a front page, a themed card, an award certificate or a fun poster made from someone's picture. Don't use for plain photo printing (use `prt print`), editing the photo itself, or real news reporting."
 license: MIT
 metadata:
   version: 0.2.0
@@ -9,7 +9,7 @@ metadata:
 
 # Photo booth
 
-Write a short, light-hearted news story (or card lore, or a wanted notice) that fits the photo you were given, then print it with `prt booth`, which lays out the photo and text as an A4 newspaper front page, a wizard trading card or a wanted poster. The command needs printer-cli installed (`prt` on the PATH). Add `-p NAME` to pick a saved printer, or `-p demo` to try everything without a printer.
+Write a short, light-hearted news story (or card lore, a citation, a wanted notice or film credits) that fits the photo you were given, then print it with `prt booth`, which lays out the photo and text as an A4 newspaper front page, a wizard or sports trading card, a certificate, or a wanted, missing-pet or movie poster. The command needs printer-cli installed (`prt` on the PATH). Add `-p NAME` to pick a saved printer, or `-p demo` to try everything without a printer.
 
 ## Workflow
 
@@ -28,10 +28,14 @@ Open the image and note only what is visible: the setting, clothing, expression,
 | `daily` | Black-and-white broadsheet: centred masthead, double rules, grey-tone photo with a mat, 3 ruled columns | About 1200 characters: calmer and longer |
 | `wizard` | Ornate trading card: dark blue card with a gold double border and cut marks, the photo in an arched gold frame, a moon-and-star emblem, the name on a gold ribbon, lore in a cream box | About 350 characters of lore |
 | `wanted` | Weathered poster: torn parchment, huge WANTED lettering, the photo in a heavy dark frame, a "dead or alive" line, the name, a reward line | About 350 characters of description |
+| `certificate` | Award certificate: ivory paper in a green-and-gold border, the title, the photo in an oval gold frame, the name, the award, a citation, date and signature lines and a gold seal | About 300 characters of citation |
+| `sports` | Sports trading card: royal-blue card with red and yellow stripes and cut marks, the team at the top, a full-width photo with a star badge, the name on a slanted red bar, the position, stats in a white box | About 300 characters of stats |
+| `missing` | Missing-pet poster: huge red MISSING, the question, the photo in a black frame, the name, a red reward line, a description, and tear-off tabs along the foot that each carry the contact | About 400 characters of description |
+| `movie` | Movie poster: dark poster, the tagline at the top, the photo fading into the dark, the title in large gold capitals, five stars, the release line, the credits block and a rating box | About 300 characters of credits |
 
-A longer story still fits: the body type gets smaller, and only text that cannot fit at the smallest size is cut. A short story gets a bigger photo on `metro`, `daily` and `wanted`, and a story of up to four lines stays in the first column.
+A longer story still fits: the body type gets smaller, and only text that cannot fit at the smallest size is cut. A short story gets a bigger photo on `metro`, `daily`, `wanted`, `missing` and `movie`, and a story of up to four lines stays in the first column.
 
-Without any text, each style prints its own built-in example: a news story on `metro` and `daily`, "The Spellbound Guest" on `wizard`, and "The Grinning Captain" with a reward of 1,000,000 gold on `wanted`.
+Without any text, each style prints its own built-in example: a news story on `metro` and `daily`, "The Spellbound Guest" on `wizard`, "The Grinning Captain" with a reward of 1,000,000 gold on `wanted`, a certificate of achievement for "The Photo Booth Guest" on `certificate`, "The Shutter Star" of the Booth City Flashes on `sports`, Whiskers the cat on `missing`, and "The Photo Booth", coming soon to a printer near you, on `movie`.
 
 ### 3. Write `story.json`
 
@@ -65,7 +69,15 @@ On the themed styles the same fields fill the card or poster:
 | `story` | Lore in the text box | Description of the "crimes" |
 | `byline` | Small footer, e.g. "Booth wizard series · card No. 1" | Small footer, e.g. "By order of the Harbour Watch" |
 
-Keep themed text in the same playful spirit, and invent your own names, places and titles rather than borrowing characters or places from books, films or games.
+| Field | `certificate` | `sports` card | `missing` poster | `movie` poster |
+|---|---|---|---|---|
+| `headline` | Name it is presented to (about 80 characters on two lines) | Player name on the slanted bar (about 70 characters on two lines) | Pet's name in large capitals (about 60 characters on two lines) | Film title in large gold capitals (about 60 characters on two lines; short titles print biggest) |
+| `kicker` | Title at the top, e.g. "Certificate of Achievement" | Team at the top, e.g. "Booth City Flashes" | Question under MISSING, e.g. "Have you seen this cat?" | Tagline at the top, e.g. "One smile. One take. One legend." |
+| `caption` | The award under the name, e.g. "For the Brightest Smile of the Day" (about 150 characters) | Position and number, e.g. "Forward · No. 23" (about 60 characters) | Reward line, e.g. "Reward: a lifetime supply of treats" (about 120 characters) | Release line, e.g. "Coming soon to a printer near you" (about 140 characters) |
+| `story` | Citation: what it is for | Stats and a scouting report, one per paragraph | What the pet looks like and where it was last seen | Credits block, e.g. "starring Today's Guest as Themselves · music by …" |
+| `byline` | Who signed it, above the signature line; the date line is filled in with today's date | Small footer, e.g. "Photo booth series · rookie card" | Contact on each tear-off tab, e.g. "Call 555-0134" (about 40 characters on two lines) | Rating box, e.g. "Rated PG for scenes of extreme smiling" |
+
+Keep themed text in the same playful spirit, and invent your own names, places and titles rather than borrowing characters or places from books, films or games. On a `missing` poster, make up a phone number such as 555-0134 unless the user gives you the real contact to print.
 
 All values are strings, and other fields are rejected. Use Latin letters: accents print without their marks, and other scripts or emoji are refused. A headline of about 4–8 words looks best.
 

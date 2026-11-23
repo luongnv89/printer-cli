@@ -1,6 +1,6 @@
 # printer-cli
 
-> printer-cli (`prt`) controls network printers from the terminal: status, ink, alerts, nozzle checks, head cleaning, printing and scanning over IPP, eSCL, SNMP and Epson ESC/P2. It also prints a photo as a newspaper front page, wizard card or wanted poster (`prt booth`), a web article or X post as A4 magazine pages (`prt article`), photos as a vintage newspaper (`prt gazette`), and any page described as JSON blocks of headings, text, images, QR codes, columns and rules (`prt compose page.json`).
+> printer-cli (`prt`) controls network printers from the terminal: status, ink, alerts, nozzle checks, head cleaning, printing and scanning over IPP, eSCL, SNMP and Epson ESC/P2. It also prints a photo as a newspaper front page, wizard or sports card, certificate, or wanted, missing-pet or movie poster (`prt booth`), a web article or X post as A4 magazine pages (`prt article`), photos as a vintage newspaper (`prt gazette`), and any page described as JSON blocks of headings, text, images, QR codes, columns and rules (`prt compose page.json`).
 
 Install with `uv tool install printer-cli` (or `uv tool install 'printer-cli[mcp]'` for the MCP server). Add `-p demo` to any command to try it without a printer.
 
@@ -20,7 +20,7 @@ Notes for agents:
 
 ## Agent skills
 
-- [photo-booth](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/photo-booth/SKILL.md): write a short story for a photo and print it as a newspaper front page, wizard card or wanted poster with `prt booth`
+- [photo-booth](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/photo-booth/SKILL.md): write a short story for a photo and print it as a newspaper front page, trading card, certificate or poster with `prt booth`
 - [article-print](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/article-print/SKILL.md): print a blog post, news article or X post as magazine pages with `prt article`, fetching the text yourself when the command cannot
 - [letter-gazette](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/letter-gazette/SKILL.md): scan a handwritten letter with `prt scan`, transcribe it, and print the scan and the transcription as a vintage newspaper edition with `prt gazette`
 

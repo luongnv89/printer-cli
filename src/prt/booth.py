@@ -84,10 +84,51 @@ WANTED_STORY = Story(
     byline="By order of the Harbour Watch",
 )
 
-DEFAULT_STORIES = {"metro": DEFAULT_STORY, "daily": DEFAULT_STORY, "wizard": WIZARD_STORY, "wanted": WANTED_STORY}
+CERTIFICATE_STORY = Story(
+    kicker="Certificate of Achievement",
+    headline="The Photo Booth Guest",
+    caption="For the Brightest Smile of the Day",
+    story=("In recognition of an outstanding performance in front of the camera: a steady pose, perfect timing "
+           "and a smile that lit up the whole room."),
+    byline="The prt Awards Committee",
+)
+
+SPORTS_STORY = Story(
+    kicker="Booth City Flashes",
+    headline="The Shutter Star",
+    caption="Forward · No. 23",
+    story=("Height: just right. Reach: the whole room.\n"
+           "Season: 12 smiles, 9 poses, 0 blinks.\n"
+           "Scouting report: quick off the mark and never misses a photo opportunity."),
+    byline="Photo booth series · rookie card",
+)
+
+MISSING_STORY = Story(
+    kicker="Have you seen this cat?",
+    headline="Whiskers",
+    caption="Reward: a lifetime supply of treats",
+    story=("Last seen near the photo booth, posing for the camera and refusing to share the spotlight. "
+           "Answers to her name, a rattled treat bag or the sound of a tin opener.\n"
+           "Friendly, fluffy and very photogenic. Please do not chase: just take a picture and call."),
+    byline="Call 555-0134",
+)
+
+MOVIE_STORY = Story(
+    kicker="One smile. One take. One legend.",
+    headline="The Photo Booth",
+    caption="Coming soon to a printer near you",
+    story=("prt Pictures presents a Self-Timer production · starring Today's Guest as Themselves · "
+           "music by The Shutter Clicks · edited by One Lucky Take · directed by The Flash"),
+    byline="Rated PG for scenes of extreme smiling",
+)
+
+DEFAULT_STORIES = {"metro": DEFAULT_STORY, "daily": DEFAULT_STORY, "wizard": WIZARD_STORY, "wanted": WANTED_STORY,
+                   "certificate": CERTIFICATE_STORY, "sports": SPORTS_STORY, "missing": MISSING_STORY,
+                   "movie": MOVIE_STORY}
 # What each style prints, for messages such as the confirmation prompt.
 KINDS = {"metro": "metro newspaper page", "daily": "daily newspaper page", "wizard": "wizard card",
-         "wanted": "wanted poster"}
+         "wanted": "wanted poster", "certificate": "certificate", "sports": "sports card",
+         "missing": "missing-pet poster", "movie": "movie poster"}
 
 
 def default_story(style: str) -> Story:
@@ -630,8 +671,350 @@ def _wanted(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     return cut
 
 
+def _ring(page: Image.Image, photo: Image.Image, box: tuple[int, int, int, int],
+           rings: tuple[tuple[int, tuple[int, int, int]], ...]) -> None:
+    """The photo in an oval window, inside rings drawn ``grow`` pixels out from it, from the outside in."""
+    d = ImageDraw.Draw(page)
+    for grow, colour in rings:
+        d.ellipse(_grow(box, grow), fill=colour)
+    frame = page.crop(box)
+    _photo(page, photo, box, mono=False)
+    window = Image.new("L", (box[2] - box[0], box[3] - box[1]), 255)
+    ImageDraw.Draw(window).ellipse([0, 0, window.width - 1, window.height - 1], fill=0)
+    page.paste(frame, box[:2], window)  # put the rings back over the corners outside the oval
+
+
+def _seal(d: ImageDraw.ImageDraw, cx: int, cy: int, r: int, fill, dark, ribbon) -> None:
+    """A gold seal: two ribbon tails under a notched disc with a star in the middle."""
+    for side in (-1, 1):
+        x = cx + side * r * 0.45
+        tail_y = cy + r * 1.55
+        d.polygon([(x - r * 0.28, cy), (x + r * 0.28, cy), (x + r * 0.28 + side * r * 0.2, tail_y),
+                   (x + side * r * 0.1, tail_y - r * 0.25), (x - r * 0.28 + side * r * 0.2, tail_y)], fill=ribbon)
+    _star(d, cx, cy, r, fill, points=24, inner=0.88)
+    d.ellipse([cx - r * 0.74, cy - r * 0.74, cx + r * 0.74, cy + r * 0.74], outline=dark, width=3)
+    _star(d, cx, cy, r * 0.5, dark)
+
+
+IVORY = (251, 247, 234)
+LAUREL = (22, 72, 56)
+CERT_PHOTO = 400  # height of the oval portrait
+
+
+def _certificate(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
+    """Certificate: ivory paper in a green-and-gold border, title, oval portrait, name, award, citation, seal."""
+    d = ImageDraw.Draw(page)
+    cut: Cuts = {}
+    mid = W // 2
+    left, top, right, bottom = MARGIN, MARGIN, W - MARGIN, BOTTOM
+    d.rectangle([left, top, right, bottom], fill=IVORY)
+    d.rectangle([left + 16, top + 16, right - 16, bottom - 16], outline=LAUREL, width=14)
+    d.rectangle([left + 40, top + 40, right - 40, bottom - 40], outline=GOLD, width=4)
+    d.rectangle([left + 50, top + 50, right - 50, bottom - 50], outline=GOLD, width=1)
+    for cx, cy in ((left + 40, top + 40), (right - 40, top + 40), (left + 40, bottom - 40), (right - 40, bottom - 40)):
+        d.polygon([(cx, cy - 18), (cx + 18, cy), (cx, cy + 18), (cx - 18, cy)], fill=GOLD)
+        d.polygon([(cx, cy - 8), (cx + 8, cy), (cx, cy + 8), (cx - 8, cy)], fill=LAUREL)
+    text_w = CONTENT_W - 180
+
+    y = top + 96
+    if story.kicker.strip():
+        y, cut_kicker = _centred(d, y, story.kicker.upper(), 52, LAUREL, bold=1, min_size=22, width=text_w)
+        if cut_kicker:
+            cut["kicker"] = cut_kicker
+    y += 10
+    d.line([(mid - 220, y), (mid - 24, y)], fill=GOLD, width=3)
+    d.line([(mid + 24, y), (mid + 220, y)], fill=GOLD, width=3)
+    d.polygon([(mid, y - 10), (mid + 10, y), (mid, y + 10), (mid - 10, y)], fill=GOLD)
+    y += 44
+
+    width = round(CERT_PHOTO * 0.82)
+    box = (mid - width // 2, y, mid + width // 2, y + CERT_PHOTO)
+    _ring(page, photo, box, ((16, GOLD), (10, IVORY), (5, GOLD_DARK)))
+    y = box[3] + 16 + 30
+
+    y = _text_block(d, (W - text_w) // 2, y, ["This certificate is proudly presented to"], _font(26), 26, GREY,
+                    width=text_w) + 6
+    name = _fit(story.headline, 80, 48, text_w, 1)
+    if name[3]:  # too long for one line even at the smallest size: allow a second
+        name = _fit(story.headline, 48, 48, text_w, 2)
+    font, size, lines, cut_name = name
+    y = _text_block(d, (W - text_w) // 2, y, lines, font, size, INK, width=text_w, bold=1)
+    if cut_name:
+        cut["headline"] = cut_name
+    d.line([(mid - 300, y + 8), (mid + 300, y + 8)], fill=GOLD, width=3)
+    y += 28
+    if story.caption.strip():
+        award = _fit(story.caption, 36, 24, text_w, 1)
+        if award[3]:  # a second line at the smallest size, so a shorter award never takes more room
+            award = _fit(story.caption, 24, 24, text_w, 2)
+        font, size, lines, cut_caption = award
+        y = _text_block(d, (W - text_w) // 2, y, lines, font, size, LAUREL, width=text_w, bold=1)
+        if cut_caption:
+            cut["caption"] = cut_caption
+    y += 18
+
+    seal_y, line_y = bottom - 190, bottom - 150  # the seal between the date and signature lines
+    citation = (left + 130, y, right - 130, seal_y - 84 - 24)
+    spare = citation[3] - citation[1] - _columns_height(story.story, citation[2] - citation[0], 1, 0, 28)
+    if spare > 0:  # a short citation sits in the middle of the space it has
+        citation = (citation[0], citation[1] + spare // 2, citation[2], citation[3])
+    if story_cut := _columns(d, story.story, citation, 1, 0, 28, 16, INK, centre=True):
+        cut["story"] = story_cut
+
+    _seal(d, mid, seal_y, 84, GOLD, GOLD_DARK, LAUREL)
+    small = _font(18)
+    for x0, x1, label in ((left + 90, left + 410, "DATE"), (right - 410, right - 90, "SIGNED")):
+        d.line([(x0, line_y), (x1, line_y)], fill=INK, width=2)
+        d.text(((x0 + x1 - small.getlength(label)) / 2, line_y + 10), label, font=small, fill=GREY)
+    date_font = _fit(_today(), 24, 16, 320, 1)
+    _text_block(d, left + 90, line_y - 8 - _lead(date_font[1]), date_font[2], date_font[0], date_font[1], INK,
+                width=320)
+    if story.byline.strip():
+        font, size, lines, cut_byline = _fit(story.byline, 26, 18, 320, 2)
+        _text_block(d, right - 410, line_y - 8 - len(lines) * _lead(size), lines, font, size, INK, width=320)
+        if cut_byline:
+            cut["byline"] = cut_byline
+    return cut
+
+
+ROYAL = (24, 62, 158)
+ROYAL_DARK = (14, 36, 98)
+SCARLET = (214, 36, 44)
+YELLOW = (252, 196, 28)
+SPORTS_PHOTO = 720  # height of the photo on the card
+
+
+def _sports(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
+    """Sports trading card: white card stock, royal-blue panel with stripes, full-width photo, slanted name bar."""
+    d = ImageDraw.Draw(page)
+    cut: Cuts = {}
+    x0, y0 = (W - CARD_W) // 2, (H - CARD_H) // 2
+    x1, y1 = x0 + CARD_W, y0 + CARD_H
+    mid = W // 2
+    for x, y, sx, sy in ((x0, y0, -1, -1), (x1, y0, 1, -1), (x0, y1, -1, 1), (x1, y1, 1, 1)):  # cut guides
+        d.line([(x + sx * 6, y), (x + sx * 24, y)], fill=GUIDE, width=2)
+        d.line([(x, y + sy * 6), (x, y + sy * 24)], fill=GUIDE, width=2)
+    d.rounded_rectangle([x0, y0, x1 - 1, y1 - 1], radius=30, fill=WHITE, outline=GUIDE, width=2)
+    panel = (x0 + 28, y0 + 28, x1 - 28, y1 - 28)
+    card_size = (panel[2] - panel[0], panel[3] - panel[1])
+    card = Image.composite(Image.new("RGB", card_size, ROYAL_DARK), Image.new("RGB", card_size, ROYAL),
+                           Image.linear_gradient("L").resize(card_size))
+    stripes = ImageDraw.Draw(card)
+    for offset, colour, wide in ((0, SCARLET, 70), (96, YELLOW, 18), (130, WHITE, 8)):  # across the top corner
+        a = card_size[0] - 380 + offset
+        stripes.polygon([(a, 0), (a + wide, 0), (a + wide + 300, 300), (a + 300, 300)], fill=colour)
+    shape = Image.new("L", card_size, 0)
+    ImageDraw.Draw(shape).rounded_rectangle([0, 0, card_size[0] - 1, card_size[1] - 1], radius=18, fill=255)
+    page.paste(card, panel[:2], shape)
+
+    if story.kicker.strip():
+        # The team name stays left of the corner stripes (their left edge at the card's top, less a small gap).
+        kicker_x = x0 + 70
+        kicker_w = panel[0] + card_size[0] - 380 - 16 - kicker_x
+        kicker = _fit(story.kicker.upper(), 44, 20, kicker_w, 1)
+        if kicker[3]:  # too long for one line even at the smallest size: allow a second
+            kicker = _fit(story.kicker.upper(), 20, 20, kicker_w, 2)
+        font, size, lines, cut_kicker = kicker
+        top = y0 + 52 + (44 - size) // 2 if len(lines) == 1 else y0 + 48
+        _text_block(d, kicker_x, top, lines, font, size, WHITE, bold=1)
+        if cut_kicker:
+            cut["kicker"] = cut_kicker
+
+    box = (x0 + 64, y0 + 120, x1 - 64, y0 + 120 + SPORTS_PHOTO)
+    d.rectangle(_grow(box, 10), fill=WHITE)
+    _photo(page, photo, box, mono=False)
+    d.rectangle(_grow(box, 2), outline=ROYAL_DARK, width=2)
+    bx, by = box[2] - 40, box[1] + 40  # a star badge on the photo's top corner
+    d.ellipse([bx - 52, by - 52, bx + 52, by + 52], fill=YELLOW, outline=WHITE, width=6)
+    _star(d, bx, by, 34, SCARLET)
+
+    name = _fit(story.headline.upper(), 64, 36, 760, 1)
+    if name[3]:  # too long for one line even at the smallest size: allow a second
+        name = _fit(story.headline.upper(), 36, 36, 760, 2)
+    font, size, lines, cut_name = name
+    if cut_name:
+        cut["headline"] = cut_name
+    top = box[3] - 48
+    bar = len(lines) * _lead(size) + 24
+    slant = 40
+    d.polygon([(x0 + 40 + slant, top + 8), (x1 - 40 + 8, top + 8), (x1 - 40 - slant + 8, top + bar + 8),
+               (x0 + 40 + 8, top + bar + 8)], fill=ROYAL_DARK)  # shadow
+    d.polygon([(x0 + 40 + slant, top), (x1 - 40, top), (x1 - 40 - slant, top + bar), (x0 + 40, top + bar)],
+              fill=SCARLET, outline=WHITE, width=4)
+    _text_block(d, mid - 380, top + 12, lines, font, size, WHITE, width=760, bold=2)
+    y = top + bar + 22
+
+    if story.caption.strip():
+        y, cut_caption = _centred(d, y, story.caption.upper(), 34, YELLOW, bold=1, min_size=22, width=800)
+        if cut_caption:
+            cut["caption"] = cut_caption
+    stats = (x0 + 70, y + 8, x1 - 70, y1 - 96)
+    d.rounded_rectangle(stats, radius=12, fill=WHITE, outline=YELLOW, width=4)
+    story_cut = _columns(d, story.story, (stats[0] + 28, stats[1] + 18, stats[2] - 28, stats[3] - 12), 1, 0, 26, 14,
+                         ROYAL_DARK)
+    if story_cut:
+        cut["story"] = story_cut
+    if story.byline.strip():
+        _, cut_byline = _centred(d, y1 - 82, story.byline.upper(), 22, WHITE, min_size=16, width=800)
+        if cut_byline:
+            cut["byline"] = cut_byline
+    return cut
+
+
+MISSING_RED = (200, 16, 30)
+MISSING_PHOTO, MISSING_PHOTO_MAX = 520, 680  # photo height: normal, and grown into space a short text leaves
+TABS, TAB_H = 8, 230  # tear-off strips along the foot of the poster, each carrying the byline
+
+
+def _missing(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
+    """Missing-pet poster: huge red MISSING, the question, a framed photo, name, reward, description, tear-offs."""
+    d = ImageDraw.Draw(page)
+    cut: Cuts = {}
+    mid = W // 2
+    left, right = MARGIN, W - MARGIN
+    text_w = CONTENT_W - 80
+    d.rectangle([left, MARGIN, right, MARGIN + 18], fill=MISSING_RED)
+
+    size = next(s for s in range(240, 100, -4) if _font(s).getlength("MISSING") <= CONTENT_W - 120)
+    font = _font(size)
+    top, bottom = font.getbbox("MISSING")[1::2]
+    d.text((mid - font.getlength("MISSING") / 2, MARGIN + 48 - top), "MISSING", font=font, fill=MISSING_RED,
+           stroke_width=4, stroke_fill=MISSING_RED)
+    y = MARGIN + 48 + bottom - top + 26
+    if story.kicker.strip():
+        y, cut_kicker = _centred(d, y, story.kicker.upper(), 56, INK, bold=2, min_size=24, width=text_w)
+        if cut_kicker:
+            cut["kicker"] = cut_kicker
+
+    name = _fit(story.headline.upper(), 88, 52, text_w, 1)
+    if name[3]:  # too long for one line even at the smallest size: allow a second
+        name = _fit(story.headline.upper(), 52, 52, text_w, 2)
+    reward = None
+    if story.caption.strip():
+        reward = _fit(story.caption.upper(), 44, 28, text_w, 1)
+        if reward[3]:  # a second line at the smallest size, so a shorter reward never takes more room
+            reward = _fit(story.caption.upper(), 28, 28, text_w, 2)
+    tabs_top = BOTTOM - TAB_H if story.byline.strip() else BOTTOM
+    # The photo grows into whatever a short description leaves (up to a 4:3 crop of a wide photo).
+    words = len(name[2]) * _lead(name[1]) + (6 + len(reward[2]) * _lead(reward[1]) if reward else 0)
+    room = tabs_top - 30 - (y + 24 + 24 + 22 + words + 26)
+    max_w = CONTENT_W - 220
+    grow_to = min(MISSING_PHOTO_MAX, round(max_w / min(photo.width / photo.height, 4 / 3)))
+    height = max(MISSING_PHOTO, min(grow_to, room - _columns_height(story.story, text_w - 40, 1, 0, 30)))
+    box = _photo_box(photo, y + 24, height, max_w)
+    d.rectangle(_grow(box, 8), outline=INK, width=4)
+    _photo(page, photo, box, mono=False)
+    y = box[3] + 8 + 22
+
+    font, size, lines, cut_name = name
+    y = _text_block(d, (W - text_w) // 2, y, lines, font, size, INK, width=text_w, bold=2)
+    if cut_name:
+        cut["headline"] = cut_name
+    if reward:
+        font, size, lines, cut_reward = reward
+        y = _text_block(d, (W - text_w) // 2, y + 6, lines, font, size, MISSING_RED, width=text_w, bold=1)
+        if cut_reward:
+            cut["caption"] = cut_reward
+    if story_cut := _columns(d, story.story, (left + 60, y + 26, right - 60, tabs_top - 30), 1, 0, 30, 16, INK,
+                             centre=True):
+        cut["story"] = story_cut
+
+    if story.byline.strip():
+        tab_w = CONTENT_W // TABS
+        font, size, lines, cut_byline = _fit(story.byline, 24, 16, TAB_H - 36, 2)
+        if cut_byline:
+            cut["byline"] = cut_byline
+        strip = Image.new("RGB", (TAB_H - 20, tab_w), WHITE)  # one tab's text, drawn level and turned upright
+        sd = ImageDraw.Draw(strip)
+        _text_block(sd, 8, (tab_w - len(lines) * _lead(size)) // 2, lines, font, size, INK, width=TAB_H - 36)
+        strip = strip.rotate(90, expand=True)
+        for i in range(TABS):
+            page.paste(strip, (left + i * tab_w, tabs_top + 10))
+        for x in range(left, right, 24):  # the dashed line to tear along, and between the tabs
+            d.line([(x, tabs_top), (min(x + 12, right), tabs_top)], fill=INK, width=2)
+        for i in range(1, TABS):
+            x = left + i * tab_w
+            for ty in range(tabs_top, BOTTOM, 24):
+                d.line([(x, ty), (x, min(ty + 12, BOTTOM))], fill=INK, width=2)
+    return cut
+
+
+SCREEN = (10, 10, 16)  # the poster's near-black
+MARQUEE = (246, 192, 74)
+SILVER = (205, 205, 212)
+MOVIE_PHOTO, MOVIE_PHOTO_MAX = 760, 1000  # photo height: normal, and grown into space short credits leave
+
+
+def _movie(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
+    """Movie poster: a dark poster, tagline, the photo fading into the dark, huge title, stars, release line,
+    the credits block and a rating box."""
+    d = ImageDraw.Draw(page)
+    cut: Cuts = {}
+    mid = W // 2
+    left, top, right, bottom = MARGIN, MARGIN, W - MARGIN, BOTTOM
+    text_w = CONTENT_W - 120
+    d.rectangle([left, top, right, bottom], fill=SCREEN)
+
+    title = _fit(story.headline.upper(), 120, 72, text_w, 1)
+    if title[3]:  # too long for one line even at the smallest size: allow a second, smaller and fixed
+        title = _fit(story.headline.upper(), 48, 48, text_w, 2)
+    release = None
+    if story.caption.strip():
+        release = _fit(story.caption.upper(), 40, 24, text_w, 1)
+        if release[3]:  # a second line at the smallest size, so a shorter release line never takes more room
+            release = _fit(story.caption.upper(), 24, 24, text_w, 2)
+    rating = _fit(story.byline, 22, 16, 760, 2) if story.byline.strip() else None
+    title_h = len(title[2]) * _lead(title[1])
+    foot = bottom - 30 - (len(rating[2]) * _lead(rating[1]) + 18 + 24 if rating else 0)
+    # The photo grows into whatever short credits leave; the title sits across its faded foot.
+    below = title_h - title_h // 2 - 30 + 70 + (len(release[2]) * _lead(release[1]) if release else 0) + 24 + \
+        _columns_height(story.story, CONTENT_W - 160, 1, 0, 22)
+    height = max(MOVIE_PHOTO, min(MOVIE_PHOTO_MAX, foot - below - (top + 96)))
+    box = (left, top + 96, right, top + 96 + height)
+    _photo(page, photo, box, mono=False)
+    fade = Image.linear_gradient("L")  # black at the top, white at the foot
+    width = box[2] - box[0]
+    page.paste(SCREEN, (box[0], box[3] - 380, box[2], box[3]), fade.resize((width, 380)))
+    page.paste(SCREEN, (box[0], box[1], box[2], box[1] + 60), fade.rotate(180).resize((width, 60)))
+    if story.kicker.strip():
+        _, cut_kicker = _centred(d, top + 34, story.kicker.upper(), 30, SILVER, min_size=20, width=text_w)
+        if cut_kicker:
+            cut["kicker"] = cut_kicker
+
+    font, size, lines, cut_title = title
+    y = _text_block(d, (W - text_w) // 2, box[3] - 30 - title_h // 2, lines, font, size, MARQUEE, width=text_w,
+                    bold=3)
+    if cut_title:
+        cut["headline"] = cut_title
+    for i in range(5):  # the critics' stars
+        _star(d, mid + (i - 2) * 52, y + 26, 20, MARQUEE)
+    y += 70
+    if release:
+        font, size, lines, cut_release = release
+        y = _text_block(d, (W - text_w) // 2, y, lines, font, size, WHITE, width=text_w, bold=1)
+        if cut_release:
+            cut["caption"] = cut_release
+
+    if rating:  # the rating box at the foot of the poster
+        font, size, lines, _ = rating
+        box_w = max(font.getlength(line) for line in lines) + 40
+        box_h = len(lines) * _lead(size) + 18
+        d.rectangle([mid - box_w / 2, foot + 24, mid + box_w / 2, foot + 24 + box_h], outline=SILVER, width=2)
+        _text_block(d, mid - 380, foot + 34, lines, font, size, SILVER, width=760)
+    credits = (left + 80, y + 24, right - 80, foot)
+    spare = credits[3] - credits[1] - _columns_height(story.story, credits[2] - credits[0], 1, 0, 22)
+    if spare > 0:  # the credits sit at the foot of the poster, as on a real one
+        credits = (credits[0], credits[1] + spare, credits[2], credits[3])
+    if story_cut := _columns(d, story.story, credits, 1, 0, 22, 12, SILVER, centre=True):
+        cut["story"] = story_cut
+    if rating and rating[3]:  # reported after the credits, which are printed above the rating box
+        cut["byline"] = rating[3]
+    return cut
+
+
 STYLES: dict[str, Callable[[Image.Image, Image.Image, Story], Cuts]] = {
-    "metro": _metro, "daily": _daily, "wizard": _wizard, "wanted": _wanted}
+    "metro": _metro, "daily": _daily, "wizard": _wizard, "wanted": _wanted, "certificate": _certificate,
+    "sports": _sports, "missing": _missing, "movie": _movie}
 
 
 def compose(photo: Image.Image, story: Story | None = None, style: str = "metro") -> tuple[Image.Image, Cuts]:

@@ -8,6 +8,10 @@ These images are the sample pages shown in the main README. They were rendered w
 | `booth-daily.jpg` | `prt booth astronaut.jpg --style daily --story-file story.json -o booth-daily.png` |
 | `booth-wizard.jpg` | `prt booth astronaut.jpg --style wizard -o booth-wizard.png` |
 | `booth-wanted.jpg` | `prt booth astronaut.jpg --style wanted -o booth-wanted.png` |
+| `booth-certificate.jpg` | `prt booth astronaut.jpg --style certificate -o booth-certificate.png` |
+| `booth-sports.jpg` | `prt booth astronaut.jpg --style sports -o booth-sports.png` |
+| `booth-missing.jpg` | `prt booth astronaut.jpg --style missing -o booth-missing.png` |
+| `booth-movie.jpg` | `prt booth astronaut.jpg --style movie -o booth-movie.png` |
 | `article-magazine.jpg` | `prt article article.json -o article-magazine.png` |
 | `article-classic.jpg` | `prt article article.json --style classic-magazine -o article-classic.png` (page 1) |
 | `gazette.jpg` | `prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file story.json -o gazette.png` |

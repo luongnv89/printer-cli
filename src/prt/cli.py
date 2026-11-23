@@ -782,6 +782,10 @@ class BoothStyle(str, Enum):
     daily = "daily"
     wizard = "wizard"
     wanted = "wanted"
+    certificate = "certificate"
+    sports = "sports"
+    missing = "missing"
+    movie = "movie"
 
 
 @app.command("booth")
@@ -789,25 +793,32 @@ def booth_cmd(
     photo: Path = typer.Argument(..., help="Photo of a person: JPEG, PNG, WebP, GIF, BMP or TIFF."),
     paper: BoothStyle = typer.Option(BoothStyle.metro, "--style", "-s",
                                      help="metro (colour tabloid, 2 columns), daily (black-and-white "
-                                          "broadsheet, 3 columns), wizard (ornate trading card) or wanted "
-                                          "(weathered pirate poster)."),
+                                          "broadsheet, 3 columns), wizard (ornate trading card), wanted "
+                                          "(weathered pirate poster), certificate (award certificate), sports "
+                                          "(sports trading card), missing (missing-pet poster) or movie (movie "
+                                          "poster)."),
     story_file: Optional[Path] = typer.Option(None, "--story-file",
                                               help="JSON story: headline and story required; kicker, caption, "
                                                    "byline optional. Use - to read it from stdin."),
     headline: Optional[str] = typer.Option(None, "--headline",
-                                           help="Headline; the name on wizard and wanted (overrides the story "
-                                                "file)."),
+                                           help="Headline; the name on the cards and posters, the film title "
+                                                "on movie (overrides the story file)."),
     story: Optional[str] = typer.Option(None, "--story",
-                                        help="Story text, or the lore / description on wizard and wanted; a "
-                                             "newline starts a new paragraph."),
+                                        help="Story text: the lore, description, citation or stats on the "
+                                             "cards and posters, the credits on movie; a newline starts a new "
+                                             "paragraph."),
     kicker: Optional[str] = typer.Option(None, "--kicker",
                                          help="Small label above the headline; the card type on wizard, the "
-                                              "'Dead or alive' line on wanted."),
+                                              "'Dead or alive' line on wanted, the title on certificate, the team "
+                                              "on sports, the question on missing, the tagline on movie."),
     caption: Optional[str] = typer.Option(None, "--caption",
                                           help="Line under the photo; the subtitle on wizard, the reward line on "
-                                               "wanted."),
+                                               "wanted and missing, the award on certificate, the position on "
+                                               "sports, the release line on movie."),
     byline: Optional[str] = typer.Option(None, "--byline",
-                                         help="Author line, e.g. 'By Jo Smith'; the footer on wizard and wanted."),
+                                         help="Author line, e.g. 'By Jo Smith'; the footer on the cards and "
+                                              "posters, the signature on certificate, the tear-off tabs on "
+                                              "missing, the rating on movie."),
     preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
                                            help="Save the page here instead of printing; the extension picks "
                                                 "the file type: .pdf, .png, .jpg or .jpeg."),
@@ -816,7 +827,7 @@ def booth_cmd(
                                                    ".jpeg) before printing it; repeat for more files."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ) -> None:
-    """Photo booth: print a photo as a newspaper front page, a wizard card or a wanted poster (A4).
+    """Photo booth: print a photo as a newspaper front page, a card, a certificate or a poster (A4).
 
     Without a story each style uses its own built-in one. Story flags override --story-file.
     """
