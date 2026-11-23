@@ -26,8 +26,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 from prt import booth, fonts
 from prt.booth import Story
 from prt.drivers.base import PrinterError
-from prt.layout import (BOTTOM, CONTENT_W, ELLIPSIS, _STAND_INS, _col_width, _ellipsize, _lead, _paragraphs, _rows,
-                        _text_block, _wrap, draw_columns, flow_columns)
+from prt.layout import (BOTTOM, CONTENT_W, ELLIPSIS, _STAND_INS, Cut, Cuts, _col_width, _cut, _ellipsize, _lead,
+                        _paragraphs, _rows, _text_block, _wrap, draw_columns, flow_columns)
 from prt.testpage import H, MARGIN, W
 
 PAPER = (244, 236, 216)  # #f4ecd8
@@ -211,17 +211,19 @@ def _printable_face(text: str, face: ImageFont.FreeTypeFont) -> str:
 
 def _fit_face(text: str, role: str, size: int, min_size: int, width: int, max_lines: int):
     """Largest size (size → min_size) of ``role`` that wraps ``text`` into ``max_lines``; cut with "…" at the
-    smallest. Returns (font, size, lines, cut)."""
+    smallest. Returns (font, size, lines, cut), ``cut`` being None or the ``Cut`` (see ``layout._fit``)."""
     for s in range(size, min_size - 1, -2):
         font = fonts.face(role, s)
-        lines = _wrap(_printable_face(text, font), font, width)
+        printable = _printable_face(text, font)
+        lines = _wrap(printable, font, width)
         if len(lines) <= max_lines:
-            return font, s, lines, False
-    return font, s, lines[:max_lines - 1] + [_ellipsize(lines[max_lines - 1], font, width)], True
+            return font, s, lines, None
+    lines = lines[:max_lines - 1] + [_ellipsize(lines[max_lines - 1], font, width)]
+    return font, s, lines, _cut(printable, lines)
 
 
 def _centred(d: ImageDraw.ImageDraw, y: int, text: str, role: str, size: int, min_size: int, lines: int,
-             x0: int, width: int) -> tuple[int, bool]:
+             x0: int, width: int) -> tuple[int, Cut | None]:
     """Fit ``text`` in ``lines`` lines centred in ``width`` from ``x0``; returns (y below, cut)."""
     font, s, wrapped, cut = _fit_face(text, role, size, min_size, width, lines)
     return _text_block(d, x0, y, wrapped, font, s, INK, width=width), cut
@@ -254,15 +256,18 @@ def _draw_caps(d: ImageDraw.ImageDraw, x: float, baseline: float, runs: Runs) ->
         x += font.getlength(text)
 
 
-def _fit_caps(text: str, role: str, size: int, min_size: int, width: int) -> tuple[Runs, int, bool]:
-    """Small caps shrunk (size → min_size) to fit ``width``, then cut with "…". Returns (runs, size, cut)."""
+def _fit_caps(text: str, role: str, size: int, min_size: int, width: int) -> tuple[Runs, int, Cut | None]:
+    """Small caps shrunk (size → min_size) to fit ``width``, then cut with "…". Returns (runs, size, cut), ``cut``
+    being None or the ``Cut`` saying how many of the characters were printed."""
     for s in range(size, min_size - 1, -1):
         runs = _caps(text, role, s)
         if _caps_width(runs) <= width:
-            return runs, s, False
+            return runs, s, None
+    given = len(text)
     while text and _caps_width(_caps(text + ELLIPSIS, role, s)) > width:
         text = text[:-1]
-    return _caps(text.rstrip() + ELLIPSIS, role, s), s, True
+    text = text.rstrip()
+    return _caps(text + ELLIPSIS, role, s), s, Cut(len(text), given)
 
 
 def _rule(d: ImageDraw.ImageDraw, y: int, sheet: Sheet) -> None:
@@ -282,28 +287,31 @@ def _double(d: ImageDraw.ImageDraw, y: int, sheet: Sheet) -> int:
 Placement = tuple[int, tuple[int, int, int, int]]  # (photo number, box it was printed in)
 
 
-def _story(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], columns: int = 2) -> bool:
-    """The story in ruled columns, shrinking the type until it fits, else cut with "…"; True when cut."""
+def _story(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], columns: int = 2) -> Cut | None:
+    """The story in ruled columns, shrinking the type until it fits, else cut with "…"; returns the ``Cut``, or
+    None when the story fits."""
     x0, y0, x1, y1 = box
     col_w = _col_width(x1 - x0, columns, GUTTER)
     for s in range(BODY, BODY_MIN - 1, -1):
         font = fonts.face("body", s)
-        cols, left = flow_columns([_printable_face(p, font) for p in text.split("\n")], font, col_w,
-                                  (y1 - y0) // _lead(s), columns)
+        paras = [_printable_face(p, font) for p in text.split("\n")]
+        cols, left = flow_columns(paras, font, col_w, (y1 - y0) // _lead(s), columns)
         if not left:
             break
+    cut = None
     if left:
         last = cols[-1]
         while len(last) > 1 and not last[-1]:  # end on text, not on a paragraph gap
             last.pop()
         last[-1] = _ellipsize(last[-1], font, col_w)
+        cut = _cut("\n".join(paras), [line for col in cols for line in col])
     draw_columns(d, cols, x0, y0, col_w, GUTTER, font, s, INK)
     # The column rule is drawn here rather than by draw_columns, at the weight of every other rule.
     depth = y0 + max((len(col) for col in cols), default=0) * _lead(s)
     for c in range(1, len(cols)):
         rx = x0 + c * (col_w + GUTTER) - GUTTER // 2
         d.line([(rx, y0), (rx, depth)], fill=INK, width=RULE)
-    return bool(left)
+    return cut
 
 
 def _story_height(text: str, size: int, width: int, columns: int = 2) -> int:
@@ -311,6 +319,17 @@ def _story_height(text: str, size: int, width: int, columns: int = 2) -> int:
     lines = _paragraphs("\n".join(_printable_face(p, font) for p in text.split("\n")), font,
                         _col_width(width, columns, GUTTER))
     return _rows(len(lines), columns) * _lead(size)
+
+
+def _figure_caption(number: int, caption: str, width: int):
+    """The lead photo's "Fig. n. caption" fitted in two lines of ``width`` (see ``_fit_face``); its ``Cut`` counts
+    the caption's own characters, without the "Fig. n. " in front."""
+    label = f"Fig. {number}"
+    font, size, lines, cut = _fit_face(f"{label}. {caption}" if caption else label, "body-italic", 22, 18, width, 2)
+    if cut:
+        prefix = len(label) + 2 if caption else len(label)
+        cut = Cut(max(0, cut.max_fit - prefix), max(0, cut.given - prefix))
+    return font, size, lines, cut
 
 
 def _page_mark(d: ImageDraw.ImageDraw, number: int, total: int, sheet: Sheet) -> None:
@@ -322,7 +341,7 @@ def _page_mark(d: ImageDraw.ImageDraw, number: int, total: int, sheet: Sheet) ->
 
 
 def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: list[int], total: int,
-           sheet: Sheet) -> tuple[list[Placement], list[str]]:
+           sheet: Sheet) -> tuple[list[Placement], Cuts]:
     """Masthead, dateline and headline across the page, then the lead photo, a row of up to two plates and the
     story in ruled columns: stacked on an upright page, side by side on a landscape one."""
     d = ImageDraw.Draw(page)
@@ -330,13 +349,13 @@ def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: 
     body = _wide_front if sheet.width > sheet.height else _tall_front
     placements, cut_below = body(page, d, photos, story, indices, y, sheet)
     _page_mark(d, 1, total, sheet)
-    return placements, cut + cut_below
+    return placements, {**cut, **cut_below}
 
 
-def _head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet) -> tuple[int, list[str]]:
+def _head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet) -> tuple[int, Cuts]:
     """Masthead, tagline, dateline, kicker, headline and byline across the page; returns (y below, cut)."""
     left, width, right = sheet.margin, sheet.content_w, sheet.width - sheet.margin
-    cut: list[str] = []
+    cut: Cuts = {}
     y = sheet.margin
     _rule(d, y, sheet)
     y += 18
@@ -359,27 +378,30 @@ def _head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet) -> tuple[int, list
         runs, ks, cut_kicker = _fit_caps(story.kicker, "body-bold", 24, 16, width)
         _draw_caps(d, (sheet.width - _caps_width(runs)) / 2, y + ks, runs)
         y += ks + 18
-        cut += ["kicker"] * cut_kicker
+        if cut_kicker:
+            cut["kicker"] = cut_kicker
     y, cut_headline = _centred(d, y, story.headline.upper(), "display-black", 64, 36, sheet.headline_lines, left,
                                 width)
-    cut += ["headline"] * cut_headline
+    if cut_headline:
+        cut["headline"] = cut_headline
     _rule(d, y + 4, sheet)
     y += 18
     if story.byline:
         y, cut_byline = _centred(d, y, story.byline, "body-italic", 22, 18, 1, left, width)
-        cut += ["byline"] * cut_byline
+        if cut_byline:
+            cut["byline"] = cut_byline
     return y + 8, cut
 
 
 def _tall_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Image], story: Story,
-                indices: list[int], y: int, sheet: Sheet) -> tuple[list[Placement], list[str]]:
+                indices: list[int], y: int, sheet: Sheet) -> tuple[list[Placement], Cuts]:
     """Upright: the lead photo, a row of up to two plates under it, then the story in two ruled columns."""
     left, width, right = sheet.margin, sheet.content_w, sheet.width - sheet.margin
-    cut: list[str] = []
+    cut: Cuts = {}
     lead, plates = photos[indices[0]], indices[1:]
-    cap = _fit_face(f"Fig. {indices[0] + 1}. {story.caption}" if story.caption else f"Fig. {indices[0] + 1}",
-                    "body-italic", 22, 18, width - 80, 2)
-    cut += ["caption"] * cap[3]
+    cap = _figure_caption(indices[0] + 1, story.caption, width - 80)
+    if cap[3]:
+        cut["caption"] = cap[3]
     caption_h = len(cap[2]) * _lead(cap[1])
     plates_h = 10 + PLATE_H + 2 * FRAME + 6 + _lead(20) if plates else 0
     story_bottom = sheet.bottom - 52
@@ -412,19 +434,19 @@ def _tall_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Im
 
     y += 16
     _rule(d, y, sheet)
-    if _story(d, story.story, (left, y + 20, right, story_bottom)):
-        cut.append("story")
+    if story_cut := _story(d, story.story, (left, y + 20, right, story_bottom)):
+        cut["story"] = story_cut
     return placements, cut
 
 
 def _wide_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Image], story: Story,
-                indices: list[int], y: int, sheet: Sheet) -> tuple[list[Placement], list[str]]:
+                indices: list[int], y: int, sheet: Sheet) -> tuple[list[Placement], Cuts]:
     """Landscape: the lead photo down the left with its caption, the story in ruled columns on the right, and
     the row of up to two plates under the story."""
     left, right = sheet.margin, sheet.width - sheet.margin
     story_bottom = sheet.bottom - 52
     y += 10
-    cut: list[str] = []
+    cut: Cuts = {}
     lead, plates = photos[indices[0]], indices[1:]
     # Two caption lines are kept whatever the lead's width turns out to be, so the lead is sized in one pass.
     caption_room = 2 * _lead(22)
@@ -436,9 +458,9 @@ def _wide_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Im
     box = (bx, y + FRAME, bx + x1 - x0, y + FRAME + bottom - top)
     _place(page, lead, box)
     placements = [(indices[0], box)]
-    cap = _fit_face(f"Fig. {indices[0] + 1}. {story.caption}" if story.caption else f"Fig. {indices[0] + 1}",
-                    "body-italic", 22, 18, col_w - 40, 2)
-    cut += ["caption"] * cap[3]
+    cap = _figure_caption(indices[0] + 1, story.caption, col_w - 40)
+    if cap[3]:
+        cut["caption"] = cap[3]
     _text_block(d, left + 20, box[3] + FRAME + 6, cap[2], cap[0], cap[1], INK, width=col_w - 40)
     rx = left + col_w + GUTTER // 2
     d.line([(rx, y), (rx, story_bottom)], fill=INK, width=RULE)
@@ -465,8 +487,8 @@ def _wide_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Im
             d.line([(mid, py), (mid, label_y + _lead(20))], fill=INK, width=RULE)
         d.line([(x0, py - 16), (right, py - 16)], fill=INK, width=RULE)
         story_end = py - 36
-    if _story(d, story.story, (x0, y, right, story_end), columns):
-        cut.append("story")
+    if story_cut := _story(d, story.story, (x0, y, right, story_end), columns):
+        cut["story"] = story_cut
     return placements, cut
 
 
@@ -525,7 +547,7 @@ def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], nu
 
 
 def compose_pages(photos: list[Image.Image], story: Story | None = None, landscape: bool = False
-                  ) -> tuple[list[Image.Image], list[list[Placement]], list[str]]:
+                  ) -> tuple[list[Image.Image], list[list[Placement]], Cuts]:
     """Lay the photos out over the pages ``plan_pages`` gives (with the default story if none is given), on
     upright A4 or, with ``landscape``, A4 on its side.
 
@@ -535,7 +557,7 @@ def compose_pages(photos: list[Image.Image], story: Story | None = None, landsca
     sheet = LANDSCAPE if landscape else PORTRAIT
     story = DEFAULT_GAZETTE_STORY if story is None else story
     plan = plan_pages(len(photos))
-    pages, placements, cut = [], [], []
+    pages, placements, cut = [], [], {}
     for number, indices in enumerate(plan, start=1):
         page = Image.new("RGB", (sheet.width, sheet.height), "white")
         ImageDraw.Draw(page).rectangle([sheet.inset, sheet.inset, sheet.width - sheet.inset - 1,

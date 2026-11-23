@@ -79,13 +79,15 @@ prt booth photo.jpg --style metro --story-file story.json --preview page.jpg
 
 `--preview` (also `-o` or `--output`) writes the finished page and sends nothing to the printer. The file name picks the type: `.jpg` or `.jpeg` for a JPEG, `.png` for a lossless image, `.pdf` for a one-page A4 PDF. Open `page.jpg` and check it. When text had to be cut to fit, its last line ends in `…` and the command warns on stderr, naming the fields, for example `caption cut to fit the metro page`. Shorten those fields and preview again.
 
+With `-f json` you do not have to guess how much to cut: the output says `"fits": false` and gives, for each cut field, how many characters were printed (`max_fit`) and how many you gave, for example `{"action": "booth", "style": "metro", "file": "page.jpg", "bytes": N, "fits": false, "cut": {"caption": {"max_fit": 96, "given": 140}}}`. Rewrite each field in `cut` to at most `max_fit` characters and preview again; `"fits": true` with `"cut": {}` means everything fitted.
+
 ### 5. Print
 
 ```bash
 prt booth photo.jpg --style metro --story-file story.json --yes
 ```
 
-`--yes` skips the confirmation prompt, which is required when there is no terminal. The cut-to-fit warning also appears before printing, but the page is still printed. Add `-f json` to get `{"action": "booth", "style": "metro", "job_id": N}` on stdout.
+`--yes` skips the confirmation prompt, which is required when there is no terminal. The cut-to-fit warning also appears before printing, but the page is still printed. Add `-f json` to get `{"action": "booth", "style": "metro", "job_id": N, "fits": true, "cut": {}}` on stdout.
 
 To keep a digital copy of the printed page, add `--save` with a `.pdf`, `.png`, `.jpg` or `.jpeg` file name (repeat it for more files):
 
@@ -93,7 +95,7 @@ To keep a digital copy of the printed page, add `--save` with a `.pdf`, `.png`, 
 prt booth photo.jpg --style metro --story-file story.json --save page.pdf --yes
 ```
 
-The copies are written before the printer is contacted, so they are kept even when printing is declined or the printer cannot be reached. With `-f json` the output gains a `saved` list: `{"action": "booth", "style": "metro", "job_id": N, "saved": [{"file": "page.pdf", "format": "pdf", "bytes": N}]}`. Combined with `--preview`, `--save` writes every file and prints nothing.
+The copies are written before the printer is contacted, so they are kept even when printing is declined or the printer cannot be reached. With `-f json` the output gains a `saved` list: `{"action": "booth", "style": "metro", "job_id": N, "fits": true, "cut": {}, "saved": [{"file": "page.pdf", "format": "pdf", "bytes": N}]}`. Combined with `--preview`, `--save` writes every file and prints nothing.
 
 For a one-off tweak, override any field from the command line: `--headline`, `--story`, `--kicker`, `--caption`, `--byline`. These flags win over the story file. With no story at all, `prt booth photo.jpg` prints the style's built-in default text, so a themed style can be tried with nothing but the photo:
 

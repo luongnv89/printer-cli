@@ -23,8 +23,8 @@ from typing import Callable
 from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 
 from prt.drivers.base import PrinterError
-from prt.layout import (BOTTOM, CONTENT_W, _clean, _columns, _columns_height, _fit, _glyphs, _lead, _printable,
-                        _text_block)
+from prt.layout import (BOTTOM, CONTENT_W, Cuts, _clean, _columns, _columns_height, _fit, _glyphs, _lead,
+                        _printable, _text_block)
 from prt.layout import _col_width, _ellipsize, _rows, _wrap  # noqa: F401  (still reachable as booth.<name>)
 from prt.testpage import H, MARGIN, W, _font
 
@@ -43,7 +43,7 @@ class Story:
 FIELDS = tuple(f.name for f in fields(Story))
 REQUIRED = ("headline", "story")
 # Upper bounds that keep a story on one page; text that still overflows its box ends in "…",
-# and compose() names the fields that were cut so the command can warn about them.
+# and compose() names the fields that were cut, with how much of each was printed, so the command can say so.
 LIMITS = {"headline": 120, "story": 2500, "kicker": 40, "caption": 200, "byline": 80}
 MAX_STORY_FILE = 64 * 1024
 STDIN = "-"  # a story file or article source of "-" is read from standard input
@@ -245,10 +245,10 @@ METRO_PHOTO, METRO_PHOTO_MAX = 560, 900  # photo height: normal, and grown into 
 METRO_BODY = 28
 
 
-def _metro(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
+def _metro(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     """Colour tabloid: reversed black masthead, red accents, shouting headline, full-width photo, 2 columns."""
     d = ImageDraw.Draw(page)
-    cut = []
+    cut: Cuts = {}
     left, right = MARGIN, W - MARGIN
     y = MARGIN
     d.rectangle([left, y, right, y + 150], fill=INK)
@@ -264,12 +264,14 @@ def _metro(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
         d.rectangle([left, y, left + font.getlength(label) + 32, y + 46], fill=RED)
         d.text((left + 16, y + 6 + (30 - size) // 2), label, font=font, fill=WHITE)
         y += 62
-        cut += ["kicker"] * cut_kicker
+        if cut_kicker:
+            cut["kicker"] = cut_kicker
     font, size, lines, cut_headline = _fit(story.headline.upper(), 80, 48, CONTENT_W, 2)
     if cut_headline:  # too long for two lines even at the smallest size: allow a third
         font, size, lines, cut_headline = _fit(story.headline.upper(), 48, 48, CONTENT_W, 3)
     y = _text_block(d, left, y, lines, font, size, INK, bold=2) + 14
-    cut += ["headline"] * cut_headline
+    if cut_headline:
+        cut["headline"] = cut_headline
     if story.byline:
         by_font, by_size, by_lines, cut_byline = _fit(story.byline.upper(), 26, 20, CONTENT_W, 1)
     # A short story leaves paper to spare: the photo grows into it (up to a 4:3 crop of a wide photo).
@@ -291,14 +293,16 @@ def _metro(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
         d.rectangle([px0 - 4, y, px1 + 4, y + bar], fill=INK)
         _text_block(d, px0 + 20, y + 10, lines, font, size, WHITE)
         y += bar
-        cut += ["caption"] * cut_caption
+        if cut_caption:
+            cut["caption"] = cut_caption
     y += 26
     if story.byline:
         y = _text_block(d, left, y, by_lines, by_font, by_size, RED, bold=1) + 6
-        cut += ["byline"] * cut_byline
+        if cut_byline:
+            cut["byline"] = cut_byline
     d.rectangle([left, BOTTOM - 8, right, BOTTOM], fill=RED)
-    if _columns(d, story.story, (left, y, right, BOTTOM - 24), 2, 44, METRO_BODY, 16, INK):
-        cut.append("story")
+    if story_cut := _columns(d, story.story, (left, y, right, BOTTOM - 24), 2, 44, METRO_BODY, 16, INK):
+        cut["story"] = story_cut
     return cut
 
 
@@ -308,10 +312,10 @@ DAILY_PHOTO, DAILY_PHOTO_MAX = 460, 820  # photo height: normal, and grown into 
 DAILY_BODY, DAILY_BODY_MAX = 24, 28  # body type: normal, and grown when the photo is already at its largest
 
 
-def _daily(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
+def _daily(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     """Black-and-white broadsheet: centred masthead, double rules, grey photo with a mat, 3 ruled columns."""
     d = ImageDraw.Draw(page)
-    cut = []
+    cut: Cuts = {}
     left, right = MARGIN, W - MARGIN
     y = MARGIN
     tiny = _font(20)
@@ -331,18 +335,22 @@ def _daily(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
     if story.kicker:
         font, size, lines, cut_kicker = _fit(story.kicker.upper(), 24, 18, CONTENT_W, 1)
         y = _text_block(d, left, y, lines, font, size, GREY, width=CONTENT_W)
-        cut += ["kicker"] * cut_kicker
+        if cut_kicker:
+            cut["kicker"] = cut_kicker
     font, size, lines, cut_headline = _fit(story.headline, 64, 40, CONTENT_W, 3)
     y = _text_block(d, left, y, lines, font, size, DAILY_INK, width=CONTENT_W, bold=1) + 4
-    cut += ["headline"] * cut_headline
+    if cut_headline:
+        cut["headline"] = cut_headline
     if story.byline:
         font, size, lines, cut_byline = _fit(story.byline, 22, 18, CONTENT_W, 1)
         y = _text_block(d, left, y, lines, font, size, GREY, width=CONTENT_W)
-        cut += ["byline"] * cut_byline
+        if cut_byline:
+            cut["byline"] = cut_byline
     y += 16
     if story.caption:
         cap_font, cap_size, cap_lines, cut_caption = _fit(story.caption, 20, 18, CONTENT_W, 2)
-        cut += ["caption"] * cut_caption
+        if cut_caption:
+            cut["caption"] = cut_caption
     else:
         cap_font, cap_size, cap_lines = None, 0, []
     # A short story leaves paper to spare: the photo grows into it (up to a 4:3 crop of a wide photo),
@@ -361,9 +369,10 @@ def _daily(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
     y += 14
     d.line([(left, y), (right, y)], fill=DAILY_INK, width=1)
     d.line([(left, BOTTOM), (right, BOTTOM)], fill=DAILY_INK, width=1)
-    if _columns(d, story.story, (left, y + 20, right, BOTTOM - 16), 3, 34, DAILY_BODY_MAX, 14, DAILY_INK,
-                rule=GREY):
-        cut.append("story")
+    story_cut = _columns(d, story.story, (left, y + 20, right, BOTTOM - 16), 3, 34, DAILY_BODY_MAX, 14, DAILY_INK,
+                         rule=GREY)
+    if story_cut:
+        cut["story"] = story_cut
     return cut
 
 
@@ -420,10 +429,10 @@ CARD_W, CARD_H = 1000, 1397  # a trading card's 63 × 88 proportions, as large a
 WIZARD_WINDOW, WIZARD_RISE = 640, 150  # portrait window height, and how high its arch rises
 
 
-def _wizard(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
+def _wizard(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     """Trading card: dark card with a gold double border, arched portrait, emblem, name banner, lore box."""
     d = ImageDraw.Draw(page)
-    cut = []
+    cut: Cuts = {}
     x0, y0 = (W - CARD_W) // 2, (H - CARD_H) // 2
     x1, y1 = x0 + CARD_W, y0 + CARD_H
     mid = W // 2
@@ -453,7 +462,8 @@ def _wizard(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
         for side in (-1, 1):
             _star(d, mid + side * (font.getlength(label) / 2 + 26), y + size * 0.62, 10, GOLD, points=4,
                   inner=0.35)
-        cut += ["kicker"] * cut_kicker
+        if cut_kicker:
+            cut["kicker"] = cut_kicker
 
     box = _photo_box(photo, y0 + 118, WIZARD_WINDOW, 800)
     rise = WIZARD_RISE
@@ -475,7 +485,8 @@ def _wizard(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
     font, size, lines, cut_name = _fit(story.headline, 60, 40, 720, 1)
     if cut_name:
         font, size, lines, cut_name = _fit(story.headline, 40, 40, 720, 2)
-    cut += ["headline"] * cut_name
+    if cut_name:
+        cut["headline"] = cut_name
     bh = len(lines) * _lead(size) + 24
     for side in (-1, 1):
         inner_x, outer_x = mid + side * 380, mid + side * 450
@@ -488,15 +499,18 @@ def _wizard(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
 
     if story.caption:
         y, cut_caption = _centred(d, y, story.caption, 30, GOLD_LIGHT, min_size=22, width=760, lines=2)
-        cut += ["caption"] * cut_caption
+        if cut_caption:
+            cut["caption"] = cut_caption
     lore = (x0 + 70, y + 10, x1 - 70, y1 - 96)
     d.rounded_rectangle(lore, radius=14, fill=CREAM, outline=GOLD, width=3)
-    if _columns(d, story.story, (lore[0] + 30, lore[1] + 20, lore[2] - 30, lore[3] - 14), 1, 0, 28, 16,
-                NAVY, centre=True):
-        cut.append("story")
+    story_cut = _columns(d, story.story, (lore[0] + 30, lore[1] + 20, lore[2] - 30, lore[3] - 14), 1, 0, 28, 16,
+                         NAVY, centre=True)
+    if story_cut:
+        cut["story"] = story_cut
     if story.byline:
         _, cut_byline = _centred(d, y1 - 80, story.byline, 22, GOLD_LIGHT, min_size=18, width=640)
-        cut += ["byline"] * cut_byline
+        if cut_byline:
+            cut["byline"] = cut_byline
     return cut
 
 
@@ -535,10 +549,10 @@ def _parchment() -> tuple[Image.Image, Image.Image]:
     return paper, mask
 
 
-def _wanted(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
+def _wanted(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     """Wanted poster: torn parchment, huge WANTED, framed sepia-tinted photo, name, reward, description."""
     d = ImageDraw.Draw(page)
-    cut = []
+    cut: Cuts = {}
     mid = W // 2
     paper, mask = _parchment()
     page.paste(paper, (MARGIN, MARGIN), mask)
@@ -593,31 +607,36 @@ def _wanted(page: Image.Image, photo: Image.Image, story: Story) -> list[str]:
                 d.line([(mid + side * half, rule_y), (mid + side * (CONTENT_W / 2 - 70), rule_y)],
                        fill=SEPIA_DARK, width=3)
         y += _lead(k_size) + 6
-        cut += ["kicker"] * cut_kicker
+        if cut_kicker:
+            cut["kicker"] = cut_kicker
     font, size, lines, cut_name = name
     y = _text_block(d, MARGIN + 60, y, lines, font, size, SEPIA_DARK, width=text_w, bold=2)
-    cut += ["headline"] * cut_name
+    if cut_name:
+        cut["headline"] = cut_name
     if reward:
         font, size, lines, cut_reward = reward
         y = _text_block(d, MARGIN + 60, y + 4, lines, font, size, RUST, width=text_w, bold=1)
-        cut += ["caption"] * cut_reward
+        if cut_reward:
+            cut["caption"] = cut_reward
     d.line([(mid - 160, y + 14), (mid + 160, y + 14)], fill=SEPIA, width=2)
-    if _columns(d, story.story, (MARGIN + 100, y + 34, W - MARGIN - 100, BOTTOM - 104), 1, 0, 30, 16, SEPIA,
-                centre=True):
-        cut.append("story")
+    story_cut = _columns(d, story.story, (MARGIN + 100, y + 34, W - MARGIN - 100, BOTTOM - 104), 1, 0, 30, 16,
+                         SEPIA, centre=True)
+    if story_cut:
+        cut["story"] = story_cut
     if story.byline:
         _, cut_byline = _centred(d, BOTTOM - 66, story.byline, 24, SEPIA, min_size=18, width=760)
-        cut += ["byline"] * cut_byline
+        if cut_byline:
+            cut["byline"] = cut_byline
     return cut
 
 
-STYLES: dict[str, Callable[[Image.Image, Image.Image, Story], list[str]]] = {
+STYLES: dict[str, Callable[[Image.Image, Image.Image, Story], Cuts]] = {
     "metro": _metro, "daily": _daily, "wizard": _wizard, "wanted": _wanted}
 
 
-def compose(photo: Image.Image, story: Story | None = None, style: str = "metro") -> tuple[Image.Image, list[str]]:
+def compose(photo: Image.Image, story: Story | None = None, style: str = "metro") -> tuple[Image.Image, Cuts]:
     """Lay out the page (with the style's default story if none is given); also returns the fields
-    (in page order) that were cut with "…" to fit."""
+    (in page order) that were cut with "…" to fit, each with how much of it was printed."""
     story = default_story(style) if story is None else story
     page = Image.new("RGB", (W, H), "white")
     cut = STYLES[style](page, photo, Story(**{name: _printable(getattr(story, name)) for name in FIELDS}))

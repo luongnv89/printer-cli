@@ -7,6 +7,7 @@ import re
 import sys
 import time
 import weakref
+from dataclasses import replace
 from functools import lru_cache
 from types import SimpleNamespace
 
@@ -318,12 +319,41 @@ def test_default_story_passes_the_story_check():
 @pytest.mark.parametrize("shape", [(800, 1200), (1200, 800), (1000, 1000)])
 def test_default_story_is_never_cut(n, shape):
     _, _, cut = vintage.compose_pages([Image.new("RGB", shape, "grey")] * n, vintage.DEFAULT_GAZETTE_STORY)
-    assert cut == []
+    assert cut == {}
 
 
 def test_too_long_text_is_cut_and_named():
     _, _, cut = vintage.compose_pages([Image.new("RGB", (400, 300), "grey")] * 3, _longest_story())
-    assert cut == ["headline", "story"]
+    assert list(cut) == ["headline", "story"]
+
+
+@pytest.mark.parametrize("landscape", [False, True])
+def test_cut_fields_report_how_much_was_printed(landscape):
+    photos = [Image.new("RGB", (400, 300), "grey")] * 3
+    story = booth.check_story(Story(headline="W" * LIMITS["headline"], story="Wide paragraph.\n" * 140,
+                                    kicker="W" * LIMITS["kicker"], caption="Wide caption words " * 10,
+                                    byline="W" * LIMITS["byline"]), 2)
+    cut = vintage.compose_pages(photos, story, landscape=landscape)[2]
+    assert {"headline", "story"} <= set(cut) and len(cut) >= 3
+    for name, fit in cut.items():
+        assert fit.given == len(getattr(story, name)) and 0 < fit.max_fit < fit.given, name
+        shorter = replace(story, **{name: getattr(story, name)[:fit.max_fit]})
+        assert name not in vintage.compose_pages(photos, shorter, landscape=landscape)[2], name
+
+
+def test_the_figure_number_is_not_counted_as_caption():
+    caption = ("caption words " * 14).strip()
+    font, size, lines, cut = vintage._figure_caption(3, caption, 400)
+    printed = " ".join(lines).removesuffix("…").rstrip()
+    assert printed.startswith("Fig. 3. ") and cut.max_fit == len(printed) - len("Fig. 3. ")
+    assert cut.given == len(caption)
+    assert vintage._figure_caption(3, "Short", 400)[3] is None
+
+
+def test_small_caps_cut_counts_the_letters_printed():
+    runs, _, cut = vintage._fit_caps("W" * 120, "body-bold", 24, 16, 1060)
+    printed = "".join(text for _, text in runs).removesuffix("…")
+    assert cut == vintage.Cut(len(printed), 120)
 
 
 def test_pages_are_cream_paper_with_dark_ink_rules():
@@ -370,9 +400,9 @@ def test_small_caps_set_lower_case_letters_as_smaller_capitals():
 
 
 def test_small_caps_shrink_then_cut_to_fit():
-    assert vintage._fit_caps("W" * 40, "body-bold", 24, 16, 1060)[1:] == (24, False)
+    assert vintage._fit_caps("W" * 40, "body-bold", 24, 16, 1060)[1:] == (24, None)
     runs, size, cut = vintage._fit_caps("㎑" * 40, "body-bold", 24, 16, 1060)  # 120 letters once spelt out
-    assert (size, cut) == (16, True) and runs[-1][1].endswith("…") and vintage._caps_width(runs) <= 1060
+    assert size == 16 and cut and runs[-1][1].endswith("…") and vintage._caps_width(runs) <= 1060
 
 
 # --- photos are shrunk, only for the gazette -------------------------------------------------
@@ -438,7 +468,7 @@ def test_one_photo_prints_one_page(capsys, tmp_path, printer):
     photo = _photo(tmp_path)
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "gazette", str(photo), "--yes")
     assert code == 0 and printer.jobs() == _expected_pages([photo])
-    assert json.loads(out) == {"action": "gazette", "photos": 1, "pages": 1, "job_ids": [101]}
+    assert json.loads(out) == {"action": "gazette", "photos": 1, "pages": 1, "fits": True, "cut": {}, "job_ids": [101]}
     assert "1 page queued as job 101" in err
 
 
@@ -447,7 +477,8 @@ def test_several_photos_print_one_job_per_page(capsys, tmp_path, printer):
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "gazette", *map(str, photos), "--yes")
     expected = _expected_pages(photos)
     assert code == 0 and len(expected) == 2 and printer.jobs() == expected
-    assert json.loads(out) == {"action": "gazette", "photos": 4, "pages": 2, "job_ids": [101, 102]}
+    assert json.loads(out) == {"action": "gazette", "photos": 4, "pages": 2, "fits": True, "cut": {},
+                               "job_ids": [101, 102]}
     assert "2 pages queued as jobs 101, 102" in err
 
 
@@ -481,7 +512,7 @@ def test_preview_writes_numbered_images_and_never_creates_a_driver(capsys, tmp_p
                          str(out_file))
     files = [tmp_path / "page-1.png", tmp_path / "page-2.png"]
     assert code == 0 and "not printed" in err and printer.made == []
-    assert json.loads(out) == {"action": "gazette", "photos": 4, "pages": 2,
+    assert json.loads(out) == {"action": "gazette", "photos": 4, "pages": 2, "fits": True, "cut": {},
                                "files": [{"file": str(f), "format": "png", "bytes": f.stat().st_size}
                                          for f in files]}
     assert all(Image.open(f).size == A4_150DPI for f in files) and not out_file.exists()
@@ -522,6 +553,24 @@ def test_bad_story_on_stdin_prints_nothing(capsys, tmp_path, printer, stdin):
 def test_warns_when_text_is_cut_to_fit(capsys, tmp_path, printer):
     code, _, err = run(capsys, "-p", "demo", "gazette", str(_photo(tmp_path)), "--headline", "W" * 120, "--yes")
     assert code == 0 and "headline cut to fit the front page" in err
+
+
+def test_json_reports_each_cut_field(capsys, tmp_path, printer):
+    headline = "W" * LIMITS["headline"]
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "gazette", str(_photo(tmp_path)), "--headline", headline,
+                         "--yes")
+    report = json.loads(out)
+    assert code == 0 and report["job_ids"] == [101] and report["fits"] is False and list(report["cut"]) == ["headline"]
+    fit = report["cut"]["headline"]
+    assert fit["given"] == len(headline) and 0 < fit["max_fit"] < fit["given"]
+    code, out, _ = run(capsys, "-f", "json", "gazette", str(_photo(tmp_path)), "--headline", headline[:fit["max_fit"]],
+                       "-o", str(tmp_path / "page.png"))
+    assert code == 0 and json.loads(out)["fits"] is True and json.loads(out)["cut"] == {}
+
+
+def test_warning_names_the_cut_fields_without_json(capsys, tmp_path, printer):
+    code, out, err = run(capsys, "-p", "demo", "gazette", str(_photo(tmp_path)), "--headline", "W" * 120, "--yes")
+    assert code == 0 and "headline cut to fit the front page" in err and "max_fit" not in out + err
 
 
 # --- nothing is sent for bad input -----------------------------------------------------------
@@ -754,7 +803,7 @@ def test_unbroken_story_renders_quickly_inside_the_landscape_margins():
 def test_default_story_is_never_cut_in_landscape(n, shape):
     _, _, cut = vintage.compose_pages([Image.new("RGB", shape, "grey")] * n, vintage.DEFAULT_GAZETTE_STORY,
                                       landscape=True)
-    assert cut == []
+    assert cut == {}
 
 
 @pytest.mark.parametrize("n", [1, 3])
