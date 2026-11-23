@@ -25,7 +25,7 @@ import re
 import stat
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, NoReturn
+from typing import Any, Callable, Iterator, NoReturn
 
 from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 
@@ -520,16 +520,19 @@ def _caption_lines(block: dict[str, Any], width: int) -> list[str]:
     return _wrap(_printable(block.get("caption", "")), _font(CAPTION_SIZE), width)
 
 
-def _with_caption(picture: Image.Image, block: dict[str, Any], width: int) -> Piece:
+def _with_caption(size: tuple[int, int], picture: Callable[[], Image.Image], block: dict[str, Any],
+                  width: int) -> Piece:
+    """A picture ``size`` px large with its caption under it. The picture is made by ``picture()`` only when the
+    piece is drawn, so measuring a page file that will be refused (too many pages) builds no bitmaps."""
     align = block.get("align", "center")
     caption = _caption_lines(block, width)
     below = _lines_piece(caption, CAPTION_SIZE, width, align, GREY) if caption else None
 
     def draw(page: Image.Image, d: ImageDraw.ImageDraw, x: int, y: int) -> None:
-        page.paste(picture, (round(x + _x(align, width, picture.width)), y))
+        page.paste(picture(), (round(x + _x(align, width, size[0])), y))
         if below:
-            below.draw(page, d, x, y + picture.height + CAPTION_GAP)
-    return Piece(picture.height + (CAPTION_GAP + below.height if below else 0), draw)
+            below.draw(page, d, x, y + size[1] + CAPTION_GAP)
+    return Piece(size[1] + (CAPTION_GAP + below.height if below else 0), draw)
 
 
 def _image(block: dict[str, Any], width: int) -> Piece:
@@ -539,32 +542,44 @@ def _image(block: dict[str, Any], width: int) -> Piece:
     tallest = min(room, round(block["height"] * PX_PER_MM) if "height" in block else IMAGE_DEFAULT_H)
     scale = min(width / img.width, tallest / img.height)
     size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
-    return _with_caption(img.resize(size, Image.LANCZOS), block, width)
+    return _with_caption(size, lambda: img.resize(size, Image.LANCZOS), block, width)
 
 
-def qr_image(data: str, width: int, where: str) -> Image.Image:
-    """A QR code of ``data`` at most ``width`` px wide, with its quiet zone; refuses (exit code 3) a code whose
-    modules would be too small to scan."""
+def _qr_code(data: str, width: int, where: str) -> tuple[Any, int]:
+    """The QR code of ``data`` and the px per module that fit it in ``width`` with its quiet zone; refuses (exit
+    code 3) a code whose modules would be too small to scan. Builds no bitmap."""
     import segno
     try:
         code = segno.make(data, error="m", micro=False)
     except segno.DataOverflowError as exc:
         raise PrinterError(f"{where}: too much data for a QR code", hint="shorten the data", exit_code=3) from exc
-    rows = [list(row) for row in code.matrix_iter(scale=1, border=QR_QUIET)]
-    modules = len(rows)
-    scale = width // modules
+    scale = width // code.symbol_size(scale=1, border=QR_QUIET)[0]
     if scale < QR_MIN_MODULE:
         raise PrinterError(f"{where}: too much data for a QR code {width / PX_PER_MM:.0f} mm wide",
                            hint="shorten the data, or give the code more room (a larger size, or fewer columns)",
                            exit_code=3)
+    return code, scale
+
+
+def _qr_bitmap(code: Any, scale: int) -> Image.Image:
+    rows = [list(row) for row in code.matrix_iter(scale=1, border=QR_QUIET)]
+    modules = len(rows)
     img = Image.new("L", (modules, modules), 255)
     img.putdata([0 if dark else 255 for row in rows for dark in row])
     return img.resize((modules * scale, modules * scale), Image.NEAREST).convert("RGB")
 
 
+def qr_image(data: str, width: int, where: str) -> Image.Image:
+    """A QR code of ``data`` at most ``width`` px wide, with its quiet zone; refuses (exit code 3) a code whose
+    modules would be too small to scan."""
+    return _qr_bitmap(*_qr_code(data, width, where))
+
+
 def _qr(block: dict[str, Any], width: int, where: str) -> Piece:
     wanted = round(block.get("size", QR_DEFAULT_MM) * PX_PER_MM)
-    return _with_caption(qr_image(block["data"], min(wanted, width), where), block, width)
+    code, scale = _qr_code(block["data"], min(wanted, width), where)  # refused here, before anything is drawn
+    side = code.symbol_size(scale=scale, border=QR_QUIET)[0]
+    return _with_caption((side, side), lambda: _qr_bitmap(code, scale), block, width)
 
 
 def _rule(block: dict[str, Any], width: int) -> Piece:
@@ -593,24 +608,31 @@ def _heading(block: dict[str, Any], width: int) -> list[Piece]:
         if lines else []
 
 
-def _stack(blocks: list[dict[str, Any]], width: int, where: str) -> list[tuple[int, Piece]]:
+def _stack(blocks: list[dict[str, Any]], width: int, where: str) -> Iterator[tuple[int, Piece]]:
     """The pieces of ``blocks`` laid out at ``width``, each with the gap above it (GAP before each block but the
-    first)."""
-    out: list[tuple[int, Piece]] = []
+    first). A block is measured only when its pieces are asked for, so a caller can stop early."""
+    started = False
     for i, block in enumerate(blocks):
-        pieces = _pieces(block, width, f"{where}[{i}]")
-        out += [(GAP if out and n == 0 else 0, piece) for n, piece in enumerate(pieces)]
-    return out
+        for n, piece in enumerate(_pieces(block, width, f"{where}[{i}]")):
+            yield (GAP if started and n == 0 else 0), piece
+            started = True
 
 
 def _columns(block: dict[str, Any], width: int, where: str) -> Piece:
     cells = block["columns"]
     cell_w = _col_width(width, len(cells), GUTTER)
-    stacks = [_stack(cell, cell_w, f"{where}.columns[{c}]") for c, cell in enumerate(cells)]
+    stacks: list[list[tuple[int, Piece]]] = []
+    for c, cell in enumerate(cells):
+        stack: list[tuple[int, Piece]] = []
+        height = 0
+        for gap, piece in _stack(cell, cell_w, f"{where}.columns[{c}]"):
+            stack.append((gap, piece))
+            height += gap + piece.height
+            if height > CONTENT_H:  # stop measuring: it cannot print
+                raise PrinterError(f"{where}: the columns block is taller than a page", exit_code=3,
+                                   hint="split it into several columns blocks, or move long text out of it")
+        stacks.append(stack)
     height = max((sum(gap + p.height for gap, p in stack) for stack in stacks), default=0)
-    if height > CONTENT_H:
-        raise PrinterError(f"{where}: the columns block is taller than a page", exit_code=3,
-                           hint="split it into several columns blocks, or move long text out of it")
 
     def draw(page: Image.Image, d: ImageDraw.ImageDraw, x: int, y: int) -> None:
         for c, stack in enumerate(stacks):
@@ -638,14 +660,17 @@ def _pieces(block: dict[str, Any], width: int, where: str) -> list[Piece]:
 
 
 def layout(page: Page) -> list[list[tuple[int, Piece]]]:
-    """Each page's pieces with the y they start at; refuses (exit code 3) a page file needing over MAX_PAGES."""
+    """Each page's pieces with the y they start at; refuses (exit code 3) a page file needing over MAX_PAGES,
+    as soon as it does, without measuring the blocks after that."""
     sheets: list[list[tuple[int, Piece]]] = [[]]
     seq = _stack(page.blocks, CONTENT_W, "blocks")
     y = TOP
-    for i, (gap, piece) in enumerate(seq):
+    following = next(seq, None)
+    while following is not None:
+        (gap, piece), following = following, next(seq, None)
         need = gap + piece.height
-        if piece.keep_with_next and i + 1 < len(seq):
-            need += seq[i + 1][0] + seq[i + 1][1].height
+        if piece.keep_with_next and following is not None:
+            need += following[0] + following[1].height
         if sheets[-1] and y + need > BOTTOM:
             if len(sheets) == MAX_PAGES:
                 raise PrinterError(f"the page file needs more than {MAX_PAGES} pages",

@@ -517,6 +517,77 @@ def test_longest_qr_data_fits_a_full_width_code():
     assert len(pages) == 1
 
 
+def _count_bitmaps(monkeypatch):
+    """Count image resizes and QR codes made and rasterised, from here on."""
+    import segno
+    made = SimpleNamespace(resized=0, codes=0, qr_bitmaps=0)
+    real_resize, real_make, real_bitmap = Image.Image.resize, segno.make, compose._qr_bitmap
+
+    def resize(self, *args, **kwargs):
+        made.resized += 1
+        return real_resize(self, *args, **kwargs)
+
+    def make(*args, **kwargs):
+        made.codes += 1
+        return real_make(*args, **kwargs)
+
+    def bitmap(*args):
+        made.qr_bitmaps += 1
+        return real_bitmap(*args)
+    monkeypatch.setattr(Image.Image, "resize", resize)
+    monkeypatch.setattr(segno, "make", make)
+    monkeypatch.setattr(compose, "_qr_bitmap", bitmap)
+    return made
+
+
+def test_many_images_needing_too_many_pages_are_refused_without_resizing_them(tmp_path, monkeypatch):
+    _photo(tmp_path, "tall.png", size=(100, 2000))
+    page = _parse({"blocks": [{"type": "image", "path": "tall.png", "height": 260}] * compose.MAX_BLOCKS}, tmp_path)
+    made = _count_bitmaps(monkeypatch)
+    with pytest.raises(PrinterError, match=f"needs more than {compose.MAX_PAGES} pages") as exc:
+        compose.compose_pages(page)
+    assert exc.value.exit_code == 3 and made.resized == 0
+
+
+def test_many_qr_codes_needing_too_many_pages_are_refused_without_drawing_them(monkeypatch):
+    page = _parse({"blocks": [{"type": "qr", "data": "x" * (compose.MAX_QR_DATA - 3) + f"{n:03}", "size": 150}
+                              for n in range(compose.MAX_BLOCKS)]})
+    made = _count_bitmaps(monkeypatch)
+    with pytest.raises(PrinterError, match=f"needs more than {compose.MAX_PAGES} pages"):
+        compose.compose_pages(page)
+    assert made.qr_bitmaps == 0 and made.resized == 0
+    assert made.codes <= 3 * (compose.MAX_PAGES + 1)  # measuring stopped at the page that did not fit
+
+
+def test_a_columns_block_taller_than_a_page_stops_measuring(monkeypatch):
+    cell = [{"type": "qr", "data": f"code {n}", "size": 15} for n in range(compose.MAX_CELL_BLOCKS)]
+    page = _parse({"blocks": [{"type": "columns", "columns": [cell, cell]}]})
+    made = _count_bitmaps(monkeypatch)
+    with pytest.raises(PrinterError, match="taller than a page"):
+        compose.layout(page)
+    assert made.qr_bitmaps == 0 and made.codes < compose.MAX_CELL_BLOCKS
+
+
+def test_a_qr_code_too_dense_is_refused_without_drawing_it(monkeypatch):
+    page = _parse({"blocks": [{"type": "qr", "data": "🎉" * compose.MAX_QR_DATA, "size": 15}]})
+    made = _count_bitmaps(monkeypatch)
+    with pytest.raises(PrinterError, match="too much data for a QR code 15 mm wide"):
+        compose.layout(page)
+    assert made.qr_bitmaps == 0
+
+
+def test_bitmaps_are_made_only_when_a_page_is_drawn(tmp_path, monkeypatch):
+    _photo(tmp_path)
+    page = _parse(EVERY_BLOCK, tmp_path)
+    made = _count_bitmaps(monkeypatch)
+    sheets = compose.layout(page)
+    assert made.resized == 0 and made.qr_bitmaps == 0
+    (img,) = compose.compose_pages(page)
+    assert img.size == (1240, 1754) and made.qr_bitmaps == 2 and made.resized >= 4  # 2 photos, 2 QR codes
+    for y, piece in sheets[0]:  # every block left ink where it was laid out
+        assert piece.space or _ink(img, (compose.MARGIN, y, compose.MARGIN + compose.CONTENT_W, y + max(piece.height, 1))) > 0
+
+
 # --- prt compose ---------------------------------------------------------------------------------------
 
 
