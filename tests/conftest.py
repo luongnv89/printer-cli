@@ -1,3 +1,4 @@
+import io
 import os
 import sys
 from pathlib import Path
@@ -19,6 +20,14 @@ def isolated_env(tmp_path, monkeypatch):
     monkeypatch.setenv("TERM", "xterm-256color")
     monkeypatch.setenv("LANG", "C.UTF-8")
     yield
+
+
+@pytest.fixture
+def stdin(monkeypatch):
+    """Feed bytes to the command's standard input: ``stdin(b'{"headline": ...}')``."""
+    def feed(data: bytes) -> None:
+        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(data), encoding="utf-8"))
+    return feed
 
 
 def clean_env(**extra):

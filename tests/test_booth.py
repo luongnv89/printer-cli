@@ -507,6 +507,43 @@ def test_story_file_missing(tmp_path):
     assert "story file not found" in str(exc.value) and exc.value.exit_code == 3
 
 
+def test_story_on_stdin_reads_like_the_same_file(tmp_path, stdin):
+    data = {"headline": "Café « l'été »", "story": "Line one…\nLine two", "byline": "By Zoë"}
+    stdin(json.dumps(data, ensure_ascii=False).encode())
+    assert booth.load_story(Path("-")) == booth.load_story(_story_file(tmp_path, data)) == Story(**data)
+
+
+@pytest.mark.parametrize("content, message", [
+    (b"", "story on stdin is not valid JSON"),
+    (b"{not json", "story on stdin is not valid JSON"),
+    (b"[1, 2]", "story on stdin must hold a JSON object"),
+    (b'{"headline": "H"}', "story on stdin is missing story"),
+    (b'{"headline": "H", "story": "S", "colour": "red"}', "unknown field(s) in story on stdin: colour"),
+    (b'{"headline": 5, "story": "S"}', "fields must be text: headline"),
+    (b'{"headline": "   ", "story": "S"}', "the story has an empty headline"),
+    (b"\xff\xfe\x00bad", "story on stdin is not UTF-8 text"),
+    (b"x" * (64 * 1024 + 1), "story on stdin is larger than 64 KiB"),
+])
+def test_story_on_stdin_errors_match_the_file_errors(stdin, content, message):
+    stdin(content)
+    with pytest.raises(PrinterError) as exc:
+        booth.load_story(Path("-"))
+    assert message in str(exc.value) and exc.value.exit_code == 3 and exc.value.hint
+
+
+def test_story_on_stdin_at_the_size_limit_is_read(stdin):
+    text = json.dumps({"headline": "H", "story": "S"})
+    stdin(text.encode() + b" " * (booth.MAX_STORY_FILE - len(text)))
+    assert booth.load_story(Path("-")) == Story("H", "S")
+
+
+def test_parse_story_reads_json_text():
+    assert booth.parse_story('{"headline": "H", "story": "S", "kicker": "K"}') == Story("H", "S", kicker="K")
+    with pytest.raises(PrinterError, match="story is missing headline") as exc:
+        booth.parse_story('{"story": "S"}')
+    assert exc.value.exit_code == 3
+
+
 @pytest.mark.parametrize("field", list(LIMITS))
 def test_length_limits(field):
     base = {"headline": "H", "story": "S"}

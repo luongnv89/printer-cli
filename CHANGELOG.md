@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+- `prt booth --story-file -` and `prt gazette --story-file -` read the story JSON from stdin, and `prt article -` reads the article from stdin (JSON when it starts with `{`, HTML when it starts with `<`, else plain text), so an agent can pipe its text in without writing a temporary file. The same size limits (64 KiB for a story, 5 MiB for an article) and checks apply as for a file: bad input on stdin exits with code 3 and nothing is printed.
+
 ## [0.2.0] - 2026-11-23
 
 ### Added

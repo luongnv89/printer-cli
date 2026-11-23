@@ -505,6 +505,20 @@ def test_story_flags_override_the_default(capsys, tmp_path, printer):
     assert code == 0 and printer.jobs() == _expected_pages([photo], story)
 
 
+def test_story_file_dash_reads_the_story_from_stdin(capsys, tmp_path, printer, stdin):
+    photo = _photo(tmp_path)
+    stdin(json.dumps({"headline": "Piped In", "story": "From stdin.", "byline": "By Zoë"}).encode())
+    code, _, _ = run(capsys, "-p", "demo", "gazette", str(photo), "--story-file", "-", "--yes")
+    assert code == 0 and printer.jobs() == _expected_pages([photo], Story("Piped In", "From stdin.", byline="By Zoë"))
+
+
+def test_bad_story_on_stdin_prints_nothing(capsys, tmp_path, printer, stdin):
+    stdin(b'{"headline": "H"}')
+    code, out, err = run(capsys, "-p", "demo", "gazette", str(_photo(tmp_path)), "--story-file", "-", "--yes")
+    assert code == 3 and out == "" and "story on stdin is missing story" in err
+    assert printer.made == [] and printer.jobs() == []
+
+
 def test_warns_when_text_is_cut_to_fit(capsys, tmp_path, printer):
     code, _, err = run(capsys, "-p", "demo", "gazette", str(_photo(tmp_path)), "--headline", "W" * 120, "--yes")
     assert code == 0 and "headline cut to fit the front page" in err

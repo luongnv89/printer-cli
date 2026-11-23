@@ -712,6 +712,24 @@ def test_booth_bad_story_sends_nothing(capsys, tmp_path, booth_printer):
     assert booth_printer.made == []
 
 
+def test_booth_story_file_dash_reads_stdin(capsys, tmp_path, booth_printer, stdin):
+    from prt.booth import Story
+    photo = _booth_photo(tmp_path)
+    stdin(json.dumps({"headline": "Piped In", "story": "From stdin.\nSecond."}).encode())
+    code, _, _ = run(capsys, "-p", "demo", "booth", str(photo), "--story-file", "-", "--byline", "By Jo", "--yes")
+    assert code == 0
+    assert booth_printer.jobs() == [_expected_page(photo, Story("Piped In", "From stdin.\nSecond.", byline="By Jo"))]
+
+
+@pytest.mark.parametrize("content, message", [(b"{oops", "story on stdin is not valid JSON"),
+                                              (b"x" * (64 * 1024 + 1), "larger than 64 KiB")])
+def test_booth_bad_story_on_stdin_sends_nothing(capsys, tmp_path, booth_printer, stdin, content, message):
+    stdin(content)
+    code, out, err = run(capsys, "-p", "demo", "booth", str(_booth_photo(tmp_path)), "--story-file", "-", "--yes")
+    assert code == 3 and out == "" and message in err
+    assert booth_printer.made == [] and booth_printer.jobs() == []
+
+
 def test_photo_booth_skill_matches_the_cli(capsys, tmp_path, monkeypatch, booth_printer):
     """Every flag the agent skill names exists, and its example story and commands work as written."""
     import re

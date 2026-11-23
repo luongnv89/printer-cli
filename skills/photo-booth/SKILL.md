@@ -69,6 +69,8 @@ All values are strings, and other fields are rejected. Use Latin letters: accent
 
 The maximums are what the command accepts, not what always fits. The `metro` page has the least room: a headline of about 70 characters fits on two full-size lines and about 100 on three smaller ones, and under a portrait photo a caption holds about 100. Longer text is cut with `…` after the last whole word that fits.
 
+If you cannot write files (a sandbox, a read-only folder), pass `--story-file -` and pipe the same JSON in on stdin instead, e.g. `printf '%s' '{"headline": "...", "story": "..."}' | prt booth photo.jpg --story-file - --yes`. A bad story on stdin fails exactly like a bad file, and nothing is printed.
+
 ### 4. Preview without printing
 
 ```bash
