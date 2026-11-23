@@ -1,14 +1,14 @@
 # printer-cli
 
-> printer-cli (`prt`) controls network printers from the terminal: status, ink, alerts, nozzle checks, head cleaning, printing and scanning over IPP, eSCL, SNMP and Epson ESC/P2. It also prints a photo as a newspaper front page, wizard or sports card, certificate, or wanted, missing-pet or movie poster (`prt booth`), a web article or X post as A4 magazine pages (`prt article`), photos as a vintage newspaper (`prt gazette`), and any page described as JSON blocks of headings, text, images, QR codes, columns and rules (`prt compose page.json`).
+> printer-cli (`prt`) controls network printers from the terminal: status, ink, alerts, nozzle checks, head cleaning, printing and scanning over IPP, eSCL, SNMP and Epson ESC/P2. It also prints a photo as a newspaper front page, wizard or sports card, certificate, or wanted, missing-pet or movie poster (`prt booth`), a greeting card that folds from one A4 sheet (`prt card`), a web article or X post as A4 magazine pages (`prt article`), photos as a vintage newspaper (`prt gazette`), and any page described as JSON blocks of headings, text, images, QR codes, columns and rules (`prt compose page.json`).
 
 Install with `uv tool install printer-cli` (or `uv tool install 'printer-cli[mcp]'` for the MCP server). Add `-p demo` to any command to try it without a printer.
 
 Notes for agents:
 
 - `-f json` gives JSON on stdout, and on failure a `{"error": {"code", "kind", "message", "hint"}}` object on the last line of stderr. Exit codes: 0 ok, 1 runtime error, 2 usage error, 3 bad input, 130 interrupted.
-- `prt styles -f json` lists every page style with its fields and character limits. `prt schema story|article|gazette|page` prints the JSON Schema of each input file; `page` is the block format `prt compose` reads.
-- `--preview FILE` renders without printing. The `-f json` line reports `fits` and `cut` (booth, gazette) and an ink `estimate`. `--story-file -`, `prt article -` and `prt compose -` read the input from stdin. An invalid page file is refused before anything is printed.
+- `prt styles -f json` lists every page style with its fields and character limits. `prt schema story|article|gazette|page|card` prints the JSON Schema of each input file; `page` is the block format `prt compose` reads.
+- `--preview FILE` renders without printing. The `-f json` line reports `fits` and `cut` (booth, card, gazette) and an ink `estimate`. `--story-file -`, `--card-file -`, `prt article -` and `prt compose -` read the input from stdin. An invalid page file is refused before anything is printed.
 - Set `PRT_AGENT=1` so nothing prints without `--yes`. `max_pages_per_run` and `max_pages_per_day` in `~/.config/prt/config.toml` cap the pages, and in agent mode the per-run cap defaults to 10. `prt print --wait` and `prt jobs wait ID` wait for a job to finish.
 - `prt mcp` is an MCP stdio server with the tools `status`, `ink`, `list_styles`, `preview_booth`, `preview_article` and `print_file`.
 - `prt skills install --claude` (or `--agents`) installs the bundled agent skills. The repository is also a Claude Code plugin: `/plugin marketplace add luongnv89/printer-cli`, then `/plugin install printer-cli@printer-cli`.
@@ -21,6 +21,7 @@ Notes for agents:
 ## Agent skills
 
 - [photo-booth](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/photo-booth/SKILL.md): write a short story for a photo and print it as a newspaper front page, trading card, certificate or poster with `prt booth`
+- [greeting-card](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/greeting-card/SKILL.md): write a verse for a photo and the occasion and print it as a greeting card that folds from one A4 sheet with `prt card`
 - [article-print](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/article-print/SKILL.md): print a blog post, news article or X post as magazine pages with `prt article`, fetching the text yourself when the command cannot
 - [letter-gazette](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/letter-gazette/SKILL.md): scan a handwritten letter with `prt scan`, transcribe it, and print the scan and the transcription as a vintage newspaper edition with `prt gazette`
 

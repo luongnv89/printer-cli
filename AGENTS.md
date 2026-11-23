@@ -1,6 +1,6 @@
 # AGENTS.md
 
-printer-cli (`prt`) is a CLI and TUI for network printers: status, ink, maintenance, printing and scanning over IPP, eSCL, SNMP and Epson ESC/P2. It can also print a photo as a newspaper front page, a wizard or sports card, a certificate, or a wanted, missing-pet or movie poster (`prt booth`), a web article as magazine pages (`prt article`), photos as a vintage newspaper (`prt gazette`) and any page described as blocks of headings, text, images, QR codes, columns and rules (`prt compose`). This file is for AI agents. The first part covers using `prt`, the second covers working on this repository. The [README](README.md) is the full user guide.
+printer-cli (`prt`) is a CLI and TUI for network printers: status, ink, maintenance, printing and scanning over IPP, eSCL, SNMP and Epson ESC/P2. It can also print a photo as a newspaper front page, a wizard or sports card, a certificate, or a wanted, missing-pet or movie poster (`prt booth`), a photo and a verse as a greeting card that folds from one A4 sheet (`prt card`), a web article as magazine pages (`prt article`), photos as a vintage newspaper (`prt gazette`) and any page described as blocks of headings, text, images, QR codes, columns and rules (`prt compose`). This file is for AI agents. The first part covers using `prt`, the second covers working on this repository. The [README](README.md) is the full user guide.
 
 ## Using prt
 
@@ -21,8 +21,8 @@ Add `-p demo` to any command to use the built-in demo printer, which needs no ha
 
 ### Find out what can be printed
 
-- `prt styles -f json` lists every booth, article and gazette style: the command and `args` that pick it, its fields with `required` and `max_length`, how many photos it takes, `max_pages`, its input `schema` and a `sample` image.
-- `prt schema story`, `prt schema article`, `prt schema gazette` and `prt schema page` print the JSON Schema (draft 2020-12) of the booth story file, the article JSON file, the gazette story file and the `prt compose` page file. A file that passes the schema is accepted, except for text in a script the page font cannot print, such as emoji or Chinese (and, for a page file, image files that cannot be read or a page longer than 10 pages).
+- `prt styles -f json` lists every booth, card, article and gazette style: the command and `args` that pick it, its fields with `required` and `max_length`, how many photos it takes, `max_pages`, its input `schema` and a `sample` image.
+- `prt schema story`, `prt schema article`, `prt schema gazette`, `prt schema page` and `prt schema card` print the JSON Schema (draft 2020-12) of the booth story file, the article JSON file, the gazette story file, the `prt compose` page file and the `prt card` card file. A file that passes the schema is accepted, except for text in a script the page font cannot print, such as emoji or Chinese (and, for a page file, image files that cannot be read or a page longer than 10 pages).
 
 ### Make a page no other command makes
 
@@ -44,20 +44,20 @@ Add `-p demo` to any command to use the built-in demo printer, which needs no ha
 
 ### Pass text without writing a file
 
-- `prt booth PHOTO --story-file -` and `prt gazette PHOTO… --story-file -` read the story JSON from stdin.
+- `prt booth PHOTO --story-file -` and `prt gazette PHOTO… --story-file -` read the story JSON from stdin, and `prt card PHOTO --card-file -` the card JSON (`greeting` and `verse` required; `message`, `signature`, `back` optional).
 - `prt article -` reads the article from stdin: JSON when it starts with `{`, HTML when it starts with `<`, plain text otherwise.
 - Bad input on stdin fails like a bad file (exit `3`), and nothing is printed.
 
 ### Preview, then print
 
 1. Render without printing: `prt booth photo.jpg --story-file story.json --preview page.jpg -f json` (or `prt compose page.json --preview page.pdf -f json`). `--preview` (also `-o`) writes `.pdf`, `.png`, `.jpg` or `.jpeg` and sends nothing to the printer.
-2. Check the fit. For `booth` and `gazette`, the JSON line has `"fits"` and `"cut"`. When text was cut with `…`, `cut` gives each field's `max_fit` (characters printed) and `given`. Shorten each field to `max_fit` and preview again. `"fits": true, "cut": {}` means everything fitted. Article text is never cut, because it runs on over more pages.
-3. Check the cost. With `-f json`, `booth`, `article`, `gazette` and `compose` add an `estimate`, e.g. `{"pages": 3, "colour": true, "ink": {…}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`.
+2. Check the fit. For `booth`, `card` and `gazette`, the JSON line has `"fits"` and `"cut"`. When text was cut with `…`, `cut` gives each field's `max_fit` (characters printed) and `given`. Shorten each field to `max_fit` and preview again. `"fits": true, "cut": {}` means everything fitted. Article text is never cut, because it runs on over more pages.
+3. Check the cost. With `-f json`, `booth`, `card`, `article`, `gazette` and `compose` add an `estimate`, e.g. `{"pages": 3, "colour": true, "ink": {…}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`.
 4. Print with `--yes`. Without a terminal, a command that would ask for confirmation fails with kind `confirmation_required` instead.
 
 ### Guardrails
 
-- Run agents with `PRT_AGENT=1`. Every command that prints or uses ink (`print`, `booth`, `article`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean`) then refuses to run without `--yes`, even at a terminal (exit `2`, kind `agent_confirmation_required`). `--preview` never needs `--yes`.
+- Run agents with `PRT_AGENT=1`. Every command that prints or uses ink (`print`, `booth`, `card`, `article`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean`) then refuses to run without `--yes`, even at a terminal (exit `2`, kind `agent_confirmation_required`). `--preview` never needs `--yes`.
 - Page caps: `max_pages_per_run` and `max_pages_per_day` at the top of `~/.config/prt/config.toml`. In agent mode the per-run cap defaults to 10. A print over a cap is refused whole before anything is sent (exit `1`, kind `page_cap_exceeded` or `daily_page_cap_exceeded`). Tell the user instead of retrying, and never raise a cap yourself.
 - Head cleaning is refused while ink is low or the waste pad is nearly full. Do not pass `--force` unless the user asks for it.
 
@@ -79,7 +79,7 @@ The tools are `status`, `ink`, `list_styles`, `preview_booth`, `preview_article`
 
 ### Skills and the Claude Code plugin
 
-Three agent skills come with prt: `photo-booth` (write a story for a photo and print it with `prt booth`), `article-print` (print an article, fetching the text yourself when `prt article` cannot) and `letter-gazette` (scan a handwritten letter with `prt scan --format jpeg`, transcribe it, and print the scan and the transcription with `prt gazette`). They live in [`skills/`](skills). With `-p demo` a JPEG scan is a sample handwritten letter, so the letter workflow runs without a printer.
+Four agent skills come with prt: `photo-booth` (write a story for a photo and print it with `prt booth`), `greeting-card` (write a verse for a photo and the occasion and print it as a folding card with `prt card`), `article-print` (print an article, fetching the text yourself when `prt article` cannot) and `letter-gazette` (scan a handwritten letter with `prt scan --format jpeg`, transcribe it, and print the scan and the transcription with `prt gazette`). They live in [`skills/`](skills). With `-p demo` a JPEG scan is a sample handwritten letter, so the letter workflow runs without a printer.
 
 ```bash
 prt skills list                     # the bundled skills
@@ -120,13 +120,14 @@ The tests use the demo printer (`FakeDriver` replaying `src/prt/fixtures/epson-x
 | `src/prt/drivers/` | The driver contract (`base.py`, with `PrinterError` and its `kind`), the IPP, Epson and fake drivers, and the registry |
 | `src/prt/transport/` | The IPP codec, the eSCL scanner client and the SNMP client |
 | `src/prt/booth.py`, `article.py`, `vintage.py`, `layout.py`, `render.py` | Page layout for booth, article and gazette, and the render steps the CLI and the MCP server share |
+| `src/prt/card.py` | `prt card`: the card file checks, the four panels and their imposition on the A4 sheet |
 | `src/prt/compose.py` | `prt compose`: the page file's schema, the checker that validates page files against that same schema, image loading and the block layout |
 | `src/prt/catalog.py` | The styles and JSON Schemas behind `prt styles` and `prt schema` |
 | `src/prt/guard.py` | Agent mode, the page caps, the daily page ledger and the ink estimate |
 | `src/prt/mcp_server.py` | `prt mcp`. `Tools` holds the tools without the SDK |
 | `src/prt/skills.py` | `prt skills list` and `prt skills install` |
 | `src/prt/tui/` | The Textual dashboard (`prt tui`) |
-| `skills/` | The agent skills (`photo-booth`, `article-print`, `letter-gazette`). The wheel carries a copy as `prt/bundled_skills` (`force-include` in `pyproject.toml`) |
+| `skills/` | The agent skills (`photo-booth`, `greeting-card`, `article-print`, `letter-gazette`). The wheel carries a copy as `prt/bundled_skills` (`force-include` in `pyproject.toml`) |
 | `.claude-plugin/` | The Claude Code plugin manifest and the marketplace that lists it |
 
 ### Conventions
@@ -134,6 +135,6 @@ The tests use the demo printer (`FakeDriver` replaying `src/prt/fixtures/epson-x
 - Every user-visible change gets an entry under `## [Unreleased]` in `CHANGELOG.md`, and the README section that describes the behaviour is updated with it.
 - Errors are `PrinterError(message, hint, exit_code, kind)`. A new failure that a script could branch on gets its own `kind`, added to the kinds table in the README.
 - Every command that prints goes through `guard.check` / `guard.reserve` (see `_authorize` in `cli.py`).
-- A change to `prt booth`, `prt article`, `prt gazette`, `prt scan` or their flags is also a change to the matching skill in `skills/`. Keep the skill's examples true.
+- A change to `prt booth`, `prt card`, `prt article`, `prt gazette`, `prt scan` or their flags is also a change to the matching skill in `skills/`. Keep the skill's examples true.
 - `version` in `.claude-plugin/plugin.json` must match `pyproject.toml` (a test checks this), because the plugin version pins plugin users to it.
 - Commit messages follow Conventional Commits: `feat(scope): description (#issue)`.

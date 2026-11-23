@@ -1,4 +1,4 @@
-"""Booth, article and compose pages as callable steps, shared by the CLI commands and the MCP server.
+"""Booth, card, article and compose pages as callable steps, shared by the CLI commands and the MCP server.
 
 Each front end reads its own input (files and flags, or MCP tool arguments) and decides how to show the result;
 what happens in between is here: lay the pages out, say what did not fit and what printing them would cost, and
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
     from prt.article import Article
     from prt.booth import Story
+    from prt.card import Card
     from prt.compose import Page
     from prt.drivers.base import Driver
     from prt.layout import Cut
@@ -55,6 +56,14 @@ def booth_page(photo: Image.Image, story: Story, style: str) -> Rendered:
     """One booth page of ``photo`` in ``style`` (see ``booth.STYLES``)."""
     from prt import booth
     page, cut = booth.compose(photo, story, style)
+    return Rendered([page], cut)
+
+
+def card_page(photo: Image.Image, card: Card) -> Rendered:
+    """The greeting card sheet of ``photo`` and ``card`` (see ``card.compose``): four panels on one A4 sheet,
+    laid out to fold into a card."""
+    from prt import card as cards
+    page, cut = cards.compose(photo, card)
     return Rendered([page], cut)
 
 

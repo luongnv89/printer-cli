@@ -12,6 +12,7 @@ These images are the sample pages shown in the main README. They were rendered w
 | `booth-sports.jpg` | `prt booth astronaut.jpg --style sports -o booth-sports.png` |
 | `booth-missing.jpg` | `prt booth astronaut.jpg --style missing -o booth-missing.png` |
 | `booth-movie.jpg` | `prt booth astronaut.jpg --style movie -o booth-movie.png` |
+| `card.jpg` | `prt card astronaut.jpg -o card.png` |
 | `article-magazine.jpg` | `prt article article.json -o article-magazine.png` |
 | `article-classic.jpg` | `prt article article.json --style classic-magazine -o article-classic.png` (page 1) |
 | `gazette.jpg` | `prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file story.json -o gazette.png` |

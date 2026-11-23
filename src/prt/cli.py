@@ -888,6 +888,79 @@ def _save_booth_page(data: bytes, path: Path) -> int:
     return len(data)
 
 
+@app.command("card")
+def card_cmd(
+    photo: Path = typer.Argument(..., help="Photo for the front of the card: JPEG, PNG, WebP, GIF, BMP or TIFF."),
+    card_file: Optional[Path] = typer.Option(None, "--card-file",
+                                             help="JSON card: greeting and verse required; message, signature, "
+                                                  "back optional. Use - to read it from stdin."),
+    greeting: Optional[str] = typer.Option(None, "--greeting",
+                                           help="Greeting on the front, under the photo, e.g. 'Happy Birthday!' "
+                                                "(overrides the card file)."),
+    verse: Optional[str] = typer.Option(None, "--verse",
+                                        help="Verse on the inside right; a newline starts a new line, a blank "
+                                             "line a new stanza."),
+    message: Optional[str] = typer.Option(None, "--message",
+                                          help="Short note on the inside left; without one that panel is left "
+                                               "blank to write on."),
+    signature: Optional[str] = typer.Option(None, "--signature",
+                                            help="Line under the verse, e.g. 'With love, Jo'."),
+    back: Optional[str] = typer.Option(None, "--back", help="Small line on the back of the card."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save the sheet here instead of printing; the extension picks "
+                                                "the file type: .pdf, .png, .jpg or .jpeg."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of the sheet here (.pdf, .png, .jpg or "
+                                                   ".jpeg) before printing it; repeat for more files."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Greeting card: print a photo and a verse on one A4 sheet that folds into a card (A6).
+
+    Fold the sheet in half from top to bottom with the printed side out, then in half again with the photo on the
+    front. Without a card the built-in one is printed. Card flags override --card-file.
+    """
+    from prt import booth, card, vintage
+    # Decode and check every input before a file is written or a driver exists, so a bad file name or
+    # bad input never leaves a partial result or reaches the printer.
+    preview_format = booth.format_for(preview) if preview else None
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    inputs = [photo] + ([card_file] if card_file and str(card_file) != booth.STDIN else [])
+    vintage.check_outputs([path for path in [preview] + [p for p, _ in copies] if path], inputs)
+    image = booth.load_photo(photo)
+    text = card.with_overrides(card.load_card(card_file) if card_file else card.DEFAULT_CARD, greeting=greeting,
+                               verse=verse, message=message, signature=signature, back=back)
+    rendered = render.card_page(image, text)
+    page, cut = rendered.pages[0], rendered.cut
+    if cut:
+        STATE.note("warn", f"{', '.join(cut)} cut to fit the card", "shorten it, or check the card with --preview")
+    if preview:
+        preview_size = _save_booth_page(booth.to_bytes(page, preview_format), preview)
+        STATE.note("ok", f"saved {preview}", f"greeting card · {preview_format.upper()} · "
+                                             f"{preview_size / 1024:,.0f} KiB · not printed")
+        STATE.note("info", card.FOLD)
+    # Copies are written before connecting, so they exist even when the printer is unreachable.
+    saved = []
+    for path, fmt in copies:
+        size = _save_booth_page(booth.to_bytes(page, fmt), path)
+        STATE.note("ok", f"saved {path}", f"greeting card · {fmt.upper()} · {size / 1024:,.0f} KiB")
+        saved.append({"file": str(path), "format": fmt, "bytes": size})
+    extra = {"saved": saved} if save else {}
+    report = {**rendered.fit(), **rendered.estimate(), "fold": card.FOLD} if STATE.json else {}
+    if preview:
+        if STATE.json:
+            STATE.write(json.dumps({"action": "card", "file": str(preview), "bytes": preview_size, **report,
+                                    **extra}) + "\n")
+        return
+    d = STATE.driver()
+    d.require(Capability.PRINT)
+    with _authorize(1, yes, f"Print {photo.name} as a {card.KIND} on {d.display_name}?") as ticket:
+        job, = render.send_pages(d, [booth.to_jpeg(page)], [f"prt card {photo.name}"], ticket)
+    STATE.note("ok", f"card queued as job {job}", d.display_name)
+    STATE.note("info", card.FOLD)
+    if STATE.json:
+        STATE.write(json.dumps({"action": "card", "job_id": job, **report, **extra}) + "\n")
+
+
 class ArticleStyle(str, Enum):
     magazine = "magazine"
     classic_magazine = "classic-magazine"
@@ -1116,7 +1189,7 @@ def compose_cmd(
 
 @app.command("styles")
 def styles_cmd() -> None:
-    """List every page style of booth, article and gazette: what it prints and the options that pick it.
+    """List every page style of booth, card, article and gazette: what it prints and the options that pick it.
 
     With -f json each style also lists its fields, their character limits, how many photos it takes and a
     link to a sample page. `prt schema NAME` prints the JSON Schema of a style's input file.
@@ -1144,9 +1217,10 @@ def _schema_names(incomplete: str) -> list[str]:
 
 @app.command("schema")
 def schema_cmd(name: str = typer.Argument(..., metavar="NAME", autocompletion=_schema_names,
-                                          help="story, article, gazette or page.")) -> None:
+                                          help="story, article, gazette, page or card.")) -> None:
     """Print the JSON Schema of an input file: story (prt booth --story-file), article (an article JSON file for
-    prt article), gazette (prt gazette --story-file) or page (a page file for prt compose).
+    prt article), gazette (prt gazette --story-file), page (a page file for prt compose) or card (prt card
+    --card-file).
 
     A file that passes the schema is accepted by the command. The schema is JSON whatever -f says.
     """
