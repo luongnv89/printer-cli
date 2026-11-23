@@ -79,7 +79,7 @@ The tools are `status`, `ink`, `list_styles`, `preview_booth`, `preview_article`
 
 ### Skills and the Claude Code plugin
 
-Two agent skills come with prt: `photo-booth` (write a story for a photo and print it with `prt booth`) and `article-print` (print an article, fetching the text yourself when `prt article` cannot). They live in [`skills/`](skills).
+Three agent skills come with prt: `photo-booth` (write a story for a photo and print it with `prt booth`), `article-print` (print an article, fetching the text yourself when `prt article` cannot) and `letter-gazette` (scan a handwritten letter with `prt scan --format jpeg`, transcribe it, and print the scan and the transcription with `prt gazette`). They live in [`skills/`](skills). With `-p demo` a JPEG scan is a sample handwritten letter, so the letter workflow runs without a printer.
 
 ```bash
 prt skills list                     # the bundled skills
@@ -91,7 +91,7 @@ prt skills install --dir PATH       # into any skills folder
 
 `prt skills install` never replaces an installed file that differs from the bundled one. It refuses with kind `skill_exists`, writes nothing, and `--force` replaces the file. Reinstalling unchanged skills does nothing.
 
-In Claude Code the repository is also a plugin, with both skills and the `prt mcp` server:
+In Claude Code the repository is also a plugin, with the three skills and the `prt mcp` server:
 
 ```text
 /plugin marketplace add luongnv89/printer-cli
@@ -126,7 +126,7 @@ The tests use the demo printer (`FakeDriver` replaying `src/prt/fixtures/epson-x
 | `src/prt/mcp_server.py` | `prt mcp`. `Tools` holds the tools without the SDK |
 | `src/prt/skills.py` | `prt skills list` and `prt skills install` |
 | `src/prt/tui/` | The Textual dashboard (`prt tui`) |
-| `skills/` | The agent skills. The wheel carries a copy as `prt/bundled_skills` (`force-include` in `pyproject.toml`) |
+| `skills/` | The agent skills (`photo-booth`, `article-print`, `letter-gazette`). The wheel carries a copy as `prt/bundled_skills` (`force-include` in `pyproject.toml`) |
 | `.claude-plugin/` | The Claude Code plugin manifest and the marketplace that lists it |
 
 ### Conventions
@@ -134,6 +134,6 @@ The tests use the demo printer (`FakeDriver` replaying `src/prt/fixtures/epson-x
 - Every user-visible change gets an entry under `## [Unreleased]` in `CHANGELOG.md`, and the README section that describes the behaviour is updated with it.
 - Errors are `PrinterError(message, hint, exit_code, kind)`. A new failure that a script could branch on gets its own `kind`, added to the kinds table in the README.
 - Every command that prints goes through `guard.check` / `guard.reserve` (see `_authorize` in `cli.py`).
-- A change to `prt booth`, `prt article` or their flags is also a change to the matching skill in `skills/`. Keep the skill's examples true.
+- A change to `prt booth`, `prt article`, `prt gazette`, `prt scan` or their flags is also a change to the matching skill in `skills/`. Keep the skill's examples true.
 - `version` in `.claude-plugin/plugin.json` must match `pyproject.toml` (a test checks this), because the plugin version pins plugin users to it.
 - Commit messages follow Conventional Commits: `feat(scope): description (#issue)`.

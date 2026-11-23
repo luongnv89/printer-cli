@@ -22,6 +22,7 @@ Notes for agents:
 
 - [photo-booth](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/photo-booth/SKILL.md): write a short story for a photo and print it as a newspaper front page, wizard card or wanted poster with `prt booth`
 - [article-print](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/article-print/SKILL.md): print a blog post, news article or X post as magazine pages with `prt article`, fetching the text yourself when the command cannot
+- [letter-gazette](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/letter-gazette/SKILL.md): scan a handwritten letter with `prt scan`, transcribe it, and print the scan and the transcription as a vintage newspaper edition with `prt gazette`
 
 ## Optional
 

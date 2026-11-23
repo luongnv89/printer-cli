@@ -490,6 +490,32 @@ def test_one_photo_prints_one_page(capsys, tmp_path, printer):
     assert "1 page queued as job 101" in err
 
 
+def test_scanned_letter_becomes_a_gazette_on_the_demo_printer(capsys, tmp_path, printer, monkeypatch):
+    """The letter-gazette skill's workflow: scan a letter as JPEG, transcribe it, preview, then print it."""
+    monkeypatch.setenv("PRT_AGENT", "1")
+    letter = tmp_path / "letter.jpg"
+    code, _, _ = run(capsys, "-p", "demo", "scan", "--format", "jpeg", "-o", str(letter))
+    assert code == 0
+    from prt.drivers.fake import DEMO_LETTER
+    story = {"kicker": "Letters to the editor", "headline": "Bake Sale Raises 212 Euros for Library Roof",
+             "byline": "From a letter by Margot Lane", "caption": "The letter as it reached our desk.",
+             "story": "\n".join(DEMO_LETTER[1:])}
+    (tmp_path / "story.json").write_text(json.dumps(story))
+    args = ["-p", "demo", "-f", "json", "gazette", str(letter), "--story-file", str(tmp_path / "story.json")]
+    code, out, _ = run(capsys, *args, "--preview", str(tmp_path / "edition.pdf"))
+    assert code == 0 and printer.jobs() == []
+    preview = json.loads(out)
+    assert (preview["pages"], preview["fits"], preview["cut"]) == (1, True, {})
+    assert (tmp_path / "edition.pdf").read_bytes().startswith(b"%PDF")
+    code, _, err = run(capsys, *args)  # agent mode: nothing prints without --yes
+    assert code == 2 and json.loads(err.splitlines()[-1])["error"]["kind"] == "agent_confirmation_required"
+    assert printer.jobs() == []
+    code, out, _ = run(capsys, *args, "--yes")
+    assert code == 0 and len(printer.jobs()) == 1
+    assert without_estimate(out) == {"action": "gazette", "photos": 1, "pages": 1, "fits": True, "cut": {},
+                                     "job_ids": [101]}
+
+
 def test_several_photos_print_one_job_per_page(capsys, tmp_path, printer):
     photos = _trip(tmp_path, 4)
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "gazette", *map(str, photos), "--yes")

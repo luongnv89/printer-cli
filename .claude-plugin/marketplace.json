@@ -9,7 +9,7 @@
     {
       "name": "printer-cli",
       "source": "./",
-      "description": "The photo-booth and article-print skills, and the prt MCP server (status, ink, previews, printing). Needs printer-cli installed: uv tool install 'printer-cli[mcp]'.",
+      "description": "The photo-booth, article-print and letter-gazette skills, and the prt MCP server (status, ink, previews, printing). Needs printer-cli installed: uv tool install 'printer-cli[mcp]'.",
       "category": "productivity",
       "tags": ["printer", "printing", "mcp"]
     }
