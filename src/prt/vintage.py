@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import unicodedata
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -33,11 +34,25 @@ INK = (26, 26, 26)  # #1a1a1a
 RULE = 2  # a hairline: about one CSS pixel at 150 dpi
 INSET = 45  # the cream stops this far inside the sheet: the printer cannot print to the edge, so it leaves white
 
+
+@dataclass(frozen=True)
+class Sheet:
+    """The page the gazette is laid out on, in pixels at 150 dpi."""
+    width: int
+    height: int
+    margin: int
+    content_w: int  # between the margins
+    bottom: int  # lowest y text and photos reach
+    inset: int  # white rim round the cream
+
+
+PORTRAIT = Sheet(W, H, MARGIN, CONTENT_W, BOTTOM, INSET)
+
 FIRST = 3  # photos on the front page: the lead picture and a row of two plates
 PER_PAGE = 6  # plates on every later page, in a 2 × 3 grid
 MAX_PAGES = 10
 MAX_PHOTOS = FIRST + (MAX_PAGES - 1) * PER_PAGE  # more is refused, never cut short
-LEAD_LIMIT = CONTENT_W  # longest side a photo is kept at once decoded: the lead is never wider than the text
+LEAD_LIMIT = PORTRAIT.content_w  # longest side a photo is kept at once decoded: the lead is never wider than the text
 PLATE_LIMIT = 540  # and a plate never wider than half of it
 
 MASTHEAD = "The Photo Gazette"
@@ -196,7 +211,7 @@ def _fit_face(text: str, role: str, size: int, min_size: int, width: int, max_li
 
 
 def _centred(d: ImageDraw.ImageDraw, y: int, text: str, role: str, size: int, min_size: int, lines: int,
-             x0: int = MARGIN, width: int = CONTENT_W) -> tuple[int, bool]:
+             x0: int, width: int) -> tuple[int, bool]:
     """Fit ``text`` in ``lines`` lines centred in ``width`` from ``x0``; returns (y below, cut)."""
     font, s, wrapped, cut = _fit_face(text, role, size, min_size, width, lines)
     return _text_block(d, x0, y, wrapped, font, s, INK, width=width), cut
@@ -240,14 +255,15 @@ def _fit_caps(text: str, role: str, size: int, min_size: int, width: int) -> tup
     return _caps(text.rstrip() + ELLIPSIS, role, s), s, True
 
 
-def _rule(d: ImageDraw.ImageDraw, y: int, x0: int = MARGIN, x1: int = W - MARGIN) -> None:
-    d.line([(x0, y), (x1, y)], fill=INK, width=RULE)
+def _rule(d: ImageDraw.ImageDraw, y: int, sheet: Sheet) -> None:
+    """A hairline from margin to margin."""
+    d.line([(sheet.margin, y), (sheet.width - sheet.margin, y)], fill=INK, width=RULE)
 
 
-def _double(d: ImageDraw.ImageDraw, y: int) -> int:
+def _double(d: ImageDraw.ImageDraw, y: int, sheet: Sheet) -> int:
     """A double rule from y; returns the y below it."""
-    _rule(d, y)
-    _rule(d, y + 5)
+    _rule(d, y, sheet)
+    _rule(d, y + 5, sheet)
     return y + 7
 
 
@@ -280,80 +296,81 @@ def _story(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int]) ->
     return bool(left)
 
 
-def _story_height(text: str, size: int) -> int:
+def _story_height(text: str, size: int, width: int) -> int:
     font = fonts.face("body", size)
     lines = _paragraphs("\n".join(_printable_face(p, font) for p in text.split("\n")), font,
-                        _col_width(CONTENT_W, 2, GUTTER))
+                        _col_width(width, 2, GUTTER))
     return _rows(len(lines), 2) * _lead(size)
 
 
-def _page_mark(d: ImageDraw.ImageDraw, number: int, total: int) -> None:
+def _page_mark(d: ImageDraw.ImageDraw, number: int, total: int, sheet: Sheet) -> None:
     """Closing double rule and "Page n of N" at the foot of the page."""
-    y = _double(d, BOTTOM - 36)
+    y = _double(d, sheet.bottom - 36, sheet)
     text = f"Page {number} of {total}" + (f" · continued on page {number + 1}" if number < total else "")
     runs = _caps(text, "body-bold", 18)
-    _draw_caps(d, (W - _caps_width(runs)) / 2, y + 24, runs)
+    _draw_caps(d, (sheet.width - _caps_width(runs)) / 2, y + 24, runs)
 
 
-def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: list[int],
-           total: int) -> tuple[list[Placement], list[str]]:
+def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: list[int], total: int,
+           sheet: Sheet) -> tuple[list[Placement], list[str]]:
     """Masthead, dateline, headline, lead photo, a row of up to two plates, and the story in ruled columns."""
     d = ImageDraw.Draw(page)
+    left, width, right = sheet.margin, sheet.content_w, sheet.width - sheet.margin
     cut: list[str] = []
-    y = MARGIN
-    _rule(d, y)
+    y = sheet.margin
+    _rule(d, y, sheet)
     y += 18
-    size = next(s for s in range(132, 40, -4) if fonts.face("masthead", s).getlength(MASTHEAD) <= CONTENT_W - 80)
+    size = next(s for s in range(132, 40, -4) if fonts.face("masthead", s).getlength(MASTHEAD) <= width - 80)
     mast = fonts.face("masthead", size)
     top, bottom = mast.getbbox(MASTHEAD)[1::2]
-    d.text(((W - mast.getlength(MASTHEAD)) / 2, y - top), MASTHEAD, font=mast, fill=INK)
+    d.text(((sheet.width - mast.getlength(MASTHEAD)) / 2, y - top), MASTHEAD, font=mast, fill=INK)
     y += bottom - top + 16
-    y, _ = _centred(d, y, TAGLINE, "body-italic", 24, 24, 1)
-    y = _double(d, y + 4)
+    y, _ = _centred(d, y, TAGLINE, "body-italic", 24, 24, 1, left, width)
+    y = _double(d, y + 4, sheet)
     parts = [_caps(text, "body-bold", 18) for text in (booth._today(), EDITION, PRICE)]
     baseline = y + 30
-    _draw_caps(d, MARGIN, baseline, parts[0])
-    _draw_caps(d, (W - _caps_width(parts[1])) / 2, baseline, parts[1])
-    _draw_caps(d, W - MARGIN - _caps_width(parts[2]), baseline, parts[2])
-    y = _double(d, baseline + 12) + 22
+    _draw_caps(d, left, baseline, parts[0])
+    _draw_caps(d, (sheet.width - _caps_width(parts[1])) / 2, baseline, parts[1])
+    _draw_caps(d, right - _caps_width(parts[2]), baseline, parts[2])
+    y = _double(d, baseline + 12, sheet) + 22
 
     if story.kicker:
-        runs, ks, cut_kicker = _fit_caps(story.kicker, "body-bold", 24, 16, CONTENT_W)
-        _draw_caps(d, (W - _caps_width(runs)) / 2, y + ks, runs)
+        runs, ks, cut_kicker = _fit_caps(story.kicker, "body-bold", 24, 16, width)
+        _draw_caps(d, (sheet.width - _caps_width(runs)) / 2, y + ks, runs)
         y += ks + 18
         cut += ["kicker"] * cut_kicker
-    y, cut_headline = _centred(d, y, story.headline.upper(), "display-black", 64, 36, 3)
+    y, cut_headline = _centred(d, y, story.headline.upper(), "display-black", 64, 36, 3, left, width)
     cut += ["headline"] * cut_headline
-    _rule(d, y + 4)
+    _rule(d, y + 4, sheet)
     y += 18
     if story.byline:
-        y, cut_byline = _centred(d, y, story.byline, "body-italic", 22, 18, 1)
+        y, cut_byline = _centred(d, y, story.byline, "body-italic", 22, 18, 1, left, width)
         cut += ["byline"] * cut_byline
     y += 8
 
     lead, plates = photos[indices[0]], indices[1:]
     cap = _fit_face(f"Fig. {indices[0] + 1}. {story.caption}" if story.caption else f"Fig. {indices[0] + 1}",
-                    "body-italic", 22, 18, CONTENT_W - 80, 2)
+                    "body-italic", 22, 18, width - 80, 2)
     cut += ["caption"] * cap[3]
     caption_h = len(cap[2]) * _lead(cap[1])
     plates_h = 10 + PLATE_H + 2 * FRAME + 6 + _lead(20) if plates else 0
-    story_bottom = BOTTOM - 52
+    story_bottom = sheet.bottom - 52
     # Room for the lead and the story: below the lead come its frame, caption, the plate row and a rule.
     room = story_bottom - y - (2 * FRAME + 6 + caption_h + plates_h + 36)
     # A short story leaves paper to spare: the lead grows into it, up to the full width of a wide photo.
-    largest = min(LEAD_MAX if plates else LEAD_MAX_SOLO, round((CONTENT_W - 2 * FRAME) * lead.height / lead.width))
-    height = max(LEAD_MIN, min(largest, room - _story_height(story.story, BODY)))
+    largest = min(LEAD_MAX if plates else LEAD_MAX_SOLO, round((width - 2 * FRAME) * lead.height / lead.width))
+    height = max(LEAD_MIN, min(largest, room - _story_height(story.story, BODY, width)))
     # The whole photo, never cropped: a portrait lead is narrower, a panorama shallower.
-    x0, top, x1, bottom = _contain(lead, y + FRAME, MARGIN + FRAME, CONTENT_W - 2 * FRAME, height)
+    x0, top, x1, bottom = _contain(lead, y + FRAME, left + FRAME, width - 2 * FRAME, height)
     box = (x0, y + FRAME, x1, y + FRAME + bottom - top)  # set at the top: what it leaves goes to the story
     _place(page, lead, box)
     placements = [(indices[0], box)]
-    y = _text_block(d, MARGIN + 40, box[3] + FRAME + 6, cap[2], cap[0], cap[1], INK, width=CONTENT_W - 80)
+    y = _text_block(d, left + 40, box[3] + FRAME + 6, cap[2], cap[0], cap[1], INK, width=width - 80)
 
     if plates:
         y += 10
-        cell_w = _col_width(CONTENT_W, 2, GUTTER)
-        cells = [MARGIN, MARGIN + cell_w + GUTTER] if len(plates) == 2 else [(W - cell_w) // 2]
+        cell_w = _col_width(width, 2, GUTTER)
+        cells = [left, left + cell_w + GUTTER] if len(plates) == 2 else [(sheet.width - cell_w) // 2]
         label_y = y + PLATE_H + 2 * FRAME + 6
         for k, cx in zip(plates, cells):
             box = _contain(photos[k], y + FRAME, cx + FRAME, cell_w - 2 * FRAME, PLATE_H)
@@ -361,37 +378,39 @@ def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: 
             placements.append((k, box))
             _centred(d, label_y, f"Fig. {k + 1}", "body-italic", 20, 20, 1, cx, cell_w)
         if len(plates) == 2:
-            rx = MARGIN + cell_w + GUTTER // 2
+            rx = left + cell_w + GUTTER // 2
             d.line([(rx, y), (rx, label_y + _lead(20))], fill=INK, width=RULE)
         y = label_y + _lead(20)
 
     y += 16
-    _rule(d, y)
-    if _story(d, story.story, (MARGIN, y + 20, W - MARGIN, story_bottom)):
+    _rule(d, y, sheet)
+    if _story(d, story.story, (left, y + 20, right, story_bottom)):
         cut.append("story")
-    _page_mark(d, 1, total)
+    _page_mark(d, 1, total, sheet)
     return placements, cut
 
 
-def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], number: int,
-            total: int) -> list[Placement]:
+def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], number: int, total: int,
+            sheet: Sheet) -> list[Placement]:
     """Running head with the page mark, a section title, then up to six plates in a ruled 2 × 3 grid, each with
     its figure number."""
     d = ImageDraw.Draw(page)
+    left, width = sheet.margin, sheet.content_w
     head = fonts.face("masthead", 48)
     top, bottom = head.getbbox(MASTHEAD)[1::2]
-    d.text((MARGIN, MARGIN - top), MASTHEAD, font=head, fill=INK)
+    d.text((left, sheet.margin - top), MASTHEAD, font=head, fill=INK)
     mark = _caps(f"{booth._today()} · Page {number} of {total}", "body-bold", 18)
-    _draw_caps(d, W - MARGIN - _caps_width(mark), MARGIN + bottom - top, mark)
-    y = _double(d, MARGIN + bottom - top + 14) + 14
+    _draw_caps(d, sheet.width - left - _caps_width(mark), sheet.margin + bottom - top, mark)
+    y = _double(d, sheet.margin + bottom - top + 14, sheet) + 14
     first, last = indices[0] + 1, indices[-1] + 1
-    y, _ = _centred(d, y, f"PLATES {first}–{last}" if last > first else f"PLATE {first}", "display-bold", 32, 32, 1)
-    _rule(d, y + 2)
+    y, _ = _centred(d, y, f"PLATES {first}–{last}" if last > first else f"PLATE {first}", "display-bold", 32, 32, 1,
+                    left, width)
+    _rule(d, y + 2, sheet)
     y += 22
 
-    cell_w = _col_width(CONTENT_W, 2, GUTTER)
+    cell_w = _col_width(width, 2, GUTTER)
     rows = -(-len(indices) // 2)  # only the rows in use share the page
-    cell_h = (BOTTOM - 16 - y) // rows
+    cell_h = (sheet.bottom - 16 - y) // rows
     label = _lead(20) + 12
     # A photo box no taller than a plate is kept, so a page of one or two never blows a plate up soft.
     box_h = min(cell_h - 32 - 2 * FRAME - label, PLATE_LIMIT)
@@ -399,7 +418,7 @@ def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], nu
     for row in range(rows):
         pair = indices[2 * row:2 * row + 2]
         # A lone last plate is centred, as on the front page.
-        xs = [(W - cell_w) // 2] if len(pair) == 1 else [MARGIN, MARGIN + cell_w + GUTTER]
+        xs = [(sheet.width - cell_w) // 2] if len(pair) == 1 else [left, left + cell_w + GUTTER]
         sizes = [_contain(photos[k], 0, 0, cell_w - 2 * FRAME, box_h) for k in pair]
         tallest = max(b[3] - b[1] for b in sizes)
         foot = y + row * cell_h + (cell_h + tallest - label) // 2  # one foot a row, so its labels share a line
@@ -409,11 +428,11 @@ def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], nu
             placements.append((k, box))
             _centred(d, foot + FRAME + 10, f"Fig. {k + 1}", "body-italic", 20, 20, 1, cx, cell_w)
     for row in range(1, rows):
-        _rule(d, y + row * cell_h)
+        _rule(d, y + row * cell_h, sheet)
     if len(indices) > 1:  # between the pairs only, never through a lone plate
-        rx = MARGIN + cell_w + GUTTER // 2
+        rx = left + cell_w + GUTTER // 2
         d.line([(rx, y), (rx, y + len(indices) // 2 * cell_h)], fill=INK, width=RULE)
-    _double(d, BOTTOM - 7)
+    _double(d, sheet.bottom - 7, sheet)
     return placements
 
 
@@ -424,16 +443,18 @@ def compose_pages(photos: list[Image.Image], story: Story | None = None
     Returns (pages, placements, cut): ``placements[p]`` lists (photo number, box) for page p, and ``cut``
     names, in page order, the story fields shortened with "…" to fit the front page.
     """
+    sheet = PORTRAIT
     story = DEFAULT_GAZETTE_STORY if story is None else story
     plan = plan_pages(len(photos))
     pages, placements, cut = [], [], []
     for number, indices in enumerate(plan, start=1):
-        page = Image.new("RGB", (W, H), "white")
-        ImageDraw.Draw(page).rectangle([INSET, INSET, W - INSET - 1, H - INSET - 1], fill=PAPER)
+        page = Image.new("RGB", (sheet.width, sheet.height), "white")
+        ImageDraw.Draw(page).rectangle([sheet.inset, sheet.inset, sheet.width - sheet.inset - 1,
+                                        sheet.height - sheet.inset - 1], fill=PAPER)
         if number == 1:
-            placed, cut = _front(page, photos, story, indices, len(plan))
+            placed, cut = _front(page, photos, story, indices, len(plan), sheet)
         else:
-            placed = _plates(page, photos, indices, number, len(plan))
+            placed = _plates(page, photos, indices, number, len(plan), sheet)
         pages.append(page)
         placements.append(placed)
     return pages, placements, cut
