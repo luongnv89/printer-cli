@@ -43,8 +43,18 @@ Changelog = "https://github.com/luongnv89/printer-cli/blob/main/CHANGELOG.md"
 prt = "prt.cli:main"
 printer-cli = "prt.cli:main"
 
+[project.optional-dependencies]
+mcp = [
+    "mcp>=2.3,<3",
+]
+
 [dependency-groups]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "jsonschema>=4.18"]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "jsonschema>=4.18",
+    "mcp>=2.3,<3",
+]
 
 [build-system]
 requires = ["hatchling>=1.27"]

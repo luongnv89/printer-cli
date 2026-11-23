@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 import typer
 from rich.text import Text
 
-from prt import __version__, cache, guard, style
+from prt import __version__, cache, guard, render, style
 from prt.config import Config
 from prt.drivers.base import FINAL_JOB_STATES, KIND_BY_EXIT_CODE, Driver, PrinterError, Unreachable
 from prt.drivers.registry import driver_names, make_driver
@@ -823,10 +823,10 @@ def booth_cmd(
     preview_format = booth.format_for(preview) if preview else None
     copies = [(path, booth.format_for(path)) for path in save or []]
     image = booth.load_photo(photo)
-    base = booth.load_story(story_file) if story_file else booth.default_story(paper.value)
-    text = booth.with_overrides(base, headline=headline, story=story, kicker=kicker, caption=caption,
-                                byline=byline)
-    page, cut = booth.compose(image, text, paper.value)
+    text = render.booth_story(paper.value, booth.load_story(story_file) if story_file else None,
+                              headline=headline, story=story, kicker=kicker, caption=caption, byline=byline)
+    rendered = render.booth_page(image, text, paper.value)
+    page, cut = rendered.pages[0], rendered.cut
     if cut:
         STATE.note("warn", f"{', '.join(cut)} cut to fit the {paper.value} page",
                    "shorten it, or check the page with --preview")
@@ -841,7 +841,7 @@ def booth_cmd(
         STATE.note("ok", f"saved {path}", f"{paper.value} page · {fmt.upper()} · {size / 1024:,.0f} KiB")
         saved.append({"file": str(path), "format": fmt, "bytes": size})
     extra = {"saved": saved} if save else {}
-    report = {**_fit_report(cut), **_estimate([page])} if STATE.json else {}
+    report = {**rendered.fit(), **rendered.estimate()} if STATE.json else {}
     if preview:
         if STATE.json:
             STATE.write(json.dumps({"action": "booth", "style": paper.value, "file": str(preview),
@@ -850,19 +850,13 @@ def booth_cmd(
     d = STATE.driver()
     d.require(Capability.PRINT)
     with _authorize(1, yes, f"Print {photo.name} as a {booth.KINDS[paper.value]} on {d.display_name}?") as ticket:
-        ticket.attempt(1)
-        job = d.submit(booth.to_jpeg(page), "image/jpeg",
-                       PrintOptions(job_name=f"prt booth {photo.name}", media="a4"))
+        job, = render.send_pages(d, [booth.to_jpeg(page)], [f"prt booth {photo.name}"], ticket)
     STATE.note("ok", f"booth page queued as job {job}", d.display_name)
     if STATE.json:
         STATE.write(json.dumps({"action": "booth", "style": paper.value, "job_id": job, **report, **extra}) + "\n")
 
 
-def _fit_report(cut: dict[str, Any]) -> dict[str, Any]:
-    """What a booth or gazette JSON line says about the text that did not fit: ``fits`` is false when any
-    field was cut with "…", and ``cut`` maps each cut field (in page order) to how many of its characters
-    were printed (``max_fit``) and how many were given, so the text can be shortened and tried again."""
-    return {"fits": not cut, "cut": {name: c.to_dict() for name, c in cut.items()}}
+_fit_report = render.fit_report  # the fit report of booth and gazette JSON lines
 
 
 def _estimate(pages: list[Any]) -> dict[str, Any]:
@@ -912,7 +906,7 @@ def article_cmd(
     preview_format = booth.format_for(preview) if preview else None
     copies = [(path, booth.format_for(path)) for path in save or []]
     text = article.load(source, STATE.timeout or STATE.cfg.timeout)
-    pages = article.compose_pages(text, paper.value)
+    pages = render.article_pages(text, paper.value).pages
     count = f"{len(pages)} page{'s' if len(pages) != 1 else ''}"
 
     def write(path: Path, fmt: str) -> list[dict[str, Any]]:
@@ -939,11 +933,8 @@ def article_cmd(
     kind = article.ARTICLE_STYLES[paper.value].kind
     jobs = []
     with _authorize(len(pages), yes, f"Print {count} of '{text.title}' as a {kind} on {d.display_name}?") as ticket:
-        for number, page in enumerate(pages, start=1):
-            ticket.attempt(1)
-            jobs.append(d.submit(booth.to_jpeg(page), "image/jpeg",
-                                 PrintOptions(job_name=f"prt article {number}/{len(pages)} {text.title[:60]}",
-                                              media="a4")))
+        jobs.extend(render.send_pages(d, [booth.to_jpeg(page) for page in pages],
+                                      render.article_job_names(text.title, len(pages)), ticket))
     STATE.note("ok", f"{count} queued as job{'s' if len(jobs) != 1 else ''} {', '.join(map(str, jobs))}",
                d.display_name)
     if STATE.json:
@@ -1235,6 +1226,18 @@ def tui() -> None:
 
 
 app.command("dash", hidden=True, help="Alias for tui.")(tui)
+
+
+@app.command("mcp")
+def mcp_cmd() -> None:
+    """Run prt as an MCP server on stdin/stdout, for AI agents in any MCP client.
+
+    Tools: status, ink, list_styles, preview_booth, preview_article (they return the rendered page images) and
+    print_file, which prints only with a token from a preview or confirm: true. -p picks the default printer.
+    Needs the optional MCP SDK: pip install 'printer-cli[mcp]'.
+    """
+    from prt import mcp_server
+    mcp_server.serve(STATE.cfg, STATE.printer, STATE.timeout)
 
 
 # --- Entry point ---------------------------------------------------------------------------------
