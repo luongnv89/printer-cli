@@ -77,7 +77,7 @@ A `.pdf` holds every page. A `.png`, `.jpg` or `.jpeg` name saves one image per 
 prt article article.json --style magazine --yes
 ```
 
-The command prints one job per page. `--yes` skips the confirmation prompt ("Print 3 pages of '…' as a magazine article on …?"), which is required when there is no terminal. Add `-f json` to get `{"action": "article", "style": "magazine", "title": "…", "pages": N, "job_ids": [...]}` on stdout.
+The command prints one job per page. `--yes` skips the confirmation prompt ("Print 3 pages of '…' as a magazine article on …?"), which is required when there is no terminal. Add `-f json` to get `{"action": "article", "style": "magazine", "title": "…", "pages": N, "estimate": {…}, "job_ids": [...]}` on stdout. The `estimate` (also in preview output) gives the page count, colour use and ink use, e.g. `"summary": "~3 pages, colour, est. ink 4%"`. When `PRT_AGENT=1` is set, printing always needs `--yes`, and the owner's page caps may refuse a long article (exit code 1, kind `page_cap_exceeded` or `daily_page_cap_exceeded`): nothing is printed then, so tell the user rather than retrying.
 
 To keep a digital copy of the printed pages, add `--save` with a `.pdf`, `.png`, `.jpg` or `.jpeg` file name (repeat it for more files):
 

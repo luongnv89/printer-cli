@@ -14,7 +14,7 @@ from prt.drivers.fake import FakeDriver
 from prt.models import Status, Target
 from prt.transport import ipp
 
-from conftest import PRT, clean_env
+from conftest import PRT, clean_env, without_estimate
 
 ESC = "\x1b"
 
@@ -454,7 +454,7 @@ def test_booth_styles(capsys, tmp_path, booth_printer):
     photo = _booth_photo(tmp_path)
     for job_id, style in enumerate(BOOTH_STYLES, start=101):
         code, out, _ = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--style", style, "--yes")
-        assert code == 0 and json.loads(out) == {"action": "booth", "style": style, "job_id": job_id,
+        assert code == 0 and without_estimate(out) == {"action": "booth", "style": style, "job_id": job_id,
                                                  "fits": True, "cut": {}}
     pages = booth_printer.jobs()
     assert pages == [_expected_page(photo, style=style) for style in BOOTH_STYLES]
@@ -511,7 +511,7 @@ def test_booth_themed_style_preview_never_creates_a_driver(capsys, tmp_path, boo
     photo, out_file = _booth_photo(tmp_path), tmp_path / f"{style}.jpg"
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "-s", style, "-o", str(out_file))
     assert code == 0 and "not printed" in err and booth_printer.made == []
-    assert json.loads(out) == {"action": "booth", "style": style, "file": str(out_file),
+    assert without_estimate(out) == {"action": "booth", "style": style, "file": str(out_file),
                                "bytes": out_file.stat().st_size, "fits": True, "cut": {}}
     assert out_file.read_bytes() == _expected_page(photo, style=style)
     assert Image.open(out_file).size == (1240, 1754)
@@ -565,7 +565,7 @@ def test_booth_preview_writes_jpeg_and_never_creates_a_driver(capsys, tmp_path, 
                          "--preview", str(out_file))
     assert booth_printer.made == []
     assert code == 0 and "not printed" in err
-    assert json.loads(out) == {"action": "booth", "style": "daily", "file": str(out_file),
+    assert without_estimate(out) == {"action": "booth", "style": "daily", "file": str(out_file),
                                "bytes": out_file.stat().st_size, "fits": True, "cut": {}}
     assert out_file.read_bytes() == _expected_page(photo, style="daily")
     assert Image.open(out_file).size == (1240, 1754)
@@ -599,7 +599,7 @@ def test_booth_preview_picks_the_file_type_from_the_extension(capsys, tmp_path, 
     photo, out_file = _booth_photo(tmp_path), tmp_path / name
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--preview", str(out_file))
     assert code == 0 and "not printed" in err and booth_printer.made == []
-    assert json.loads(out) == {"action": "booth", "style": "metro", "file": str(out_file),
+    assert without_estimate(out) == {"action": "booth", "style": "metro", "file": str(out_file),
                                "bytes": out_file.stat().st_size, "fits": True, "cut": {}}
     assert out_file.read_bytes().startswith(magic)
 
@@ -609,7 +609,8 @@ def test_booth_save_prints_and_keeps_digital_copies(capsys, tmp_path, booth_prin
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--save", str(pdf),
                          "--save", str(png), "--yes")
     assert code == 0 and "queued as job 101" in err and f"saved {pdf}" in err and f"saved {png}" in err
-    assert json.loads(out) == {"action": "booth", "style": "metro", "job_id": 101, "fits": True, "cut": {}, "saved": [
+    assert without_estimate(out) == {"action": "booth", "style": "metro", "job_id": 101, "fits": True, "cut": {},
+                                      "saved": [
         {"file": str(pdf), "format": "pdf", "bytes": pdf.stat().st_size},
         {"file": str(png), "format": "png", "bytes": png.stat().st_size}]}
     assert _print_jobs(booth_printer.driver) == [("image/jpeg", _expected_page(photo))]
@@ -623,7 +624,7 @@ def test_booth_preview_with_save_writes_every_file_and_prints_nothing(capsys, tm
                          "--save", str(pdf))
     assert code == 0 and "not printed" in err
     assert booth_printer.made == [] and booth_printer.jobs() == []
-    assert json.loads(out) == {"action": "booth", "style": "metro", "file": str(jpg),
+    assert without_estimate(out) == {"action": "booth", "style": "metro", "file": str(jpg),
                                "bytes": jpg.stat().st_size, "fits": True, "cut": {},
                                "saved": [{"file": str(pdf), "format": "pdf", "bytes": pdf.stat().st_size}]}
     assert jpg.read_bytes() == _expected_page(photo) and pdf.read_bytes().startswith(b"%PDF-")

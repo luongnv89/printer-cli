@@ -12,7 +12,10 @@ from functools import lru_cache
 from types import SimpleNamespace
 
 import pytest
+
 from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageStat
+
+from conftest import without_estimate
 
 from prt import article, booth, fonts, layout, testpage, vintage
 from prt.booth import LIMITS, Story
@@ -482,7 +485,8 @@ def test_one_photo_prints_one_page(capsys, tmp_path, printer):
     photo = _photo(tmp_path)
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "gazette", str(photo), "--yes")
     assert code == 0 and printer.jobs() == _expected_pages([photo])
-    assert json.loads(out) == {"action": "gazette", "photos": 1, "pages": 1, "fits": True, "cut": {}, "job_ids": [101]}
+    assert without_estimate(out) == {"action": "gazette", "photos": 1, "pages": 1, "fits": True, "cut": {},
+                                      "job_ids": [101]}
     assert "1 page queued as job 101" in err
 
 
@@ -491,7 +495,7 @@ def test_several_photos_print_one_job_per_page(capsys, tmp_path, printer):
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "gazette", *map(str, photos), "--yes")
     expected = _expected_pages(photos)
     assert code == 0 and len(expected) == 2 and printer.jobs() == expected
-    assert json.loads(out) == {"action": "gazette", "photos": 4, "pages": 2, "fits": True, "cut": {},
+    assert without_estimate(out) == {"action": "gazette", "photos": 4, "pages": 2, "fits": True, "cut": {},
                                "job_ids": [101, 102]}
     assert "2 pages queued as jobs 101, 102" in err
 
@@ -526,7 +530,7 @@ def test_preview_writes_numbered_images_and_never_creates_a_driver(capsys, tmp_p
                          str(out_file))
     files = [tmp_path / "page-1.png", tmp_path / "page-2.png"]
     assert code == 0 and "not printed" in err and printer.made == []
-    assert json.loads(out) == {"action": "gazette", "photos": 4, "pages": 2, "fits": True, "cut": {},
+    assert without_estimate(out) == {"action": "gazette", "photos": 4, "pages": 2, "fits": True, "cut": {},
                                "files": [{"file": str(f), "format": "png", "bytes": f.stat().st_size}
                                          for f in files]}
     assert all(Image.open(f).size == A4_150DPI for f in files) and not out_file.exists()

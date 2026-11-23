@@ -1,6 +1,8 @@
 """Configuration: ~/.config/prt/config.toml, env overrides, and printer resolution.
 
 Precedence: CLI flags > environment (PRT_PRINTER, PRT_CONFIG, PRT_TIMEOUT) > config file > defaults.
+
+``max_pages_per_run`` and ``max_pages_per_day`` cap how many pages a print may use; ``prt.guard`` enforces them.
 """
 
 from __future__ import annotations
@@ -36,6 +38,8 @@ class Config:
     default: str | None = None
     timeout: float = DEFAULT_TIMEOUT
     printers: dict[str, Target] = field(default_factory=dict)
+    max_pages_per_run: int | None = None
+    max_pages_per_day: int | None = None
 
     @classmethod
     def load(cls, explicit: str | Path | None = None) -> "Config":
@@ -49,6 +53,8 @@ class Config:
                                    hint="fix the TOML syntax or delete the file", exit_code=3) from exc
             cfg.default = data.get("default")
             cfg.timeout = float(data.get("timeout", DEFAULT_TIMEOUT))
+            cfg.max_pages_per_run = _page_cap(data, "max_pages_per_run", path)
+            cfg.max_pages_per_day = _page_cap(data, "max_pages_per_day", path)
             known = {f.name for f in fields(Target)}
             for name, entry in (data.get("printers") or {}).items():
                 if not isinstance(entry, dict) or "host" not in entry:
@@ -69,6 +75,9 @@ class Config:
             lines.append(f"default = {_q(self.default)}")
         if self.timeout != DEFAULT_TIMEOUT:
             lines.append(f"timeout = {self.timeout}")
+        for key in ("max_pages_per_run", "max_pages_per_day"):
+            if getattr(self, key) is not None:
+                lines.append(f"{key} = {getattr(self, key)}")
         defaults = asdict(Target(name="", host=""))
         for name, t in self.printers.items():
             lines.append("")
@@ -105,6 +114,16 @@ class Config:
         raise PrinterError(f"{len(found)} printers found; which one?",
                            hint="pick one with --printer, or set a default: `prt printers default NAME`",
                            exit_code=2)
+
+
+def _page_cap(data: dict, key: str, path: Path) -> int | None:
+    value = data.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise PrinterError(f"{key} in {path} must be a whole number of pages, 1 or more",
+                           hint=f"e.g. {key} = 20, or remove the line for no limit", exit_code=3)
+    return value
 
 
 def _looks_like_host(s: str) -> bool:
