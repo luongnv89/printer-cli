@@ -816,6 +816,10 @@ def gazette_cmd(
     kicker: Optional[str] = typer.Option(None, "--kicker", help="Small label above the headline."),
     caption: Optional[str] = typer.Option(None, "--caption", help="Line under the lead photo."),
     byline: Optional[str] = typer.Option(None, "--byline", help="Author line, e.g. 'By Jo Smith'."),
+    landscape: bool = typer.Option(False, "--landscape",
+                                   help="Lay the pages out on A4 turned on its side: the lead photo beside the "
+                                        "story, and plates three abreast. Saved pages stay landscape; each is "
+                                        "turned upright only for the printer."),
     preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
                                            help="Save the pages here instead of printing; the extension picks "
                                                 "the file type: .pdf (every page in one file), or .png, .jpg, "
@@ -844,7 +848,7 @@ def gazette_cmd(
     base = booth.load_story(story_file) if story_file else vintage.DEFAULT_GAZETTE_STORY
     text = booth.with_overrides(base, headline=headline, story=story, kicker=kicker, caption=caption,
                                 byline=byline)
-    pages, _, cut = vintage.compose_pages(images, text)
+    pages, _, cut = vintage.compose_pages(images, text, landscape=landscape)
     if cut:
         STATE.note("warn", f"{', '.join(cut)} cut to fit the front page",
                    "shorten it, or check the page with --preview")
@@ -875,7 +879,7 @@ def gazette_cmd(
     jobs: list[int] = []
     for number, page in enumerate(pages, start=1):
         try:
-            jobs.append(d.submit(booth.to_jpeg(page), "image/jpeg",
+            jobs.append(d.submit(booth.to_jpeg(vintage.for_printer(page)), "image/jpeg",
                                  PrintOptions(job_name=f"prt gazette {number}/{len(pages)}", media="a4")))
         except (PrinterError, KeyboardInterrupt):
             if jobs:  # say what is already on the printer, even under -q, so it can be cancelled

@@ -411,9 +411,9 @@ def test_large_photos_are_shrunk_one_at_a_time(capsys, tmp_path, monkeypatch, pr
         full_size.append(weakref.ref(image))
         return image
 
-    def compose(photos, story=None):
+    def compose(photos, story=None, **options):
         sizes.extend(photo.size for photo in photos)
-        return real_compose(photos, story)
+        return real_compose(photos, story, **options)
 
     monkeypatch.setattr(booth, "load_photo", load)
     monkeypatch.setattr(vintage, "compose_pages", compose)

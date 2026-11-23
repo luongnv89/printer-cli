@@ -5,8 +5,9 @@ masthead between hairline and double rules, a small-caps dateline, headlines in 
 and Old Standard TT text in ruled columns, with no textures or colour. Photos are toned from ink to paper.
 
 The front page holds the masthead, the story and up to ``FIRST`` photos: the lead picture and a row of two
-plates. Each later page holds up to ``PER_PAGE`` plates in a ruled 2 × 3 grid, so every photo is printed.
-Pages are A4 at 150 dpi like the booth pages, and each one prints as its own JPEG job.
+plates. Each later page holds up to ``PER_PAGE`` plates in a ruled grid, so every photo is printed.
+Pages are A4 at 150 dpi like the booth pages, upright (``PORTRAIT``, a 2 × 3 grid of plates) or turned on its
+side (``LANDSCAPE``, a 3 × 2 grid, the lead beside the story), and each one prints as its own JPEG job.
 
 Every word is drawn in a bundled font (``prt.fonts``), and every character is checked against the font that
 draws it: what a font lacks becomes a stand-in, its unaccented form, or "?", never an empty box.
@@ -44,9 +45,13 @@ class Sheet:
     content_w: int  # between the margins
     bottom: int  # lowest y text and photos reach
     inset: int  # white rim round the cream
+    masthead_max: int  # largest masthead size: a landscape page has less height to spend on it
+    headline_lines: int
+    plate_cols: int  # plates side by side on a plate page
 
 
-PORTRAIT = Sheet(W, H, MARGIN, CONTENT_W, BOTTOM, INSET)
+PORTRAIT = Sheet(W, H, MARGIN, CONTENT_W, BOTTOM, INSET, masthead_max=132, headline_lines=3, plate_cols=2)
+LANDSCAPE = Sheet(H, W, MARGIN, H - 2 * MARGIN, W - MARGIN, INSET, masthead_max=96, headline_lines=2, plate_cols=3)
 
 FIRST = 3  # photos on the front page: the lead picture and a row of two plates
 PER_PAGE = 6  # plates on every later page, in a 2 × 3 grid
@@ -78,6 +83,11 @@ LEAD_MIN = 300  # room kept for the lead's height, grown into what a short story
 LEAD_MAX, LEAD_MAX_SOLO = 520, 760  # largest lead height with a row of plates under it, and alone
 PLATE_H = 270  # height of the plate row on the front page
 FRAME = 6  # the hairline frame sits this far outside a photo
+# On a landscape front page the lead's column takes at most this share of the width (so the lead stays well
+# under LEAD_LIMIT) and narrows to a narrow lead, but never below LEAD_COL_MIN, which keeps room for its caption.
+LEAD_SHARE, LEAD_COL_MIN = 0.58, 480
+PLATE_H_MIN, PLATE_H_MAX = 160, 260  # plate row under a landscape story: grown into what a short story leaves
+STORY_COL_MIN = 300  # narrowest story column on a landscape front page: wider story room gets a third column
 
 
 # --- which photo goes where --------------------------------------------------------------------
@@ -272,14 +282,14 @@ def _double(d: ImageDraw.ImageDraw, y: int, sheet: Sheet) -> int:
 Placement = tuple[int, tuple[int, int, int, int]]  # (photo number, box it was printed in)
 
 
-def _story(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int]) -> bool:
-    """The story in two ruled columns, shrinking the type until it fits, else cut with "…"; True when cut."""
+def _story(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], columns: int = 2) -> bool:
+    """The story in ruled columns, shrinking the type until it fits, else cut with "…"; True when cut."""
     x0, y0, x1, y1 = box
-    col_w = _col_width(x1 - x0, 2, GUTTER)
+    col_w = _col_width(x1 - x0, columns, GUTTER)
     for s in range(BODY, BODY_MIN - 1, -1):
         font = fonts.face("body", s)
         cols, left = flow_columns([_printable_face(p, font) for p in text.split("\n")], font, col_w,
-                                  (y1 - y0) // _lead(s), 2)
+                                  (y1 - y0) // _lead(s), columns)
         if not left:
             break
     if left:
@@ -296,11 +306,11 @@ def _story(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int]) ->
     return bool(left)
 
 
-def _story_height(text: str, size: int, width: int) -> int:
+def _story_height(text: str, size: int, width: int, columns: int = 2) -> int:
     font = fonts.face("body", size)
     lines = _paragraphs("\n".join(_printable_face(p, font) for p in text.split("\n")), font,
-                        _col_width(width, 2, GUTTER))
-    return _rows(len(lines), 2) * _lead(size)
+                        _col_width(width, columns, GUTTER))
+    return _rows(len(lines), columns) * _lead(size)
 
 
 def _page_mark(d: ImageDraw.ImageDraw, number: int, total: int, sheet: Sheet) -> None:
@@ -313,14 +323,25 @@ def _page_mark(d: ImageDraw.ImageDraw, number: int, total: int, sheet: Sheet) ->
 
 def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: list[int], total: int,
            sheet: Sheet) -> tuple[list[Placement], list[str]]:
-    """Masthead, dateline, headline, lead photo, a row of up to two plates, and the story in ruled columns."""
+    """Masthead, dateline and headline across the page, then the lead photo, a row of up to two plates and the
+    story in ruled columns: stacked on an upright page, side by side on a landscape one."""
     d = ImageDraw.Draw(page)
+    y, cut = _head(d, story, sheet)
+    body = _wide_front if sheet.width > sheet.height else _tall_front
+    placements, cut_below = body(page, d, photos, story, indices, y, sheet)
+    _page_mark(d, 1, total, sheet)
+    return placements, cut + cut_below
+
+
+def _head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet) -> tuple[int, list[str]]:
+    """Masthead, tagline, dateline, kicker, headline and byline across the page; returns (y below, cut)."""
     left, width, right = sheet.margin, sheet.content_w, sheet.width - sheet.margin
     cut: list[str] = []
     y = sheet.margin
     _rule(d, y, sheet)
     y += 18
-    size = next(s for s in range(132, 40, -4) if fonts.face("masthead", s).getlength(MASTHEAD) <= width - 80)
+    size = next(s for s in range(sheet.masthead_max, 40, -4)
+                if fonts.face("masthead", s).getlength(MASTHEAD) <= width - 80)
     mast = fonts.face("masthead", size)
     top, bottom = mast.getbbox(MASTHEAD)[1::2]
     d.text(((sheet.width - mast.getlength(MASTHEAD)) / 2, y - top), MASTHEAD, font=mast, fill=INK)
@@ -339,15 +360,22 @@ def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: 
         _draw_caps(d, (sheet.width - _caps_width(runs)) / 2, y + ks, runs)
         y += ks + 18
         cut += ["kicker"] * cut_kicker
-    y, cut_headline = _centred(d, y, story.headline.upper(), "display-black", 64, 36, 3, left, width)
+    y, cut_headline = _centred(d, y, story.headline.upper(), "display-black", 64, 36, sheet.headline_lines, left,
+                                width)
     cut += ["headline"] * cut_headline
     _rule(d, y + 4, sheet)
     y += 18
     if story.byline:
         y, cut_byline = _centred(d, y, story.byline, "body-italic", 22, 18, 1, left, width)
         cut += ["byline"] * cut_byline
-    y += 8
+    return y + 8, cut
 
+
+def _tall_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Image], story: Story,
+                indices: list[int], y: int, sheet: Sheet) -> tuple[list[Placement], list[str]]:
+    """Upright: the lead photo, a row of up to two plates under it, then the story in two ruled columns."""
+    left, width, right = sheet.margin, sheet.content_w, sheet.width - sheet.margin
+    cut: list[str] = []
     lead, plates = photos[indices[0]], indices[1:]
     cap = _fit_face(f"Fig. {indices[0] + 1}. {story.caption}" if story.caption else f"Fig. {indices[0] + 1}",
                     "body-italic", 22, 18, width - 80, 2)
@@ -386,14 +414,66 @@ def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: 
     _rule(d, y, sheet)
     if _story(d, story.story, (left, y + 20, right, story_bottom)):
         cut.append("story")
-    _page_mark(d, 1, total, sheet)
+    return placements, cut
+
+
+def _wide_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Image], story: Story,
+                indices: list[int], y: int, sheet: Sheet) -> tuple[list[Placement], list[str]]:
+    """Landscape: the lead photo down the left with its caption, the story in ruled columns on the right, and
+    the row of up to two plates under the story."""
+    left, right = sheet.margin, sheet.width - sheet.margin
+    story_bottom = sheet.bottom - 52
+    y += 10
+    cut: list[str] = []
+    lead, plates = photos[indices[0]], indices[1:]
+    # Two caption lines are kept whatever the lead's width turns out to be, so the lead is sized in one pass.
+    caption_room = 2 * _lead(22)
+    x0, top, x1, bottom = _contain(lead, 0, 0, round(sheet.content_w * LEAD_SHARE) - 2 * FRAME,
+                                   story_bottom - y - 2 * FRAME - 6 - caption_room)
+    # The whole photo, never cropped; a narrow lead narrows its column and leaves the story more room.
+    col_w = max(x1 - x0 + 2 * FRAME, LEAD_COL_MIN)
+    bx = left + (col_w - (x1 - x0)) // 2
+    box = (bx, y + FRAME, bx + x1 - x0, y + FRAME + bottom - top)
+    _place(page, lead, box)
+    placements = [(indices[0], box)]
+    cap = _fit_face(f"Fig. {indices[0] + 1}. {story.caption}" if story.caption else f"Fig. {indices[0] + 1}",
+                    "body-italic", 22, 18, col_w - 40, 2)
+    cut += ["caption"] * cap[3]
+    _text_block(d, left + 20, box[3] + FRAME + 6, cap[2], cap[0], cap[1], INK, width=col_w - 40)
+    rx = left + col_w + GUTTER // 2
+    d.line([(rx, y), (rx, story_bottom)], fill=INK, width=RULE)
+
+    x0 = left + col_w + GUTTER
+    width = right - x0
+    columns = 3 if _col_width(width, 3, GUTTER) >= STORY_COL_MIN else 2
+    story_end = story_bottom
+    if plates:
+        label = 6 + _lead(20)
+        spare = story_bottom - y - _story_height(story.story, BODY, width, columns) - 2 * FRAME - label - 36
+        plate_h = max(PLATE_H_MIN, min(PLATE_H_MAX, spare))
+        py = story_bottom - label - 2 * FRAME - plate_h  # the plate row sits on the foot of the column
+        cell_w = _col_width(width, 2, GUTTER)
+        cells = [x0, x0 + cell_w + GUTTER] if len(plates) == 2 else [x0 + (width - cell_w) // 2]
+        label_y = py + plate_h + 2 * FRAME + 6
+        for k, cx in zip(plates, cells):
+            plate = _contain(photos[k], py + FRAME, cx + FRAME, cell_w - 2 * FRAME, plate_h)
+            _place(page, photos[k], plate)
+            placements.append((k, plate))
+            _centred(d, label_y, f"Fig. {k + 1}", "body-italic", 20, 20, 1, cx, cell_w)
+        if len(plates) == 2:
+            mid = x0 + cell_w + GUTTER // 2
+            d.line([(mid, py), (mid, label_y + _lead(20))], fill=INK, width=RULE)
+        d.line([(x0, py - 16), (right, py - 16)], fill=INK, width=RULE)
+        story_end = py - 36
+    if _story(d, story.story, (x0, y, right, story_end), columns):
+        cut.append("story")
     return placements, cut
 
 
 def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], number: int, total: int,
             sheet: Sheet) -> list[Placement]:
-    """Running head with the page mark, a section title, then up to six plates in a ruled 2 × 3 grid, each with
-    its figure number."""
+    """Running head with the page mark, a section title, then up to six plates in a ruled grid (2 × 3 upright,
+    3 × 2 landscape), each with its figure number."""
     d = ImageDraw.Draw(page)
     left, width = sheet.margin, sheet.content_w
     head = fonts.face("masthead", 48)
@@ -408,17 +488,19 @@ def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], nu
     _rule(d, y + 2, sheet)
     y += 22
 
-    cell_w = _col_width(width, 2, GUTTER)
-    rows = -(-len(indices) // 2)  # only the rows in use share the page
+    cols = sheet.plate_cols
+    cell_w = _col_width(width, cols, GUTTER)
+    rows = -(-len(indices) // cols)  # only the rows in use share the page
     cell_h = (sheet.bottom - 16 - y) // rows
     label = _lead(20) + 12
     # A photo box no taller than a plate is kept, so a page of one or two never blows a plate up soft.
     box_h = min(cell_h - 32 - 2 * FRAME - label, PLATE_LIMIT)
     placements = []
     for row in range(rows):
-        pair = indices[2 * row:2 * row + 2]
-        # A lone last plate is centred, as on the front page.
-        xs = [(sheet.width - cell_w) // 2] if len(pair) == 1 else [left, left + cell_w + GUTTER]
+        pair = indices[cols * row:cols * row + cols]
+        # A short last row is centred, so a lone last plate sits in the middle, as on the front page.
+        start = left + (cols - len(pair)) * (cell_w + GUTTER) // 2
+        xs = [start + i * (cell_w + GUTTER) for i in range(len(pair))]
         sizes = [_contain(photos[k], 0, 0, cell_w - 2 * FRAME, box_h) for k in pair]
         tallest = max(b[3] - b[1] for b in sizes)
         foot = y + row * cell_h + (cell_h + tallest - label) // 2  # one foot a row, so its labels share a line
@@ -429,21 +511,28 @@ def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], nu
             _centred(d, foot + FRAME + 10, f"Fig. {k + 1}", "body-italic", 20, 20, 1, cx, cell_w)
     for row in range(1, rows):
         _rule(d, y + row * cell_h, sheet)
-    if len(indices) > 1:  # between the pairs only, never through a lone plate
-        rx = left + cell_w + GUTTER // 2
-        d.line([(rx, y), (rx, y + len(indices) // 2 * cell_h)], fill=INK, width=RULE)
+    full = len(indices) // cols
+    if full:  # down the full rows, never through a lone plate
+        for c in range(1, cols):
+            rx = left + c * (cell_w + GUTTER) - GUTTER // 2
+            d.line([(rx, y), (rx, y + full * cell_h)], fill=INK, width=RULE)
+    if len(pair) > 1 and full < rows:  # between the plates of a short, centred last row
+        for x in xs[1:]:
+            d.line([(x - GUTTER // 2, y + full * cell_h), (x - GUTTER // 2, y + rows * cell_h)], fill=INK,
+                   width=RULE)
     _double(d, sheet.bottom - 7, sheet)
     return placements
 
 
-def compose_pages(photos: list[Image.Image], story: Story | None = None
+def compose_pages(photos: list[Image.Image], story: Story | None = None, landscape: bool = False
                   ) -> tuple[list[Image.Image], list[list[Placement]], list[str]]:
-    """Lay the photos out over the pages ``plan_pages`` gives (with the default story if none is given).
+    """Lay the photos out over the pages ``plan_pages`` gives (with the default story if none is given), on
+    upright A4 or, with ``landscape``, A4 on its side.
 
     Returns (pages, placements, cut): ``placements[p]`` lists (photo number, box) for page p, and ``cut``
     names, in page order, the story fields shortened with "…" to fit the front page.
     """
-    sheet = PORTRAIT
+    sheet = LANDSCAPE if landscape else PORTRAIT
     story = DEFAULT_GAZETTE_STORY if story is None else story
     plan = plan_pages(len(photos))
     pages, placements, cut = [], [], []
@@ -458,3 +547,12 @@ def compose_pages(photos: list[Image.Image], story: Story | None = None
         pages.append(page)
         placements.append(placed)
     return pages, placements, cut
+
+
+def for_printer(page: Image.Image) -> Image.Image:
+    """The page as the printer takes it, upright A4: a landscape page is turned a quarter turn.
+
+    ROTATE_90 turns it counter-clockwise, as IPP's "landscape" orientation does, so the masthead runs up the
+    sheet's left edge and the page reads once the sheet is turned clockwise. An upright page is returned as is.
+    """
+    return page.transpose(Image.Transpose.ROTATE_90) if page.width > page.height else page
