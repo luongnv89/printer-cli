@@ -58,7 +58,7 @@ Show the user the transcription and fix anything they correct.
 
 All values are strings, and other fields are rejected. `prt schema gazette` prints these rules as a JSON Schema.
 
-The front page holds the whole 2500 characters: a long story is set in smaller type. A letter longer than that does not fit in one edition. Tell the user, and either print the first part ending with `[continued]` or print it in two editions, one per part.
+When the scan is the only image, the front page holds the whole 2500 characters: a long story is set in smaller type. Each extra photo or page scan takes room from the story: with two more images the front page holds only about 1350 characters. A letter longer than the room it has does not fit in one edition. Tell the user, and either print the first part ending with `[continued]` or print it in two editions, one per part (each with its own page scan).
 
 If you cannot write files, pass `--story-file -` and pipe the same JSON in on stdin, e.g. `printf '%s' '{"headline": "...", "story": "..."}' | prt gazette letter.jpg --story-file - --yes`. A bad story on stdin fails exactly like a bad file, and nothing is printed.
 
@@ -76,7 +76,7 @@ prt gazette letter.jpg --story-file story.json --preview edition.pdf -f json
  "files": [{"file": "edition.pdf", "format": "pdf", "bytes": 123456}]}
 ```
 
-When `"fits"` is false, `cut` names each field that was cut with `…`, with how many characters were printed (`max_fit`) and how many you gave (`given`). Shorten the headline, kicker, byline or caption to `max_fit` and preview again; never shorten the transcription without asking the user. `"fits": true, "cut": {}` means everything fitted.
+When `"fits"` is false, `cut` names each field that was cut with `…`, with how many characters were printed (`max_fit`) and how many you gave (`given`). Shorten the headline, kicker, byline or caption to `max_fit` and preview again. When `cut` names `story`, the transcription did not fit: never shorten it without asking the user. Take out the extra images, or split the letter into two editions as in step 3. `"fits": true, "cut": {}` means everything fitted.
 
 A letter written across a wide sheet may look better with `--landscape`, which puts the scan beside the story.
 
@@ -88,7 +88,7 @@ prt gazette letter.jpg --story-file story.json --yes -f json
 
 `--yes` skips the confirmation prompt, which is required when there is no terminal and always when `PRT_AGENT=1` is set. The output is the same JSON line with `"job_ids": [N]` in place of `files`. Add `--save edition.pdf` to keep a copy of the printed page. If the owner's page caps refuse the print (exit `1`, kind `page_cap_exceeded` or `daily_page_cap_exceeded`), nothing was printed: tell the user rather than retrying.
 
-If the letter came with photos or a second page, scan them too and add them after the letter: `prt gazette letter.jpg photo-1.jpg page-2.jpg --story-file story.json`. The front page shows the first two after the letter as numbered plates, and later pages hold six more each.
+If the letter came with photos, scan them too and add them after the letter: `prt gazette letter.jpg photo-1.jpg photo-2.jpg --story-file story.json`. The front page shows the first two after the letter as numbered plates, and later pages hold six more each. The plates leave less room for the story (step 3), so preview again and check `cut`. For a letter of several pages, print one edition per page instead.
 
 ## Try it with the demo printer
 
