@@ -804,6 +804,97 @@ def article_cmd(
         STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
 
 
+@app.command("gazette")
+def gazette_cmd(
+    photos: list[Path] = typer.Argument(..., help="One or more photos (JPEG, PNG, WebP, GIF, BMP or TIFF); the "
+                                                  "first is the lead picture on the front page."),
+    story_file: Optional[Path] = typer.Option(None, "--story-file",
+                                              help="JSON story: headline and story required; kicker, caption, "
+                                                   "byline optional."),
+    headline: Optional[str] = typer.Option(None, "--headline", help="Headline (overrides the story file)."),
+    story: Optional[str] = typer.Option(None, "--story", help="Story text; a newline starts a new paragraph."),
+    kicker: Optional[str] = typer.Option(None, "--kicker", help="Small label above the headline."),
+    caption: Optional[str] = typer.Option(None, "--caption", help="Line under the lead photo."),
+    byline: Optional[str] = typer.Option(None, "--byline", help="Author line, e.g. 'By Jo Smith'."),
+    landscape: bool = typer.Option(False, "--landscape",
+                                   help="Lay the pages out on A4 turned on its side: the lead photo beside the "
+                                        "story, and plates three abreast. Saved pages stay landscape; each is "
+                                        "turned upright only for the printer."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save the pages here instead of printing; the extension picks "
+                                                "the file type: .pdf (every page in one file), or .png, .jpg, "
+                                                ".jpeg (one file per page, numbered when there are several)."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of the pages here (.pdf, .png, .jpg or "
+                                                   ".jpeg) before printing them; repeat for more files."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Vintage gazette: print one or more photos as an old-style newspaper (A4, cream paper, one ink).
+
+    The front page holds the story and up to three photos, each later page up to six more: none is left out.
+    Without a story the gazette prints its own built-in one. Story flags override --story-file.
+    """
+    from prt import article, booth, vintage
+    # Check every input before a file is written or a driver exists, so a bad file name, too many photos or
+    # an unreadable photo never leaves a partial result or reaches the printer.
+    preview_format = booth.format_for(preview) if preview else None
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    vintage.check_count(len(photos))
+    count = len(vintage.plan_pages(len(photos)))
+    outputs = [(preview, preview_format)] if preview else []
+    vintage.check_outputs([file for path, fmt in outputs + copies for file in vintage.page_paths(path, fmt, count)],
+                          photos)
+    images = vintage.load_photos(photos)
+    base = booth.load_story(story_file) if story_file else vintage.DEFAULT_GAZETTE_STORY
+    text = booth.with_overrides(base, headline=headline, story=story, kicker=kicker, caption=caption,
+                                byline=byline)
+    pages, _, cut = vintage.compose_pages(images, text, landscape=landscape)
+    if cut:
+        STATE.note("warn", f"{', '.join(cut)} cut to fit the front page",
+                   "shorten it, or check the page with --preview")
+    pictures = f"{len(photos)} photo{'s' if len(photos) != 1 else ''}"
+    sheets = f"{len(pages)} page{'s' if len(pages) != 1 else ''}"
+
+    def write(path: Path, fmt: str) -> list[dict[str, Any]]:
+        written = []
+        for file, data in article.page_files(pages, path, fmt):
+            size = _save_booth_page(data, file)
+            STATE.note("ok", f"saved {file}", f"gazette · {fmt.upper()} · {size / 1024:,.0f} KiB")
+            written.append({"file": str(file), "format": fmt, "bytes": size})
+        return written
+
+    files = write(preview, preview_format) if preview else []
+    # Copies are written before connecting, so they exist even when the printer is unreachable.
+    saved = [entry for path, fmt in copies for entry in write(path, fmt)]
+    summary = {"action": "gazette", "photos": len(photos), "pages": len(pages)}
+    extra = {"saved": saved} if save else {}
+    if preview:
+        STATE.note("ok", f"{pictures} on {sheets} rendered", "not printed")
+        if STATE.json:
+            STATE.write(json.dumps({**summary, "files": files, **extra}) + "\n")
+        return
+    d = STATE.driver()
+    d.require(Capability.PRINT)
+    _confirm(f"Print {pictures} as {sheets} of a vintage newspaper on {d.display_name}?", yes)
+    jobs: list[int] = []
+    for number, page in enumerate(pages, start=1):
+        try:
+            jobs.append(d.submit(booth.to_jpeg(vintage.for_printer(page)), "image/jpeg",
+                                 PrintOptions(job_name=f"prt gazette {number}/{len(pages)}", media="a4")))
+        except (PrinterError, KeyboardInterrupt):
+            if jobs:  # say what is already on the printer, even under -q, so it can be cancelled
+                sys.stderr.write(f"page {number} of {len(pages)} may not have been sent; pages already queued as "
+                                 f"job(s) {', '.join(map(str, jobs))}: cancel them with `prt jobs cancel <id>`\n")
+                if STATE.json:
+                    STATE.write(json.dumps({"action": "gazette", "pages": len(pages), "job_ids": jobs,
+                                            "failed_page": number}) + "\n")
+            raise
+    STATE.note("ok", f"{sheets} queued as job{'s' if len(jobs) != 1 else ''} {', '.join(map(str, jobs))}",
+               d.display_name)
+    if STATE.json:
+        STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
+
+
 @jobs_app.callback()
 def jobs(ctx: typer.Context,
          all_: bool = typer.Option(False, "--all", "-a", help="Include completed jobs.")) -> None:
