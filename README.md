@@ -104,6 +104,7 @@ prt list
 | `prt jobs [--all]` / `prt jobs wait ID` / `prt jobs cancel ID` | List jobs, wait for one to finish, or cancel one |
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
 | `prt tui` | Full-screen dashboard |
+| `prt mcp` | Run prt as an MCP server over stdio for AI agents (needs `printer-cli[mcp]`; see [MCP server](#mcp-server)) |
 
 **Global options**, which can go before or after the command:
 - `-p/--printer NAME|HOST` picks the printer.
@@ -241,6 +242,7 @@ $ prt -f json article https://example.com/gone
 | `daily_page_cap_exceeded` | 1 | the print would go over `max_pages_per_day`: nothing was sent |
 | `page_count_unknown` | 1 | a page cap is in force and the file's pages cannot be counted (text, PWG, office files) |
 | `page_ledger_unavailable` | 1 | `max_pages_per_day` is set but the page count cannot be recorded in the cache folder |
+| `missing_dependency` | 2 | `prt mcp` was run without the MCP SDK: install `printer-cli[mcp]` |
 | `fetch_failed` | 3 | an article link could not be fetched |
 | `invalid_input` | 3 | a bad input file or link |
 | `interrupted` | 130 | Ctrl-C |
@@ -379,6 +381,31 @@ With the demo printer's low inks and nearly full pad, `prt -p demo maintain clea
 hint: replace low cartridges first, or pass --force if you understand the risk
 ```
 
+## MCP server
+
+`prt mcp` runs printer-cli as an [MCP](https://modelcontextprotocol.io) server over stdio, so an agent in any MCP client (Claude Desktop, Claude Code, Cursor, …) can check the printer, look at a page before it is printed and print it, without running commands or knowing flags. The MCP SDK is an optional extra:
+
+```bash
+pipx install 'printer-cli[mcp]'        # or: uv tool install 'printer-cli[mcp]'
+```
+
+Without it, `prt mcp` exits with code 2 (kind `missing_dependency`) and says how to install it. Add the server to your client's config; `-p` picks the printer the tools use by default (try `demo` first):
+
+```json
+{"mcpServers": {"printer": {"command": "prt", "args": ["-p", "demo", "mcp"]}}}
+```
+
+| Tool | What it does |
+|---|---|
+| `status` | State, alerts, ink, paper and waste pad, as `prt status -f json` |
+| `ink` | Ink levels, as `prt ink -f json` |
+| `list_styles` | Every booth, article and gazette style with its fields and character limits, as `prt styles -f json` |
+| `preview_booth` | Render a photo (a file path) as a booth page in `metro`, `daily`, `wizard` or `wanted` style, with an optional `story` object (`headline`, `story`, `kicker`, `caption`, `byline`). Prints nothing |
+| `preview_article` | Render an article as magazine pages from a `source` (link or file) or from `content` (the article JSON object, HTML or text). Prints nothing |
+| `print_file` | Print what a preview rendered (`token`), or a file (`path`) with `confirm: true` |
+
+The preview tools return the rendered page image in the tool result (scaled to 1200 pixels; an article shows its first `max_images` pages, 3 by default), together with the fit report (`fits`, `cut`), the ink `estimate` and a `token`. Passing that token to `print_file` prints exactly the previewed pages. A token works once and lasts 30 minutes; the last 8 previews keep theirs. `print_file` never prints by accident: without a token or `confirm: true` it refuses with kind `confirmation_required`, and an unknown, used or expired token is refused with `invalid_token`. Every print goes through the [agent guardrails](#agent-guardrails): the page caps hold, and in agent mode the token or `confirm` counts as `--yes`. Errors come back as tool errors whose text is the same `{"error": {...}}` object `-f json` prints. `source: "-"` is refused, since stdin carries the MCP protocol.
+
 ## How it talks to printers
 
 | Feature | Protocol | Notes |
@@ -422,6 +449,8 @@ From source (add `--editable` to track local changes):
 git clone https://github.com/luongnv89/printer-cli.git && cd printer-cli
 uv tool install .
 ```
+
+With the MCP server (`prt mcp`), add the `mcp` extra: `pipx install 'printer-cli[mcp]'`.
 
 Optional tab completion for your shell:
 
