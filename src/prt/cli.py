@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import typer
 from rich.text import Text
@@ -20,6 +21,9 @@ from prt.drivers.registry import driver_names, make_driver
 from prt.maintenance import head_clean_preflight, nozzle_check_preflight
 from prt.models import Capability, PrintOptions, ScanSettings, Severity, Status, to_dict
 from prt.style import ROLES, Mode, t
+
+if TYPE_CHECKING:
+    from prt.discovery import Discovered
 
 # --- App state ----------------------------------------------------------------
 
@@ -415,9 +419,37 @@ def _scanner_info(d: Driver) -> dict[str, Any]:
 app.command("info", hidden=True, help="Alias for overview.")(overview)
 
 
+def _slug(name: str) -> str:
+    """A bare TOML key: mDNS names can hold characters a config table name cannot."""
+    return re.sub(r"[^a-z0-9_]+", "-", name.lower()).strip("-") or "printer"
+
+
+def _save_discovered(cfg: Config, found: list[Discovered]) -> list[tuple[str | None, bool]]:
+    """Save each newly found IPP printer; per device, in order: (saved name or None, added now)."""
+    by_host = {p.host.lower(): n for n, p in cfg.printers.items()}
+    taken = {*cfg.printers, "demo"}  # a saved "demo" would shadow the built-in replay printer
+    out: list[tuple[str | None, bool]] = []
+    for f in found:
+        keys = [k.lower() for k in (f.host, *f.addresses)]
+        saved = next((by_host[k] for k in keys if k in by_host), None)
+        # TXT records are untrusted: a control character would make the config unloadable.
+        if saved or not f.ipp or not all(s.isprintable() for s in (f.host, f.ipp_path, f.scan_path)):
+            out.append((saved, False))
+            continue
+        base = name = _slug(f.suggested_name())
+        n = 2
+        while name in taken:
+            name, n = f"{base}-{n}", n + 1
+        cfg.printers[name] = f.to_target(name)
+        taken.add(name)
+        by_host.update(dict.fromkeys(keys, name))
+        out.append((name, True))
+    return out
+
+
 @app.command()
 def discover(timeout: float = typer.Option(3.0, "--wait", help="Seconds to listen for mDNS answers.")) -> None:
-    """Find printers and scanners on the local network (mDNS / Bonjour)."""
+    """Find printers and scanners on the local network (mDNS / Bonjour) and save new printers."""
     from prt.discovery import discover as run
     if STATE.err.styled and not STATE.quiet:
         sys.stderr.write(style.render(STATE.err, Text(f"listening for printers for {timeout:g}s…",
@@ -426,24 +458,38 @@ def discover(timeout: float = typer.Option(3.0, "--wait", help="Seconds to liste
     if not found:
         STATE.note("warn", "no printers answered",
                    "a sleeping printer does not reply to discovery — wake it (press a button) and retry")
+    cfg = STATE.cfg
+    results = _save_discovered(cfg, found)
+    added = [name for name, new in results if new]
+    hint = None
+    if added:
+        cfg.save()
+        if not cfg.default and len(cfg.printers) > 1:
+            hint = f"pick a default: prt printers default {added[0]}"
+        STATE.note("ok", f"added {len(added)} printer{'s' if len(added) > 1 else ''}: {', '.join(added)}",
+                   hint or str(cfg.path))
     mode = STATE.out
-    saved = {p.host.lower(): n for n, p in STATE.cfg.printers.items()}
 
     def text() -> str:
         if not found:
             return style.box("discover", [style.seg("no printers answered", "dim")], mode,
                              footer="0 found")
         rows = [[f.make_model or f.name, f.host, f.addresses[0] if f.addresses else "",
-                 " ".join(f.services), saved.get(f.host.lower(), "")] for f in found]
-        body = style.table_rows(["model", "host", "address", "services", "saved as"], rows, mode)
-        hint = Text(f"save one: prt printers add {found[0].suggested_name()} {found[0].host} --default",
-                    style=ROLES["dim"])
-        return style.box("discover", [*body, None, hint], mode, footer=f"{len(found)} found")
+                 " ".join(f.services), name or ""] for f, (name, _) in zip(found, results)]
+        body: list[Text | None] = [*style.table_rows(["model", "host", "address", "services", "saved as"],
+                                                     rows, mode)]
+        if added:
+            body += [None, style.seg("added ", "ok") + t(", ".join(added))]
+        if hint:
+            body.append(style.seg(hint, "dim"))
+        return style.box("discover", body, mode, footer=f"{len(found)} found {style.glyphs(mode)['dot']} {len(added)} added")
 
-    STATE.emit([f.__dict__ | {"services": f.services} for f in found], text,
+    STATE.emit([f.__dict__ | {"services": f.services, "saved_as": name, "added": new}
+                for f, (name, new) in zip(found, results)], text,
                lambda: [style.plain_record(f.make_model or f.name, f.host,
-                                           f.addresses[0] if f.addresses else "", ",".join(f.services))
-                        for f in found])
+                                           f.addresses[0] if f.addresses else "", ",".join(f.services),
+                                           name or "", "added" if new else "")
+                        for f, (name, new) in zip(found, results)])
 
 
 # --- printers ---------------------------------------------------------------------------

@@ -100,7 +100,7 @@ class Config:
             return found[0].to_target()
         if not found:
             raise PrinterError("no printer configured and none found on the network",
-                               hint="run `prt discover`, then `prt printers add NAME HOST --default`",
+                               hint="wake the printer and run `prt discover`, or `prt printers add NAME HOST`",
                                exit_code=2)
         raise PrinterError(f"{len(found)} printers found; which one?",
                            hint="pick one with --printer, or set a default: `prt printers default NAME`",
