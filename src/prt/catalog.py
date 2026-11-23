@@ -78,13 +78,45 @@ WANTED_ROLES = {
     "caption": "Reward line",
     "byline": "Footer line",
 }
+CERTIFICATE_ROLES = {
+    "headline": "The name of the person the certificate is presented to",
+    "story": "The citation: what it is awarded for, under the award line; a newline starts a new paragraph",
+    "kicker": "The certificate's title at the top, e.g. 'Certificate of Achievement'",
+    "caption": "The award, under the name, e.g. 'For the Brightest Smile of the Day'",
+    "byline": "Who signed it, above the signature line, e.g. 'The Awards Committee'",
+}
+SPORTS_ROLES = {
+    "headline": "The player's name, on the slanted bar across the photo",
+    "story": "Stats and scouting report, in the box under the name; a newline starts a new paragraph",
+    "kicker": "Team name at the top of the card",
+    "caption": "Position and number, under the name, e.g. 'Forward · No. 23'",
+    "byline": "Footer line, e.g. the series and card number",
+}
+MISSING_ROLES = {
+    "headline": "The pet's name, under the photo",
+    "story": "Description: what the pet looks like, where it was last seen; a newline starts a new paragraph",
+    "kicker": "The question under MISSING, e.g. 'Have you seen this cat?'",
+    "caption": "Reward line",
+    "byline": "Contact, e.g. a phone number, printed on each tear-off tab",
+}
+MOVIE_ROLES = {
+    "headline": "The film's title",
+    "story": "The credits block at the foot of the poster; a newline starts a new paragraph",
+    "kicker": "Tagline at the top",
+    "caption": "Release line under the title, e.g. 'Coming soon'",
+    "byline": "Rating box at the foot, e.g. 'Rated PG for scenes of extreme smiling'",
+}
 GAZETTE_ROLES = {**NEWSPAPER_ROLES, "caption": "Line under the lead photo"}
 STORY_ROLES = {  # every booth style at once, for the style-independent story schema
-    "headline": "Headline; the name on wizard and wanted",
-    "story": "Story text, or the lore / description on wizard and wanted; a newline starts a new paragraph",
-    "kicker": "Small label above the headline; the card type on wizard, the 'Dead or alive' line on wanted",
-    "caption": "Line under the photo; the subtitle on wizard, the reward line on wanted",
-    "byline": "Author line, e.g. 'By Jo Smith'; the footer on wizard and wanted",
+    "headline": "Headline; the name on wizard, wanted, certificate, sports and missing, the film title on movie",
+    "story": "Story text, or the lore / description on wizard and wanted, the citation on certificate, the stats on "
+             "sports, the description on missing, the credits on movie; a newline starts a new paragraph",
+    "kicker": "Small label above the headline; the card type on wizard, the 'Dead or alive' line on wanted, the "
+              "title on certificate, the team on sports, the question on missing, the tagline on movie",
+    "caption": "Line under the photo; the subtitle on wizard, the reward line on wanted and missing, the award on "
+               "certificate, the position on sports, the release line on movie",
+    "byline": "Author line, e.g. 'By Jo Smith'; the footer on wizard, wanted and sports, the signature on "
+              "certificate, the tear-off tabs on missing, the rating on movie",
 }
 ARTICLE_ROLES = {
     "title": "Headline; when empty the source, else 'Untitled', is printed",
@@ -114,6 +146,15 @@ BOOTH = {  # style: (description, roles, sample)
                "booth-wizard.jpg"),
     "wanted": ("Weathered parchment pirate poster with the name and a reward line", WANTED_ROLES,
                "booth-wanted.jpg"),
+    "certificate": ("Award certificate: ivory paper in a green-and-gold border, oval portrait, name, award, "
+                    "citation, date and signature lines and a gold seal", CERTIFICATE_ROLES,
+                    "booth-certificate.jpg"),
+    "sports": ("Sports trading card: royal-blue card with stripes, full-width photo, star badge, the name on a "
+               "slanted red bar and a stats box", SPORTS_ROLES, "booth-sports.jpg"),
+    "missing": ("Missing-pet poster: huge red MISSING, the question, the photo, name, reward, description and "
+                "tear-off tabs with the contact", MISSING_ROLES, "booth-missing.jpg"),
+    "movie": ("Movie poster: dark poster with a tagline, the photo fading into the title, stars, a release line, "
+              "credits and a rating box", MOVIE_ROLES, "booth-movie.jpg"),
 }
 ARTICLE = {  # style: (description, sample)
     "magazine": ("Bold headline, three columns, colour accents", "article-magazine.jpg"),

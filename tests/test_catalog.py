@@ -53,8 +53,8 @@ def test_styles_json_lists_every_style_with_fields_limits_and_sample(capsys):
     code, out, err = run(capsys, "styles", "-f", "json")
     assert code == 0 and err == ""
     styles = {s["name"]: s for s in json.loads(out)}
-    assert list(styles) == ["metro", "daily", "wizard", "wanted", "magazine", "classic-magazine", "gazette",
-                            "gazette-landscape"]
+    assert list(styles) == ["metro", "daily", "wizard", "wanted", "certificate", "sports", "missing", "movie",
+                            "magazine", "classic-magazine", "gazette", "gazette-landscape"]
     metro = styles["metro"]
     assert metro["command"] == "booth" and metro["args"] == [] and metro["default"] is True
     assert metro["kind"] == "metro newspaper page" and metro["schema"] == "story"
@@ -66,6 +66,15 @@ def test_styles_json_lists_every_style_with_fields_limits_and_sample(capsys):
                                "booth-metro.jpg")
     assert styles["wanted"]["args"] == ["--style", "wanted"] and styles["wanted"]["default"] is False
     assert next(f for f in styles["wanted"]["fields"] if f["name"] == "caption")["description"] == "Reward line"
+    for name, kind in (("certificate", "certificate"), ("sports", "sports card"), ("missing", "missing-pet poster"),
+                       ("movie", "movie poster")):
+        assert styles[name]["command"] == "booth" and styles[name]["args"] == ["--style", name]
+        assert styles[name]["kind"] == kind and styles[name]["schema"] == "story"
+        assert styles[name]["photos"] == {"min": 1, "max": 1} and styles[name]["max_pages"] == 1
+        assert styles[name]["sample"] == catalog.SAMPLES + f"booth-{name}.jpg"
+        assert {f["name"]: f["max_length"] for f in styles[name]["fields"]} == booth.LIMITS
+    assert "tear-off" in next(f for f in styles["missing"]["fields"] if f["name"] == "byline")["description"]
+    assert next(f for f in styles["movie"]["fields"] if f["name"] == "headline")["description"] == "The film's title"
     assert styles["classic-magazine"]["args"] == ["--style", "classic-magazine"]
     assert [f["name"] for f in styles["magazine"]["fields"] if f["required"]] == ["title", "body"]
     assert styles["magazine"]["photos"] == {"min": 0, "max": 0} and styles["magazine"]["max_pages"] == 30

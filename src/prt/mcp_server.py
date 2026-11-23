@@ -44,13 +44,13 @@ DEFAULT_ARTICLE_IMAGES = 3  # pages an article preview shows unless asked for mo
 TOKEN_TTL = 30 * 60  # seconds a preview token stays valid
 MAX_TOKENS = 8  # previews kept at once; the oldest is dropped first
 
-BoothStyleName = Literal["metro", "daily", "wizard", "wanted"]
+BoothStyleName = Literal["metro", "daily", "wizard", "wanted", "certificate", "sports", "missing", "movie"]
 ArticleStyleName = Literal["magazine", "classic-magazine"]
 ContentType = Literal["json", "html", "text"]
 
 INSTRUCTIONS = """\
 printer-cli (prt) controls a network printer. Read state with `status` and `ink`. To print a page made from a \
-photo (newspaper front page, wizard card, wanted poster) or an article, call `preview_booth` or \
+photo (newspaper front page, card, certificate, poster) or an article, call `preview_booth` or \
 `preview_article` first: they print nothing and return the rendered page images, whether the text fits and an \
 ink estimate. Check the images, then pass the returned `token` to `print_file` to print exactly that. \
 `print_file` with a `path` prints an existing file and needs `confirm: true`. `list_styles` lists every style \
@@ -346,7 +346,8 @@ def build_server(tools: Tools):
                       story: dict[str, str] | None = None):
         """Render a photo as an A4 booth page WITHOUT printing it, and return the page image. `photo` is the path
         of a JPEG, PNG, WebP, GIF, BMP or TIFF file. `style`: metro (colour tabloid), daily (black-and-white
-        broadsheet), wizard (trading card) or wanted (pirate poster). `story` may hold headline, story, kicker,
+        broadsheet), wizard (fantasy trading card), wanted (pirate poster), certificate (award certificate), sports
+        (sports trading card), missing (missing-pet poster) or movie (movie poster). `story` may hold headline, story, kicker,
         caption and byline (see list_styles for what each is on a style, and the limits); fields left out keep
         the style's built-in text. The result says whether the text fits (`fits`, `cut`), estimates ink use,
         and gives a `token`: pass it to print_file to print this exact page."""

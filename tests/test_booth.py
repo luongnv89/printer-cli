@@ -77,7 +77,8 @@ def test_longest_story_stays_inside_the_page_margins(style):
         assert page.crop(band).getextrema() == ((255, 255),) * 3, band
 
 
-@pytest.mark.parametrize("style", ["metro", "daily", "wanted"])  # wizard's arch frames the top: see below
+@pytest.mark.parametrize("style", ["metro", "daily", "wanted", "sports", "missing", "movie"])  # wizard, certificate:
+# their arch and oval frame the top, see below
 def test_full_length_portrait_keeps_the_top_of_the_photo(monkeypatch, style):
     # A 9:16 photo whose top 8% (where the head is) is black and the rest white.
     photo = Image.new("RGB", (360, 640), "white")
@@ -87,6 +88,7 @@ def test_full_length_portrait_keeps_the_top_of_the_photo(monkeypatch, style):
     monkeypatch.setattr(booth, "_photo", lambda page, img, box, mono: boxes.append(box) or real(page, img, box, mono))
     page = _render(photo, style=style).convert("L")
     [(x0, y0, x1, _)] = boxes
+    x1 -= 120 if style == "sports" else 0  # clear of the sports card's star badge on the photo's corner
     top = page.crop((x0 + 20, y0 + 10, x1 - 20, y0 + 20))  # just inside metro's thick frame
     assert top.getextrema()[1] < 60
 
@@ -233,8 +235,12 @@ def test_compose_names_the_fields_cut_to_fit():
     assert list(booth.compose(portrait, booth.check_story(long, 2), "daily")[1]) == ["story"]
     # A 40-character kicker always fits; the rest of the card or poster is cut.
     themed = ["headline", "caption", "story", "byline"]
-    assert list(booth.compose(portrait, booth.check_story(long, 2), "wizard")[1]) == themed
-    assert list(booth.compose(portrait, booth.check_story(long, 2), "wanted")[1]) == themed
+    for style in ("wizard", "wanted", "certificate", "sports", "missing"):
+        assert list(booth.compose(portrait, booth.check_story(long, 2), style)[1]) == themed, style
+    # The movie's rating box takes two lines, so 80 capitals fit; a longer rating is cut after the credits.
+    assert list(booth.compose(portrait, booth.check_story(long, 2), "movie")[1]) == ["headline", "caption", "story"]
+    longer = replace(long, byline="€" * 80)  # each "€" prints as "EUR": 240 capitals
+    assert list(booth.compose(portrait, booth.check_story(longer, 2), "movie")[1]) == themed
     # Text that already ends in "…" is not mistaken for a cut.
     assert booth.compose(portrait, Story(headline="Wait for it…", story="Line one…"), "metro")[1] == {}
 
@@ -304,7 +310,7 @@ def _share(page, test):
 def test_every_style_looks_different():
     grey = Image.new("RGB", (300, 400), (128, 128, 128))  # a neutral photo, so the colours are the style's own
     pages = {style: _render(grey, style=style) for style in STYLES}
-    assert len({page.tobytes() for page in pages.values()}) == len(STYLES) == 4
+    assert len({page.tobytes() for page in pages.values()}) == len(STYLES) == 8
 
     def navy(r, g, b):
         return b > r + 20 and b > g + 15 and max(r, g, b) < 130
@@ -317,7 +323,23 @@ def test_every_style_looks_different():
 
     def red(r, g, b):
         return r > 180 and g < 60 and b < 80
-    signature = {style: {test.__name__: _share(page, test) for test in (navy, gold, parchment, red)}
+
+    def ivory(r, g, b):
+        return r > 240 and g > 235 and 215 < b < 240
+
+    def green(r, g, b):
+        return g > r + 25 and g > b + 5 and g < 110
+
+    def blue(r, g, b):
+        return b > r + 60 and b > g + 30
+
+    def dark(r, g, b):
+        return max(r, g, b) < 30
+
+    def white(r, g, b):
+        return min(r, g, b) > 250
+    signature = {style: {test.__name__: _share(page, test)
+                         for test in (navy, gold, parchment, red, ivory, green, blue, dark, white)}
                  for style, page in pages.items()}
     assert signature["wizard"]["navy"] > 0.25 and signature["wizard"]["gold"] > 0.03  # dark card, gold trim
     assert signature["wanted"]["parchment"] > 0.45  # aged paper
@@ -327,13 +349,28 @@ def test_every_style_looks_different():
         assert signature[style]["navy"] < 0.001, style  # only the wizard card is dark blue
     for style in ("metro", "daily", "wizard"):
         assert signature[style]["parchment"] < signature["wanted"]["parchment"] / 4, style
+    assert signature["certificate"]["ivory"] > 0.4 and signature["certificate"]["green"] > 0.02  # green border
+    assert signature["certificate"]["gold"] > 0.01  # gold rules and seal
+    assert signature["sports"]["blue"] > 0.1 and signature["sports"]["red"] > 0.02  # blue card, red name bar
+    assert signature["missing"]["white"] > 0.7 and signature["missing"]["red"] > 0.02  # white paper, red MISSING
+    assert signature["movie"]["dark"] > 0.2  # a dark poster
+    for style in STYLES:
+        if style != "certificate":
+            assert signature[style]["ivory"] < 0.01, style
+        if style != "sports":
+            assert signature[style]["blue"] < 0.01, style
+        if style != "movie":
+            assert signature[style]["dark"] < signature["movie"]["dark"] / 2, style
 
 
 @pytest.mark.parametrize("style, frame", [
     ("wizard", ((booth.W - booth.CARD_W) // 2, (booth.H - booth.CARD_H) // 2,
                 (booth.W + booth.CARD_W) // 2, (booth.H + booth.CARD_H) // 2)),
     ("wanted", (booth.MARGIN, booth.MARGIN, booth.W - booth.MARGIN, booth.BOTTOM)),
-])
+    ("sports", ((booth.W - booth.CARD_W) // 2, (booth.H - booth.CARD_H) // 2,
+                (booth.W + booth.CARD_W) // 2, (booth.H + booth.CARD_H) // 2)),
+    ("missing", (booth.MARGIN, booth.MARGIN, booth.W - booth.MARGIN, booth.BOTTOM)),
+])  # the movie poster's photo runs edge to edge: see test_movie_photo_grows_into_room_short_credits_leave
 @pytest.mark.parametrize("shape", [(300, 400), (1600, 900)])
 def test_photo_is_composited_into_the_frame(style, frame, shape):
     magenta = Image.new("RGB", shape, (255, 0, 255))  # a colour no style uses on its own
@@ -350,12 +387,12 @@ def test_photo_is_composited_into_the_frame(style, frame, shape):
 
 def test_each_style_has_its_own_default_story():
     assert booth.default_story("metro") is booth.default_story("daily") is booth.DEFAULT_STORY
-    themed = [booth.default_story("wizard"), booth.default_story("wanted")]
+    themed = [booth.default_story(style) for style in STYLES if style not in ("metro", "daily")]
     for story in themed:
         assert all([story.headline, story.story, story.kicker, story.caption, story.byline])
         assert booth.check_story(story, 2) == story  # valid as written: no blank lines, printable, in limits
         assert story != booth.DEFAULT_STORY
-    assert themed[0] != themed[1]
+    assert len(set(themed)) == len(themed) == 6
     assert booth.default_story("wanted").kicker.upper() == "DEAD OR ALIVE"
     assert booth.default_story("wanted").caption.upper().startswith("REWARD")
     assert set(booth.DEFAULT_STORIES) == set(booth.STYLES) == set(booth.KINDS)
@@ -378,6 +415,112 @@ def test_wizard_arch_keeps_the_top_of_a_full_length_portrait(monkeypatch):
     [(x0, y0, x1, _)] = boxes
     mid = (x0 + x1) // 2
     assert page.crop((mid - 40, y0 + 10, mid + 40, y0 + 20)).getextrema()[1] < 60
+
+
+def _photo_boxes(monkeypatch):
+    boxes = []
+    real = booth._photo
+    monkeypatch.setattr(booth, "_photo", lambda page, img, box, mono: boxes.append(box) or real(page, img, box, mono))
+    return boxes
+
+
+def test_certificate_oval_keeps_the_top_of_a_full_length_portrait(monkeypatch):
+    photo = Image.new("RGB", (360, 640), "white")
+    photo.paste((0, 0, 0), (0, 0, 360, 51))
+    boxes = _photo_boxes(monkeypatch)
+    page = _render(photo, style="certificate").convert("L")
+    [(x0, y0, x1, y1)] = boxes
+    mid = (x0 + x1) // 2
+    assert page.crop((mid - 40, y0 + 10, mid + 40, y0 + 20)).getextrema()[1] < 60
+    # Outside the oval, the corners of the photo's box show the frame, not the photo.
+    assert page.crop((x0, y0, x0 + 12, y0 + 12)).getextrema()[0] > 200
+
+
+@pytest.mark.parametrize("shape", [(300, 400), (1600, 900)])
+def test_certificate_photo_is_an_oval_inside_the_border(shape):
+    page = _render(Image.new("RGB", shape, (255, 0, 255)), style="certificate")
+    r, g, b = page.split()
+    hits = ImageChops.multiply(ImageChops.multiply(r.point(lambda v: 255 if v > 180 else 0),
+                                                   b.point(lambda v: 255 if v > 160 else 0)),
+                               g.point(lambda v: 255 if v < 80 else 0))
+    x0, y0, x1, y1 = hits.getbbox()
+    area = (x1 - x0) * (y1 - y0)
+    assert 0.7 * area < hits.histogram()[255] < 0.85 * area  # an oval fills π/4 of its box
+    assert booth.MARGIN + 150 < y0 and x0 > booth.MARGIN + 200 and x1 < booth.W - booth.MARGIN - 200
+
+
+def test_certificate_prints_the_date_and_the_signature(monkeypatch):
+    blue = Image.new("RGB", (300, 400), "blue")
+    signed = booth.default_story("certificate")
+    page = _render(blue, signed, "certificate")
+    unsigned = _render(blue, replace(signed, byline=""), "certificate")
+    line_y = booth.BOTTOM - 150
+    sign = (booth.W - booth.MARGIN - 410, line_y - 80, booth.W - booth.MARGIN - 90, line_y - 2)
+    assert page.crop(sign).convert("L").getextrema()[0] < 100  # the byline sits on the signature line
+    assert unsigned.crop(sign).convert("L").getextrema()[0] > 200
+    monkeypatch.setattr(booth, "_today", lambda: "Monday, January 4, 2027")
+    dated = _render(blue, signed, "certificate")
+    date = (booth.MARGIN + 90, line_y - 80, booth.MARGIN + 410, line_y - 2)
+    assert dated.crop(date).tobytes() != page.crop(date).tobytes()
+    assert dated.crop(sign).tobytes() == page.crop(sign).tobytes()
+
+
+def _ink_in(page, box):
+    return page.crop(box).convert("L").getextrema()[0] < 100
+
+
+def test_missing_poster_has_tear_off_tabs_with_the_byline():
+    blue = Image.new("RGB", (300, 400), "blue")
+    story = booth.default_story("missing")
+    page = _render(blue, story, "missing")
+    tab_w = booth.CONTENT_W // booth.TABS
+    top = booth.BOTTOM - booth.TAB_H
+    tabs = [(booth.MARGIN + i * tab_w + 6, top + 12, booth.MARGIN + (i + 1) * tab_w - 6, booth.BOTTOM - 4)
+            for i in range(booth.TABS)]
+    assert all(_ink_in(page, tab) for tab in tabs)  # every tab carries the contact
+    first = page.crop(tabs[0]).tobytes()
+    assert all(page.crop(tab).tobytes() == first for tab in tabs[1:])  # the same on each one
+    # Without a byline there is nothing to tear off: no tabs, no dashed lines along the foot of the poster.
+    bare = _render(blue, replace(story, byline=""), "missing")
+    foot = (booth.MARGIN, booth.BOTTOM - 24, booth.W - booth.MARGIN, booth.BOTTOM)
+    assert _ink_in(page, foot) and not _ink_in(bare, foot)
+
+
+def test_missing_poster_byline_is_cut_to_fit_a_tab():
+    story = booth.check_story(replace(booth.default_story("missing"), byline="Call Jo on 555-0134 " * 4), 2)
+    page, cut = booth.compose(Image.new("RGB", (300, 400), "blue"), story, "missing")
+    assert list(cut) == ["byline"] and 0 < cut["byline"].max_fit < cut["byline"].given
+    shorter = replace(story, byline=story.byline[:cut["byline"].max_fit])
+    assert booth.compose(Image.new("RGB", (300, 400), "blue"), shorter, "missing")[1] == {}
+
+
+@pytest.mark.parametrize("credits, grown", [("Short credits.", True), ("Long credits line here. " * 100, False)])
+def test_movie_photo_grows_into_room_short_credits_leave(monkeypatch, credits, grown):
+    boxes = _photo_boxes(monkeypatch)
+    story = booth.check_story(replace(booth.default_story("movie"), story=credits), 2)
+    page = _render(Image.new("RGB", (1600, 900), "blue"), story, "movie")
+    [(x0, y0, x1, y1)] = boxes
+    assert (x0, x1) == (booth.MARGIN, booth.W - booth.MARGIN)  # full width, edge to edge of the poster
+    assert (y1 - y0 > booth.MOVIE_PHOTO) is grown and booth.MOVIE_PHOTO <= y1 - y0 <= booth.MOVIE_PHOTO_MAX
+    foot = page.getpixel((booth.W // 2, y1 - 2))  # the foot of the photo fades into the poster
+    assert max(abs(a - b) for a, b in zip(foot, booth.SCREEN)) <= 4
+
+
+def test_movie_credits_sit_at_the_foot_of_the_poster():
+    blue = Image.new("RGB", (300, 400), "blue")
+    story = booth.default_story("movie")
+    page = _render(blue, replace(story, byline=""), "movie").convert("L")
+    above = (booth.MARGIN + 80, booth.BOTTOM - 120, booth.W - booth.MARGIN - 80, booth.BOTTOM - 30)
+    assert page.crop(above).getextrema()[1] > 150  # silver credits printed just above the foot
+
+
+def test_sports_card_name_bar_is_scarlet_across_the_photo(monkeypatch):
+    boxes = _photo_boxes(monkeypatch)
+    page = _render(Image.new("RGB", (300, 400), (128, 128, 128)), style="sports")
+    [(x0, y0, x1, y1)] = boxes
+    bar = page.crop((x0 + 100, y1 - 30, x1 - 100, y1 - 20))
+    assert _share(bar, lambda r, g, b: (r, g, b) == booth.SCARLET) > 0.5
+    assert (x1 - x0, y1 - y0) == (booth.CARD_W - 128, booth.SPORTS_PHOTO)
 
 
 # --- saving a copy -------------------------------------------------------------------------------

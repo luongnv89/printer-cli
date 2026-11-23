@@ -11,7 +11,7 @@ import pytest
 from PIL import Image
 
 from conftest import PRT, clean_env
-from prt import catalog, cli, mcp_server
+from prt import booth, catalog, cli, mcp_server
 from prt.config import Config
 from prt.drivers.base import PrinterError
 from prt.drivers.fake import FakeDriver
@@ -275,8 +275,8 @@ async def test_the_server_lists_the_six_tools(client):
     async with client as c:
         listed = {t.name: t for t in (await c.list_tools()).tools}
     assert set(listed) == TOOLS
-    assert listed["preview_booth"].input_schema["properties"]["style"]["enum"] == ["metro", "daily", "wizard",
-                                                                                   "wanted"]
+    assert listed["preview_booth"].input_schema["properties"]["style"]["enum"] == list(booth.STYLES) == [
+        "metro", "daily", "wizard", "wanted", "certificate", "sports", "missing", "movie"]
     assert listed["status"].annotations.read_only_hint is True
     assert listed["print_file"].annotations.read_only_hint is False
 
