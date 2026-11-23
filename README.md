@@ -105,6 +105,7 @@ prt list
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
 | `prt tui` | Full-screen dashboard |
 | `prt mcp` | Run prt as an MCP server over stdio for AI agents (needs `printer-cli[mcp]`; see [MCP server](#mcp-server)) |
+| `prt skills list` / `prt skills install [--claude] [--agents] [--project] [--dir PATH] [--force]` | List the agent skills that come with prt, or install them for Claude Code or other agents (see [Agent skills](#agent-skills)) |
 
 **Global options**, which can go before or after the command:
 - `-p/--printer NAME|HOST` picks the printer.
@@ -243,6 +244,8 @@ $ prt -f json article https://example.com/gone
 | `page_count_unknown` | 1 | a page cap is in force and the file's pages cannot be counted (text, PWG, office files) |
 | `page_ledger_unavailable` | 1 | `max_pages_per_day` is set but the page count cannot be recorded in the cache folder |
 | `missing_dependency` | 2 | `prt mcp` was run without the MCP SDK: install `printer-cli[mcp]` |
+| `skill_exists` | 1 | `prt skills install` found an installed skill file that differs from the bundled one: nothing was installed, `--force` replaces it |
+| `skills_missing` | 1 | this prt install has no bundled skills: reinstall printer-cli |
 | `fetch_failed` | 3 | an article link could not be fetched |
 | `invalid_input` | 3 | a bad input file or link |
 | `interrupted` | 130 | Ctrl-C |
@@ -303,7 +306,7 @@ The `metro` and `daily` samples use [story.json](https://github.com/luongnv89/pr
 - Text too long for its space is cut with `…` after the last whole word that fits, and `prt booth` warns on stderr naming the fields that were cut. With `-f json` the output says the same in a fit report: `"fits": false` and, for each cut field in page order, how many of its characters were printed and how many were given, e.g. `"cut": {"headline": {"max_fit": 68, "given": 92}}`. Shortening the field to `max_fit` characters makes it fit, so a script or agent can cut the text and try again. When everything fits the report is `"fits": true, "cut": {}`. Transparent parts of a PNG print as white paper.
 - The photo and story are checked before anything is sent, so an unreadable image or a bad story file exits with an error and prints nothing.
 
-To let an AI agent look at the photo and write a story that fits it, give it the [photo-booth skill](https://github.com/luongnv89/printer-cli/blob/main/skills/photo-booth/SKILL.md).
+To let an AI agent look at the photo and write a story that fits it, give it the [photo-booth skill](https://github.com/luongnv89/printer-cli/blob/main/skills/photo-booth/SKILL.md): `prt skills install` puts it where the agent finds it (see [Agent skills](#agent-skills)).
 
 ## Article printing
 
@@ -325,7 +328,7 @@ Both samples are page 1 of [article.json](https://github.com/luongnv89/printer-c
 - Long articles run on over as many pages as they need, up to 30; nothing is cut. Each page is printed as its own job, after one confirmation prompt (`--yes` skips it).
 - Links must start with `http://` or `https://`. Pages are fetched with certificate checks, at most 5 redirects and 5 MiB, within the `--timeout` (default 5 s).
 - X posts (`https://x.com/<user>/status/<id>`, also `twitter.com`) are read through X's public oEmbed service, which returns the text of one public post only: no images, no threads, nothing behind a login.
-- For pages the command cannot read (a login wall, text built by JavaScript, a long X thread), pass a saved file instead: article JSON (`{"title": "...", "author": "...", "source": "...", "url": "...", "body": ["paragraph", "..."]}`), a saved `.html` page, or a text file whose first line is the title. `prt article -` reads the same from stdin: JSON when the input starts with `{`, HTML when it starts with `<`, else plain text, up to 5 MiB. The [article-print skill](https://github.com/luongnv89/printer-cli/blob/main/skills/article-print/SKILL.md) lets an AI agent fetch the article itself and write that JSON.
+- For pages the command cannot read (a login wall, text built by JavaScript, a long X thread), pass a saved file instead: article JSON (`{"title": "...", "author": "...", "source": "...", "url": "...", "body": ["paragraph", "..."]}`), a saved `.html` page, or a text file whose first line is the title. `prt article -` reads the same from stdin: JSON when the input starts with `{`, HTML when it starts with `<`, else plain text, up to 5 MiB. The [article-print skill](https://github.com/luongnv89/printer-cli/blob/main/skills/article-print/SKILL.md) lets an AI agent fetch the article itself and write that JSON; `prt skills install` installs it.
 - `--preview page.pdf` saves the pages without printing: a `.pdf` holds every page, while `.png`, `.jpg` or `.jpeg` save one image per page (`page-1.png`, `page-2.png`, …). `--save` keeps the same copies and still prints.
 - The page font covers Latin letters only: accents print without their marks, emoji are left out, and an article mostly in another script is refused.
 - When the article cannot be fetched or converted, `prt article` exits with code 3 and a hint, and nothing is sent to the printer.
@@ -406,6 +409,30 @@ Without it, `prt mcp` exits with code 2 (kind `missing_dependency`) and says how
 
 The preview tools return the rendered page image in the tool result (scaled to 1200 pixels; an article shows its first `max_images` pages, 3 by default), together with the fit report (`fits`, `cut`), the ink `estimate` and a `token`. Passing that token to `print_file` prints exactly the previewed pages. A token works once and lasts 30 minutes; the last 8 previews keep theirs. `print_file` never prints by accident: without a token or `confirm: true` it refuses with kind `confirmation_required`, and an unknown, used or expired token is refused with `invalid_token`. Every print goes through the [agent guardrails](#agent-guardrails): the page caps hold, and in agent mode the token or `confirm` counts as `--yes`. Errors come back as tool errors whose text is the same `{"error": {...}}` object `-f json` prints. `source: "-"` is refused, since stdin carries the MCP protocol.
 
+## Agent skills
+
+Two [agent skills](https://github.com/luongnv89/printer-cli/tree/main/skills) come with prt: `photo-booth`, which looks at a photo, writes a story that fits it and prints it with `prt booth`, and `article-print`, which prints an article with `prt article` and fetches the text itself when the command cannot. `prt skills install` copies them where agents look for skills:
+
+```bash
+prt skills list                          # the bundled skills (-f json for name, version, description, files)
+prt skills install --claude              # Claude Code: ~/.claude/skills/<skill>/SKILL.md (the default)
+prt skills install --agents              # agents that read ~/.agents/skills, such as Codex
+prt skills install --claude --project    # this project only: ./.claude/skills (or ./.agents/skills)
+prt skills install photo-booth --dir ~/my-agent/skills   # one skill, into any skills folder
+```
+
+Name skills to install only those; the default is all of them. Installing again leaves skills that match the bundled ones alone. An installed file that differs from the bundled one, because you edited it or it came from another prt version, is never replaced: the command lists the files, installs nothing, and exits with code 1 (kind `skill_exists`). After upgrading prt, run `prt skills install --force` to replace the old skills with the new ones; this also replaces any edits you made to them. Files in a skill folder that prt does not ship are always left alone. With `-f json` the output is `{"action": "skills_install", "skills": [{"name": "photo-booth", "target": "claude", "path": "...", "status": "installed"}]}`, where `status` is `installed`, `updated`, `unchanged` or `replaced`.
+
+**Claude Code plugin.** The repository is also a Claude Code plugin with both skills and the [MCP server](#mcp-server):
+
+```text
+/plugin install printer-cli --marketplace luongnv89/printer-cli
+```
+
+On Claude Code older than 2.1.275, add the marketplace first: `/plugin marketplace add luongnv89/printer-cli`, then `/plugin install printer-cli@printer-cli`. The plugin starts `prt mcp` with `PRT_AGENT=1` (see [Agent guardrails](#agent-guardrails)), so install printer-cli with the `mcp` extra first: `uv tool install 'printer-cli[mcp]'`. The skills call `prt` too.
+
+For agents reading the repository, [`AGENTS.md`](https://github.com/luongnv89/printer-cli/blob/main/AGENTS.md) sums up how to use prt from an agent and how to work on the code, and [`llms.txt`](https://github.com/luongnv89/printer-cli/blob/main/llms.txt) indexes the docs.
+
 ## How it talks to printers
 
 | Feature | Protocol | Notes |
@@ -471,7 +498,7 @@ To add a vendor, subclass `IPPDriver`, declare its `capabilities`, override what
 
 ```bash
 uv sync
-uv run pytest            # 559 tests, no printer needed
+uv run pytest            # no printer needed
 uv run prt -p demo tui
 ```
 

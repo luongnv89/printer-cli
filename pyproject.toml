@@ -63,6 +63,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/prt"]
 
+# The agent skills live once, in skills/ at the repository root; the wheel carries a copy for `prt skills install`.
+[tool.hatch.build.targets.wheel.force-include]
+"skills" = "prt/bundled_skills"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
