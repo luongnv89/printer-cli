@@ -1,6 +1,7 @@
 import io
 import json
 import subprocess
+import threading
 
 import pytest
 
@@ -8,6 +9,7 @@ from prt import cache, style
 from prt.cli import hoist_globals, main, render_status
 from prt.config import Config, config_path
 from prt.discovery import Discovered
+from prt.drivers.base import Unreachable
 from prt.drivers.fake import FakeDriver
 from prt.models import Status, Target
 from prt.transport import ipp
@@ -28,7 +30,7 @@ def run(capsys, *args):
 @pytest.mark.parametrize("argv", [[], ["--help"], ["printers", "--help"], ["maintain", "--help"],
                                   ["jobs", "--help"], ["status", "--help"], ["scan", "--help"],
                                   ["print", "--help"], ["maintain", "clean", "--help"], ["tui", "--help"],
-                                  ["booth", "--help"], ["article", "--help"]])
+                                  ["booth", "--help"], ["article", "--help"], ["list", "--help"]])
 def test_help_everywhere(capsys, argv):
     code, out, err = run(capsys, *argv)
     assert code in (0, 2) if not argv else code == 0
@@ -86,7 +88,7 @@ def test_jobs(capsys):
 def test_printers_crud(capsys):
     assert run(capsys, "printers", "add", "office", "EPSON721655.local", "--driver", "epson")[0] == 0
     assert run(capsys, "printers", "add", "home", "demo", "--driver", "fake", "--default")[0] == 0
-    code, out, _ = run(capsys, "printers", "list")
+    code, out, _ = run(capsys, "printers", "list", "--no-check")
     assert "office\tEPSON721655.local\tepson\t" in out and "home\tdemo\tfake\tdefault" in out
     code, out, _ = run(capsys, "status")  # uses the default (demo)
     assert code == 0 and out.startswith("state\tidle")
@@ -98,6 +100,98 @@ def test_printers_crud(capsys):
 def test_unknown_driver_is_usage_error(capsys):
     code, _, err = run(capsys, "printers", "add", "x", "h", "--driver", "canon9000")
     assert code == 2 and "unknown driver" in err
+
+
+# --- printers list: connection status ------------------------------------------------------
+
+@pytest.fixture
+def checked(monkeypatch):
+    """make_driver for the list check: online.local answers, asleep.local and broken.local fail.
+
+    Returns the (host, timeout) of every driver asked for."""
+    calls = []
+    failures = {"asleep.local": lambda target: Unreachable(target, "timed out"),
+                "broken.local": lambda target: RuntimeError("garbled IPP reply")}
+
+    def make_driver(target, timeout=5.0):
+        calls.append((target.host, timeout))
+        if target.host in failures:
+            raise failures[target.host](target)
+        return FakeDriver(target, timeout)
+
+    monkeypatch.setattr("prt.cli.make_driver", make_driver)
+    return calls
+
+
+def _save(capsys, *hosts):
+    for host in hosts:
+        assert run(capsys, "printers", "add", host.split(".")[0], host)[0] == 0
+
+
+def test_printers_list_shows_connection_status_by_default(capsys, checked):
+    _save(capsys, "online.local", "asleep.local", "broken.local")
+    code, out, _ = run(capsys, "printers", "list")
+    assert code == 0 and out.splitlines() == ["online\tonline.local\tauto\tdefault\tonline",
+                                              "asleep\tasleep.local\tauto\t\toffline",
+                                              "broken\tbroken.local\tauto\t\toffline"]
+    code, out, _ = run(capsys, "-f", "json", "printers", "list")
+    assert code == 0 and json.loads(out) == [
+        {"name": "online", "host": "online.local", "driver": "auto", "default": True, "reachable": "online"},
+        {"name": "asleep", "host": "asleep.local", "driver": "auto", "default": False, "reachable": "offline"},
+        {"name": "broken", "host": "broken.local", "driver": "auto", "default": False, "reachable": "offline"}]
+
+
+def test_printers_list_no_check_contacts_no_printer(capsys, checked):
+    _save(capsys, "online.local", "asleep.local")
+    code, out, _ = run(capsys, "printers", "list", "--no-check")
+    assert code == 0 and out.splitlines() == ["online\tonline.local\tauto\tdefault\t",
+                                              "asleep\tasleep.local\tauto\t\t"]
+    code, out, _ = run(capsys, "-f", "json", "printers", "list", "--no-check")
+    assert [r["reachable"] for r in json.loads(out)] == [None, None]
+    assert checked == []
+
+
+def test_printers_list_with_no_saved_printers(capsys, checked):
+    assert run(capsys, "printers", "list") == (0, "", "")
+    assert run(capsys, "-f", "json", "printers", "list") == (0, "[]\n", "")
+    assert checked == []
+
+
+def test_printers_list_check_uses_the_timeout(capsys, monkeypatch, checked):
+    _save(capsys, "online.local", "asleep.local")
+    run(capsys, "printers", "list")
+    run(capsys, "--timeout", "1", "printers", "list")
+    monkeypatch.setenv("PRT_TIMEOUT", "2")
+    run(capsys, "printers", "list")
+    assert [t for _, t in checked] == [3, 3, 1.0, 1.0, 2.0, 2.0]
+
+
+def test_printers_list_checks_in_parallel_and_keeps_the_order(capsys, monkeypatch):
+    """The first printer only answers once the second one has been asked: one at a time, it times out.
+    The second one is offline, so swapped rows would show."""
+    second_asked = threading.Event()
+
+    def make_driver(target, timeout=5.0):
+        if target.host == "first.local":
+            if not second_asked.wait(timeout=2):
+                raise Unreachable(target, "checked one at a time")
+            return FakeDriver(target, timeout)
+        second_asked.set()
+        raise Unreachable(target, "timed out")
+
+    monkeypatch.setattr("prt.cli.make_driver", make_driver)
+    _save(capsys, "first.local", "second.local")
+    code, out, _ = run(capsys, "printers", "list")
+    assert code == 0 and out.splitlines() == ["first\tfirst.local\tauto\tdefault\tonline",
+                                              "second\tsecond.local\tauto\t\toffline"]
+
+
+def test_list_is_printers_list(capsys, checked):
+    _save(capsys, "online.local", "asleep.local")
+    for args in ([], ["-f", "json"], ["--no-check"]):
+        assert run(capsys, "list", *args) == run(capsys, "printers", "list", *args)
+    code, out, _ = run(capsys, "list")
+    assert code == 0 and out.splitlines()[1] == "asleep\tasleep.local\tauto\t\toffline"
 
 
 # --- discover (auto-save) ------------------------------------------------------------------
@@ -206,7 +300,7 @@ def test_discover_names_from_untrusted_text_keep_the_config_loadable(capsys, mon
     code, out, _ = run(capsys, "discover")
     assert [ln.split("\t")[4:] for ln in out.splitlines()] == [
         ["caf-imprimante-b", "added"], ["printer", "added"], ["demo-2", "added"], ["", ""]]
-    code, out, _ = run(capsys, "printers", "list")
+    code, out, _ = run(capsys, "printers", "list", "--no-check")
     assert code == 0 and [ln.split("\t")[0] for ln in out.splitlines()] == ["caf-imprimante-b", "printer", "demo-2"]
 
 
