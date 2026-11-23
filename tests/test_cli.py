@@ -6,8 +6,10 @@ import pytest
 
 from prt import cache, style
 from prt.cli import hoist_globals, main, render_status
+from prt.config import Config, config_path
+from prt.discovery import Discovered
 from prt.drivers.fake import FakeDriver
-from prt.models import Status
+from prt.models import Status, Target
 from prt.transport import ipp
 
 from conftest import PRT, clean_env
@@ -96,6 +98,126 @@ def test_printers_crud(capsys):
 def test_unknown_driver_is_usage_error(capsys):
     code, _, err = run(capsys, "printers", "add", "x", "h", "--driver", "canon9000")
     assert code == 2 and "unknown driver" in err
+
+
+# --- discover (auto-save) ------------------------------------------------------------------
+
+def _dev(host, addresses=(), model="EPSON XP-6000 Series", ipp=True, **kw):
+    return Discovered(name=model, host=host, addresses=list(addresses), make_model=model, ipp=ipp, **kw)
+
+
+XP = _dev("EPSON721655.local", ["192.168.1.70"])
+CANON = _dev("Canon-TS8300.local", ["192.168.1.81"], model="Canon TS8300 series")
+
+
+def _discovers(monkeypatch, *devices):
+    monkeypatch.setattr("prt.discovery.discover", lambda timeout=3.0: list(devices))
+
+
+def test_discover_saves_new_printers(capsys, monkeypatch):
+    _discovers(monkeypatch, XP, CANON)
+    code, out, err = run(capsys, "discover")
+    assert code == 0
+    assert out.splitlines() == ["EPSON XP-6000 Series\tEPSON721655.local\t192.168.1.70\tipp\txp-6000\tadded",
+                                "Canon TS8300 series\tCanon-TS8300.local\t192.168.1.81\tipp\tts8300\tadded"]
+    cfg = Config.load()
+    assert cfg.printers["xp-6000"] == Target(name="xp-6000", host="EPSON721655.local")
+    assert cfg.printers["ts8300"].host == "Canon-TS8300.local" and cfg.default is None
+    assert "added 2 printers: xp-6000, ts8300" in err and "prt printers default xp-6000" in err
+
+
+def test_discover_json_names_added_printers(capsys, monkeypatch):
+    run(capsys, "printers", "add", "office", "Canon-TS8300.local")
+    _discovers(monkeypatch, XP, CANON)
+    code, out, _ = run(capsys, "-f", "json", "discover")
+    data = json.loads(out)
+    assert [(d["host"], d["saved_as"], d["added"]) for d in data] == [
+        ("EPSON721655.local", "xp-6000", True), ("Canon-TS8300.local", "office", False)]
+    assert data[0]["services"] == ["ipp"] and data[0]["addresses"] == ["192.168.1.70"]
+
+
+def test_discover_twice_adds_nothing_the_second_time(capsys, monkeypatch):
+    _discovers(monkeypatch, XP)
+    assert run(capsys, "discover")[0] == 0
+    before = config_path().read_bytes()
+    code, out, err = run(capsys, "discover")
+    assert code == 0 and out == "EPSON XP-6000 Series\tEPSON721655.local\t192.168.1.70\tipp\txp-6000\t\n"
+    assert "added" not in err
+    assert config_path().read_bytes() == before and list(Config.load().printers) == ["xp-6000"]
+
+
+def test_discover_leaves_config_alone_when_printers_are_already_saved(capsys, monkeypatch):
+    """Matched by host (any case) and by one of the advertised addresses: nothing to add, no rewrite."""
+    path = config_path()
+    path.parent.mkdir(parents=True)
+    path.write_text('# my printers\ndefault = "office"\ncolour = "blue"\n\n'
+                    '[printers.office]\nhost = "192.168.1.70"\ndriver = "epson"\n\n'
+                    '[printers.study]\nhost = "canon-ts8300.local"\n')
+    before = path.read_bytes()
+    _discovers(monkeypatch, XP, CANON)
+    code, out, err = run(capsys, "discover")
+    assert code == 0 and [ln.split("\t")[4:] for ln in out.splitlines()] == [["office", ""], ["study", ""]]
+    assert path.read_bytes() == before and "added" not in err
+
+
+def test_discover_keeps_default_and_existing_printers(capsys, monkeypatch):
+    run(capsys, "printers", "add", "office", "192.168.1.50", "--driver", "epson", "--default")
+    _discovers(monkeypatch, XP)
+    code, out, err = run(capsys, "discover")
+    assert code == 0 and out.endswith("\txp-6000\tadded\n")
+    cfg = Config.load()
+    assert cfg.default == "office" and list(cfg.printers) == ["office", "xp-6000"]
+    assert cfg.printers["office"] == Target(name="office", host="192.168.1.50", driver="epson")
+    assert "printers default" not in err
+
+
+def test_discover_suffixes_a_taken_name(capsys, monkeypatch):
+    run(capsys, "printers", "add", "xp-6000", "other.local")
+    twin = _dev("EPSON999999.local", ["192.168.1.71"])
+    again = _dev("epson721655-2.local", ["192.168.1.70"])  # same device answering under a second name
+    _discovers(monkeypatch, XP, twin, again)
+    code, out, _ = run(capsys, "discover")
+    assert [ln.split("\t")[4:] for ln in out.splitlines()] == [["xp-6000-2", "added"], ["xp-6000-3", "added"],
+                                                              ["xp-6000-2", ""]]
+    cfg = Config.load()
+    assert cfg.printers["xp-6000"].host == "other.local"
+    assert {n: p.host for n, p in cfg.printers.items() if n != "xp-6000"} == {
+        "xp-6000-2": "EPSON721655.local", "xp-6000-3": "EPSON999999.local"}
+
+
+def test_discover_does_not_save_scanner_only_devices(capsys, monkeypatch):
+    _discovers(monkeypatch, _dev("scanner.local", ["192.168.1.90"], model="ScanSnap iX1600", ipp=False,
+                                 scanner=True, scan_port=80))
+    code, out, err = run(capsys, "discover")
+    assert code == 0 and out == "ScanSnap iX1600\tscanner.local\t192.168.1.90\tescl\t\t\n"
+    assert not config_path().exists()
+
+
+def test_discover_with_nothing_found_writes_no_config(capsys, monkeypatch):
+    _discovers(monkeypatch)
+    code, out, err = run(capsys, "discover")
+    assert code == 0 and out == "" and "no printers answered" in err
+    assert not config_path().exists()
+
+
+def test_discover_names_from_untrusted_text_keep_the_config_loadable(capsys, monkeypatch):
+    _discovers(monkeypatch, _dev("a.local", model='Café "Imprimante" <b>'), _dev("b.local", model="日本"),
+               _dev("c.local", model="Demo"), _dev("d.local", model="Bad", ipp_path="/ipp\nprint"))
+    code, out, _ = run(capsys, "discover")
+    assert [ln.split("\t")[4:] for ln in out.splitlines()] == [
+        ["caf-imprimante-b", "added"], ["printer", "added"], ["demo-2", "added"], ["", ""]]
+    code, out, _ = run(capsys, "printers", "list")
+    assert code == 0 and [ln.split("\t")[0] for ln in out.splitlines()] == ["caf-imprimante-b", "printer", "demo-2"]
+
+
+def test_discover_styled_box_names_added_printers(capsys, monkeypatch):
+    for var, value in (("FORCE_COLOR", "1"), ("NO_COLOR", "1"), ("COLUMNS", "100")):
+        monkeypatch.setenv(var, value)
+    _discovers(monkeypatch, XP, CANON)
+    code, out, _ = run(capsys, "discover")
+    assert code == 0 and "saved as" in out
+    assert "added xp-6000, ts8300" in out and "pick a default: prt printers default xp-6000" in out
+    assert "2 found" in out and "2 added" in out
 
 
 # --- offline / cache -----------------------------------------------------------------------
