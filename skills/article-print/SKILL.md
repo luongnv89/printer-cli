@@ -50,6 +50,8 @@ Open the page with your own tools (a browser session that is logged in, a reader
 
 All values are text and other fields are rejected. The file may be at most 5 MiB. Saved `.html` pages and plain `.txt` files also work: in a text file the first line is the title and blank lines separate paragraphs.
 
+If you cannot write files (a sandbox, a read-only folder), pass `-` instead of a file name and pipe the article in on stdin, e.g. `printf '%s' "$json" | prt article - --yes`. Input starting with `{` is read as article JSON, input starting with `<` as HTML, anything else as plain text. Bad input on stdin fails exactly like a bad file, and nothing is printed.
+
 ### 3. Pick a style
 
 | `--style` | Look |

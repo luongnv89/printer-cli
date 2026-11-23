@@ -24,7 +24,7 @@ import httpx
 from PIL import Image, ImageDraw
 
 from prt import __version__
-from prt.booth import INK, RUST, SEPIA, SEPIA_DARK, _centred, to_bytes
+from prt.booth import INK, RUST, SEPIA, SEPIA_DARK, STDIN, _centred, read_stdin, to_bytes
 from prt.drivers.base import PrinterError
 from prt.layout import (BOTTOM, CONTENT_W, _clean, _col_width, _ellipsize, _fit, _glyphs, _lead, _text_block,
                         _wrapped, draw_columns, paginate)
@@ -52,7 +52,10 @@ _LINK = re.compile(r"^[a-z][a-z0-9+.-]*://", re.I)
 
 
 def load(source: str, timeout: float) -> Article:
-    """The article behind a link (``scheme://…``) or in a local file, normalised for the page font."""
+    """The article behind a link (``scheme://…``), on stdin (``-``) or in a local file, normalised for the page
+    font."""
+    if source == STDIN:
+        return normalise(load_stdin())
     return normalise(from_link(source, timeout) if _LINK.match(source) else load_file(Path(source)))
 
 
@@ -414,35 +417,54 @@ def load_file(path: Path) -> Article:
     if path.stat().st_size > MAX_BYTES:
         raise PrinterError(f"{path.name} is larger than {MAX_BYTES // (1024 * 1024)} MiB",
                            hint="save just the article", exit_code=3)
-    content = path.read_bytes()
-    if path.suffix.lower() in (".html", ".htm", ".xhtml"):
+    suffix = path.suffix.lower()
+    kind = "html" if suffix in (".html", ".htm", ".xhtml") else "json" if suffix == ".json" else "text"
+    return parse(path.read_bytes(), kind, path.name)
+
+
+def load_stdin() -> Article:
+    """An article piped in on stdin: JSON (see JSON_HINT) when it starts with ``{``, HTML when it starts with ``<``,
+    else plain text."""
+    content = read_stdin(MAX_BYTES)
+    if len(content) > MAX_BYTES:
+        raise PrinterError(f"the article on stdin is larger than {MAX_BYTES // (1024 * 1024)} MiB",
+                           hint="pipe in just the article", exit_code=3)
+    start = content.lstrip(b"\xef\xbb\xbf \t\r\n")[:1]
+    kind = "json" if start == b"{" else "html" if start == b"<" else "text"
+    return parse(content, kind, "stdin")
+
+
+def parse(content: bytes, kind: str, name: str = "the article") -> Article:
+    """An article from its bytes: ``kind`` is ``json`` (see JSON_HINT), ``html`` or ``text``; ``name`` says where
+    it came from in error messages (a file name, or ``stdin``)."""
+    if kind == "html":
         return from_html(_decode(content, None))
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise PrinterError(f"{path.name} is not UTF-8 text", hint="save it as UTF-8", exit_code=3) from exc
-    if path.suffix.lower() != ".json":
+        raise PrinterError(f"{name} is not UTF-8 text", hint="save it as UTF-8", exit_code=3) from exc
+    if kind != "json":
         return from_text(text)
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise PrinterError(f"{path.name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=JSON_HINT,
+        raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=JSON_HINT,
                            exit_code=3) from exc
     if not isinstance(data, dict):
-        raise PrinterError(f"{path.name} must hold a JSON object", hint=JSON_HINT, exit_code=3)
+        raise PrinterError(f"{name} must hold a JSON object", hint=JSON_HINT, exit_code=3)
     unknown = sorted(set(data) - set(FIELDS))
     if unknown:
-        raise PrinterError(f"unknown field(s) in {path.name}: {', '.join(unknown)}",
+        raise PrinterError(f"unknown field(s) in {name}: {', '.join(unknown)}",
                            hint="allowed fields: " + ", ".join(FIELDS), exit_code=3)
-    missing = [name for name in ("title", "body") if name not in data]
+    missing = [field for field in ("title", "body") if field not in data]
     if missing:
-        raise PrinterError(f"{path.name} is missing {' and '.join(missing)}", hint=JSON_HINT, exit_code=3)
+        raise PrinterError(f"{name} is missing {' and '.join(missing)}", hint=JSON_HINT, exit_code=3)
     body = data["body"]
     if isinstance(body, list) and all(isinstance(p, str) for p in body):
         body = "\n".join(body)
-    wrong = sorted(name for name, value in {**data, "body": body}.items() if not isinstance(value, str))
+    wrong = sorted(field for field, value in {**data, "body": body}.items() if not isinstance(value, str))
     if wrong:
-        raise PrinterError(f"fields of {path.name} must be text: {', '.join(wrong)}",
+        raise PrinterError(f"fields of {name} must be text: {', '.join(wrong)}",
                            hint="body may also be a list of paragraphs", exit_code=3)
     return Article(title=data["title"], body=tuple(body.split("\n")), author=data.get("author", ""),
                    source=data.get("source", ""), url=data.get("url", ""))

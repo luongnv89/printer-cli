@@ -1,5 +1,6 @@
 import io
 import json
+import re
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlencode
 
@@ -415,6 +416,47 @@ def test_missing_and_oversized_files_are_refused(tmp_path, monkeypatch):
         article.load(str(tmp_path / "big.txt"), 5)
 
 
+@pytest.mark.parametrize("name, content", [
+    ("a.json", json.dumps({"title": "Zoë", "author": "Jo", "body": ["Café — first.", "Second."]})),
+    ("saved.html", BLOG),
+    ("notes.txt", "Title line\n\nBody text."),
+])
+def test_stdin_reads_like_the_same_file(tmp_path, stdin, name, content):
+    """JSON when stdin starts with {, HTML when it starts with <, else plain text."""
+    path = tmp_path / name
+    path.write_text(content, encoding="utf-8")
+    stdin(content.encode())
+    assert article.load("-", 5) == article.load(str(path), 5)
+
+
+def test_stdin_json_may_start_with_blank_lines(stdin):
+    stdin(b' \n {"title": "T", "body": "One.\\n\\nTwo."}')
+    assert article.load("-", 5).body == ("One.", "Two.")
+
+
+@pytest.mark.parametrize("content, message", [
+    (b"{oops", "stdin is not valid JSON"),
+    (b'{"title": "T", "body": "B", "date": "x"}', "unknown field(s) in stdin: date"),
+    (b'{"body": "B"}', "stdin is missing title"),
+    (b'{"title": "T", "body": [1]}', "fields of stdin must be text: body"),
+    (b"\xff\xfe bad", "stdin is not UTF-8 text"),
+    (b"", "no article text found"),
+    (b'{"title": "T", "body": ""}', "no article text found")])
+def test_bad_stdin_is_refused_like_a_bad_file(stdin, content, message):
+    stdin(content)
+    with pytest.raises(PrinterError, match=re.escape(message)) as err:
+        article.load("-", 5)
+    assert err.value.exit_code == 3
+
+
+def test_oversized_stdin_is_refused(stdin, monkeypatch):
+    monkeypatch.setattr(article, "MAX_BYTES", 10)
+    stdin(b"T\n\n" + b"x" * 10)
+    with pytest.raises(PrinterError, match="the article on stdin is larger than") as err:
+        article.load("-", 5)
+    assert err.value.exit_code == 3
+
+
 # --- normalising -----------------------------------------------------------------------------
 
 def test_symbols_print_as_ascii_and_emoji_are_left_out():
@@ -571,6 +613,22 @@ def test_cli_prints_one_job_per_page(capsys, tmp_path, printer, style):
     assert json.loads(out) == {"action": "article", "style": style, "title": LONG.title, "pages": len(expected),
                                "job_ids": list(range(101, 101 + len(expected)))}
     assert f"{len(expected)} pages queued" in err
+
+
+def test_cli_dash_reads_the_article_from_stdin(capsys, tmp_path, printer, stdin):
+    from prt.booth import to_jpeg
+    stdin(_article_file(tmp_path).read_bytes())
+    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "article", "-", "--yes")
+    expected = [to_jpeg(page) for page in article.compose_pages(LONG, "magazine")]
+    assert code == 0 and printer.jobs() == expected
+    assert json.loads(out)["title"] == LONG.title
+
+
+def test_cli_bad_stdin_prints_nothing(capsys, tmp_path, printer, stdin):
+    stdin(b'{"title": "T", "body": "B", "date": "x"}')
+    code, out, err = run(capsys, "-p", "demo", "article", "-", "--yes")
+    assert code == 3 and out == "" and "unknown field(s) in stdin: date" in err
+    assert printer.made == [] and printer.jobs() == []
 
 
 def test_cli_fetches_a_link_and_asks_before_printing(capsys, tmp_path, monkeypatch, printer, web):

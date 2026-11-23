@@ -731,7 +731,7 @@ def booth_cmd(
                                           "(weathered pirate poster)."),
     story_file: Optional[Path] = typer.Option(None, "--story-file",
                                               help="JSON story: headline and story required; kicker, caption, "
-                                                   "byline optional."),
+                                                   "byline optional. Use - to read it from stdin."),
     headline: Optional[str] = typer.Option(None, "--headline",
                                            help="Headline; the name on wizard and wanted (overrides the story "
                                                 "file)."),
@@ -814,7 +814,7 @@ class ArticleStyle(str, Enum):
 @app.command("article")
 def article_cmd(
     source: str = typer.Argument(..., help="Link to a blog post, news article or X post (http or https), or a "
-                                           "saved file: article JSON, HTML or plain text."),
+                                           "saved file: article JSON, HTML or plain text, or - to read it from stdin."),
     paper: ArticleStyle = typer.Option(ArticleStyle.magazine, "--style", "-s",
                                        help="magazine (bold headline, 3 columns, colour accents) or "
                                             "classic-magazine (ivory page, centred single column, drop cap, "
@@ -880,7 +880,7 @@ def gazette_cmd(
                                                   "first is the lead picture on the front page."),
     story_file: Optional[Path] = typer.Option(None, "--story-file",
                                               help="JSON story: headline and story required; kicker, caption, "
-                                                   "byline optional."),
+                                                   "byline optional. Use - to read it from stdin."),
     headline: Optional[str] = typer.Option(None, "--headline", help="Headline (overrides the story file)."),
     story: Optional[str] = typer.Option(None, "--story", help="Story text; a newline starts a new paragraph."),
     kicker: Optional[str] = typer.Option(None, "--kicker", help="Small label above the headline."),

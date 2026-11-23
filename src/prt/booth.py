@@ -13,6 +13,7 @@ import io
 import json
 import math
 import random
+import sys
 import time
 from dataclasses import dataclass, fields, replace
 from functools import lru_cache
@@ -45,6 +46,7 @@ REQUIRED = ("headline", "story")
 # and compose() names the fields that were cut so the command can warn about them.
 LIMITS = {"headline": 120, "story": 2500, "kicker": 40, "caption": 200, "byline": 80}
 MAX_STORY_FILE = 64 * 1024
+STDIN = "-"  # a story file or article source of "-" is read from standard input
 
 DEFAULT_STORY = Story(
     kicker="Local news",
@@ -114,35 +116,63 @@ def check_story(story: Story, exit_code: int) -> Story:
     return Story(**clean)
 
 
+def read_stdin(limit: int) -> bytes:
+    """Standard input as bytes, at most ``limit + 1`` of them: a longer result means the input is over ``limit``."""
+    stream = getattr(sys.stdin, "buffer", None)
+    if stream is None:
+        raise PrinterError("cannot read standard input: there is none", hint="pipe the input in, or give a file",
+                           exit_code=3)
+    try:
+        return stream.read(limit + 1)
+    except (OSError, ValueError) as exc:  # ValueError: stdin was closed
+        raise PrinterError(f"cannot read standard input: {exc}", hint="pipe the input in, or give a file",
+                           exit_code=3) from exc
+
+
 def load_story(path: Path) -> Story:
-    """Read a story JSON file: {"headline", "story", "kicker"?, "caption"?, "byline"?}."""
-    if not path.is_file():
-        raise PrinterError(f"story file not found: {path}", hint="check the path", exit_code=3)
-    if path.stat().st_size > MAX_STORY_FILE:
-        raise PrinterError(f"story file {path.name} is larger than {MAX_STORY_FILE // 1024} KiB",
+    """Read a story JSON file: {"headline", "story", "kicker"?, "caption"?, "byline"?}; ``-`` reads stdin."""
+    if str(path) == STDIN:
+        name = kind = "story on stdin"
+        content = read_stdin(MAX_STORY_FILE)
+        too_big = len(content) > MAX_STORY_FILE
+    else:
+        if not path.is_file():
+            raise PrinterError(f"story file not found: {path}", hint="check the path", exit_code=3)
+        name, kind = f"story file {path.name}", "story file"
+        too_big = path.stat().st_size > MAX_STORY_FILE
+        content = b"" if too_big else path.read_bytes()
+    if too_big:
+        raise PrinterError(f"{name} is larger than {MAX_STORY_FILE // 1024} KiB",
                            hint="a booth story is a few short paragraphs", exit_code=3)
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise PrinterError(f"story file {path.name} is not UTF-8 text", hint="save it as UTF-8 JSON",
-                           exit_code=3) from exc
+        raise PrinterError(f"{name} is not UTF-8 text", hint="save it as UTF-8 JSON", exit_code=3) from exc
+    return parse_story(text, name, kind)
+
+
+def parse_story(text: str, name: str = "story", kind: str = "story") -> Story:
+    """A story from its JSON text, checked as a story file is; ``name`` and ``kind`` say where it came from in
+    error messages (e.g. ``story file story.json`` and ``story file``)."""
+    try:
+        data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise PrinterError(f"story file {path.name} is not valid JSON: {exc.msg} (line {exc.lineno})",
+        raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})",
                            hint='expected {"headline": "...", "story": "..."}', exit_code=3) from exc
     if not isinstance(data, dict):
-        raise PrinterError(f"story file {path.name} must hold a JSON object",
+        raise PrinterError(f"{name} must hold a JSON object",
                            hint='expected {"headline": "...", "story": "..."}', exit_code=3)
     unknown = sorted(set(data) - set(FIELDS))
     if unknown:
-        raise PrinterError(f"unknown field(s) in story file: {', '.join(unknown)}",
+        raise PrinterError(f"unknown field(s) in {kind}: {', '.join(unknown)}",
                            hint="allowed fields: " + ", ".join(FIELDS), exit_code=3)
-    missing = [name for name in REQUIRED if name not in data]
+    missing = [field for field in REQUIRED if field not in data]
     if missing:
-        raise PrinterError(f"story file {path.name} is missing {' and '.join(missing)}",
+        raise PrinterError(f"{name} is missing {' and '.join(missing)}",
                            hint='expected {"headline": "...", "story": "..."}', exit_code=3)
-    wrong = [name for name, value in data.items() if not isinstance(value, str)]
+    wrong = [field for field, value in data.items() if not isinstance(value, str)]
     if wrong:
-        raise PrinterError(f"story file fields must be text: {', '.join(sorted(wrong))}",
+        raise PrinterError(f"{kind} fields must be text: {', '.join(sorted(wrong))}",
                            hint='quote the values, e.g. "byline": "By Jo"', exit_code=3)
     return check_story(Story(**data), exit_code=3)
 
