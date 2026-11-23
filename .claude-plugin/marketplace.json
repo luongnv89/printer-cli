@@ -1,0 +1,17 @@
+{
+  "name": "printer-cli",
+  "owner": {
+    "name": "Luong NGUYEN",
+    "url": "https://github.com/luongnv89"
+  },
+  "description": "The printer-cli plugin: prt's agent skills and MCP server for Claude Code.",
+  "plugins": [
+    {
+      "name": "printer-cli",
+      "source": "./",
+      "description": "The photo-booth and article-print skills, and the prt MCP server (status, ink, previews, printing). Needs printer-cli installed: uv tool install 'printer-cli[mcp]'.",
+      "category": "productivity",
+      "tags": ["printer", "printing", "mcp"]
+    }
+  ]
+}

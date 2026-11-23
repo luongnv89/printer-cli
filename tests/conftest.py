@@ -11,7 +11,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 @pytest.fixture(autouse=True)
 def isolated_env(tmp_path, monkeypatch):
-    """Never touch the user's real config/cache; neutral terminal environment."""
+    """Never touch the user's real config, cache or home folder (skills); neutral terminal environment."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     for var in ("PRT_PRINTER", "PRT_CONFIG", "PRT_TIMEOUT", "FORCE_COLOR", "NO_COLOR", "CLICOLOR_FORCE",

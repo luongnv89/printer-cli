@@ -97,9 +97,12 @@ printers_app = typer.Typer(help="Manage saved printers.", no_args_is_help=True)
 maintain_app = typer.Typer(help="Maintenance: nozzle check, head cleaning, test page, identify.",
                            no_args_is_help=True)
 jobs_app = typer.Typer(help="List, wait for or cancel print jobs.", invoke_without_command=True)
+skills_app = typer.Typer(help="List the agent skills that come with prt, or install them for Claude Code and "
+                              "other agents.", no_args_is_help=True)
 app.add_typer(printers_app, name="printers")
 app.add_typer(maintain_app, name="maintain")
 app.add_typer(jobs_app, name="jobs")
+app.add_typer(skills_app, name="skills")
 
 
 def _version(value: bool) -> None:
@@ -1077,6 +1080,62 @@ def schema_cmd(name: str = typer.Argument(..., metavar="NAME", autocompletion=_s
     """
     from prt import catalog
     STATE.write(json.dumps(catalog.schema(name), indent=2) + "\n")
+
+
+# --- Agent skills ----------------------------------------------------------------------
+
+
+@skills_app.command("list")
+def skills_list() -> None:
+    """List the agent skills that come with prt: name, version and what each one does."""
+    from prt import skills
+    items = skills.bundled()
+    mode = STATE.out
+
+    def text() -> str:
+        rows = [[t(s.name, "accent"), t(s.version or ""), t(s.description.split(". ")[0].rstrip("."))]
+                for s in items]
+        return style.box("skills", style.table_rows(["skill", "version", "what it does"], rows, mode), mode,
+                         footer="install: prt skills install --claude")
+
+    STATE.emit([s.to_dict() for s in items], text,
+               lambda: [style.plain_record(s.name, s.version or "", s.description) for s in items])
+
+
+@skills_app.command("install")
+def skills_install(
+    names: Optional[list[str]] = typer.Argument(None, metavar="[SKILL]...",
+                                                help="Skills to install (default: all of them)."),
+    claude: bool = typer.Option(False, "--claude", help="Install for Claude Code, in ~/.claude/skills (the default)."),
+    agents: bool = typer.Option(False, "--agents",
+                                help="Install for agents that read ~/.agents/skills, such as Codex."),
+    project: bool = typer.Option(False, "--project",
+                                 help="Install into .claude/skills or .agents/skills of the current folder instead "
+                                      "of your home folder."),
+    folder: Optional[Path] = typer.Option(None, "--dir", metavar="PATH",
+                                          help="Install into this skills folder instead (one sub-folder per skill)."),
+    force: bool = typer.Option(False, "--force",
+                               help="Replace installed skill files that differ from the ones that come with prt."),
+) -> None:
+    """Install the agent skills that come with prt (photo-booth, article-print) where agents look for them.
+
+    Installed files that differ from the bundled ones are never replaced without --force; then nothing is installed.
+    """
+    from prt import skills
+    if folder is not None and (claude or agents or project):
+        raise PrinterError("--dir cannot be combined with --claude, --agents or --project", exit_code=2,
+                           hint="pick one: --dir PATH, or --claude / --agents (with --project for this folder)")
+    if folder is not None:
+        destinations = [("dir", folder.expanduser())]
+    else:
+        base = Path.cwd() if project else Path.home()
+        chosen = [name for name, on in (("claude", claude), ("agents", agents)) if on] or ["claude"]
+        destinations = [(name, skills.target_dir(name, base)) for name in chosen]
+    done = skills.install(skills.select(skills.bundled(), names or []), destinations, force=force)
+    for item in done:
+        STATE.note("ok" if item.status != "unchanged" else "info", f"{item.skill} {item.status}", str(item.path))
+    if STATE.json:
+        STATE.write(json.dumps({"action": "skills_install", "skills": [item.to_dict() for item in done]}) + "\n")
 
 
 @jobs_app.callback()

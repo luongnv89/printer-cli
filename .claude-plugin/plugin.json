@@ -1,0 +1,34 @@
+{
+  "name": "printer-cli",
+  "displayName": "printer-cli",
+  "version": "0.2.0",
+  "description": "Print photos as newspaper pages and web articles as magazine pages with prt: the photo-booth and article-print skills, and the prt MCP server for printer status, ink, page previews and printing.",
+  "author": {
+    "name": "Luong NGUYEN",
+    "url": "https://github.com/luongnv89"
+  },
+  "homepage": "https://github.com/luongnv89/printer-cli",
+  "repository": "https://github.com/luongnv89/printer-cli",
+  "license": "MIT AND OFL-1.1",
+  "keywords": [
+    "printer",
+    "printing",
+    "photo-booth",
+    "newspaper",
+    "magazine",
+    "article",
+    "mcp"
+  ],
+  "icon": "./assets/logo/png/logo-icon-512.png",
+  "mcpServers": {
+    "printer": {
+      "command": "prt",
+      "args": [
+        "mcp"
+      ],
+      "env": {
+        "PRT_AGENT": "1"
+      }
+    }
+  }
+}

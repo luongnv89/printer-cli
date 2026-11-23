@@ -1,0 +1,29 @@
+# printer-cli
+
+> printer-cli (`prt`) controls network printers from the terminal: status, ink, alerts, nozzle checks, head cleaning, printing and scanning over IPP, eSCL, SNMP and Epson ESC/P2. It also prints a photo as a newspaper front page, wizard card or wanted poster (`prt booth`), a web article or X post as A4 magazine pages (`prt article`), and photos as a vintage newspaper (`prt gazette`).
+
+Install with `uv tool install printer-cli` (or `uv tool install 'printer-cli[mcp]'` for the MCP server). Add `-p demo` to any command to try it without a printer.
+
+Notes for agents:
+
+- `-f json` gives JSON on stdout, and on failure a `{"error": {"code", "kind", "message", "hint"}}` object on the last line of stderr. Exit codes: 0 ok, 1 runtime error, 2 usage error, 3 bad input, 130 interrupted.
+- `prt styles -f json` lists every page style with its fields and character limits. `prt schema story|article|gazette` prints the JSON Schema of each input file.
+- `--preview FILE` renders without printing. The `-f json` line reports `fits` and `cut` (booth, gazette) and an ink `estimate`. `--story-file -` and `prt article -` read the input from stdin.
+- Set `PRT_AGENT=1` so nothing prints without `--yes`. `max_pages_per_run` and `max_pages_per_day` in `~/.config/prt/config.toml` cap the pages, and in agent mode the per-run cap defaults to 10. `prt print --wait` and `prt jobs wait ID` wait for a job to finish.
+- `prt mcp` is an MCP stdio server with the tools `status`, `ink`, `list_styles`, `preview_booth`, `preview_article` and `print_file`.
+- `prt skills install --claude` (or `--agents`) installs the bundled agent skills. The repository is also a Claude Code plugin: `/plugin marketplace add luongnv89/printer-cli`, then `/plugin install printer-cli@printer-cli`.
+
+## Docs
+
+- [README](https://raw.githubusercontent.com/luongnv89/printer-cli/main/README.md): the full user guide, with every command, the JSON error kinds, the agent guardrails, the MCP server and the configuration
+- [AGENTS.md](https://raw.githubusercontent.com/luongnv89/printer-cli/main/AGENTS.md): using prt from an agent, and working on this repository
+
+## Agent skills
+
+- [photo-booth](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/photo-booth/SKILL.md): write a short story for a photo and print it as a newspaper front page, wizard card or wanted poster with `prt booth`
+- [article-print](https://raw.githubusercontent.com/luongnv89/printer-cli/main/skills/article-print/SKILL.md): print a blog post, news article or X post as magazine pages with `prt article`, fetching the text yourself when the command cannot
+
+## Optional
+
+- [CHANGELOG](https://raw.githubusercontent.com/luongnv89/printer-cli/main/CHANGELOG.md): what changed in each release
+- [Sample pages](https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/README.md): the commands that rendered the sample images, with their story and article inputs
