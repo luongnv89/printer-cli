@@ -58,7 +58,7 @@ Show the user the transcription and fix anything they correct.
 
 All values are strings, and other fields are rejected. `prt schema gazette` prints these rules as a JSON Schema.
 
-When the scan is the only image, the front page holds the whole 2500 characters: a long story is set in smaller type. Each extra photo or page scan takes room from the story: with two more images the front page holds only about 1350 characters. A letter longer than the room it has does not fit in one edition. Tell the user, and either print the first part ending with `[continued]` or print it in two editions, one per part (each with its own page scan).
+When the scan is the only image, the front page holds the whole 2500 characters: a long story is set in smaller type. Any extra image adds a row of plates under the scan, which leaves the story only about 1350 characters, whether there are one or two extra images; images after the third go on later pages and take no front-page room. Only taking out every extra image gives the room back. A letter longer than the room it has does not fit in one edition. Tell the user, and either print the first part ending with `[continued]` or print it in two editions, one per part (each with its own page scan).
 
 If you cannot write files, pass `--story-file -` and pipe the same JSON in on stdin, e.g. `printf '%s' '{"headline": "...", "story": "..."}' | prt gazette letter.jpg --story-file - --yes`. A bad story on stdin fails exactly like a bad file, and nothing is printed.
 
@@ -76,7 +76,7 @@ prt gazette letter.jpg --story-file story.json --preview edition.pdf -f json
  "files": [{"file": "edition.pdf", "format": "pdf", "bytes": 123456}]}
 ```
 
-When `"fits"` is false, `cut` names each field that was cut with `…`, with how many characters were printed (`max_fit`) and how many you gave (`given`). Shorten the headline, kicker, byline or caption to `max_fit` and preview again. When `cut` names `story`, the transcription did not fit: never shorten it without asking the user. Take out the extra images, or split the letter into two editions as in step 3. `"fits": true, "cut": {}` means everything fitted.
+When `"fits"` is false, `cut` names each field that was cut with `…`, with how many characters were printed (`max_fit`) and how many you gave (`given`). Shorten the headline, kicker, byline or caption to `max_fit` and preview again. When `cut` names `story`, the transcription did not fit: never shorten it without asking the user. Take out all the extra images (dropping only one of two does not help), or split the letter into two editions as in step 3. `"fits": true, "cut": {}` means everything fitted.
 
 A letter written across a wide sheet may look better with `--landscape`, which puts the scan beside the story.
 
