@@ -95,7 +95,7 @@ prt list
 | `prt maintain clean [--force]` | Head cleaning, with a safety check first (see [Safety](#safety)) |
 | `prt maintain test-page` | Colour test page: ink bars, gradients, grey steps, fine lines |
 | `prt maintain identify` | Flash the printer's panel |
-| `prt print FILE… [-n 2] [--media 4x6] [--tray photo] [--quality high] [--mono] [--duplex] [--direct] [--wait]` | Print; `--wait` returns once each job has finished and reports how it ended |
+| `prt print FILE… [-n 2] [--media 4x6] [--tray photo] [--quality high] [--mono] [--duplex] [--direct] [--wait] [--yes]` | Print; `--wait` returns once each job has finished and reports how it ended; `--yes` is needed in agent mode |
 | `prt booth PHOTO [--style metro\|daily\|wizard\|wanted] [--story-file story.json] [--preview page.jpg] [--save page.pdf]` | Photo booth: print the photo as an A4 newspaper front page, wizard card or wanted poster (see [Photo booth](#photo-booth)) |
 | `prt article URL\|FILE [--style magazine\|classic-magazine] [--preview page.pdf] [--save page.pdf]` | Print a blog post, news article or X post as A4 magazine pages (see [Article printing](#article-printing)) |
 | `prt gazette PHOTO… [--landscape] [--story-file story.json] [--preview page.pdf] [--save page.pdf]` | Print one or more photos as a vintage newspaper, over as many A4 pages as the photos need (see [Vintage gazette](#vintage-gazette)) |
@@ -236,6 +236,11 @@ $ prt -f json article https://example.com/gone
 | `error` | 1 | any other runtime failure |
 | `usage` | 2 | bad command line, option value or argument |
 | `confirmation_required` | 2 | a prompt is needed but there is no terminal: add `--yes` |
+| `agent_confirmation_required` | 2 | agent mode (`PRT_AGENT=1`) and no `--yes`: nothing was sent |
+| `page_cap_exceeded` | 1 | the print uses more pages than `max_pages_per_run` allows: nothing was sent |
+| `daily_page_cap_exceeded` | 1 | the print would go over `max_pages_per_day`: nothing was sent |
+| `page_count_unknown` | 1 | a page cap is in force and the file's pages cannot be counted (text, PWG, office files) |
+| `page_ledger_unavailable` | 1 | `max_pages_per_day` is set but the page count cannot be recorded in the cache folder |
 | `fetch_failed` | 3 | an article link could not be fetched |
 | `invalid_input` | 3 | a bad input file or link |
 | `interrupted` | 130 | Ctrl-C |
@@ -351,6 +356,18 @@ Both samples: `prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file s
 - Nozzle check, cleaning, the test page, the photo booth, article printing and the gazette ask for confirmation first. In scripts, pass `--yes`.
 - printer-cli never resets the waste ink counter or writes to the printer's EEPROM.
 
+### Agent guardrails
+
+Before you let an AI agent print unattended, set `PRT_AGENT=1` in its environment and, if you like, page caps in the config file:
+
+- **Agent mode** (`PRT_AGENT=1`, also `true`, `yes` or `on`): every command that prints or uses ink — `print`, `booth`, `article`, `gazette`, `maintain test-page`, `maintain nozzle-check`, `maintain clean` — refuses to run without `--yes`, even at a terminal, so an agent never sits waiting on a prompt and never prints without deciding to. The refusal exits `2` with kind `agent_confirmation_required`. `--preview` needs no `--yes`: it prints nothing.
+- **Per-run cap**: `max_pages_per_run` in the config limits the pages one command may print (copies count). In agent mode it defaults to 10 when not set.
+- **Daily cap**: `max_pages_per_day` in the config limits the pages printed per calendar day, counted across every command in `~/.cache/prt/pages.json`. A page counts once its job has been sent, even if sending failed, because the printer may have taken it.
+- A print over a cap is refused whole, before the prompt and before anything is sent (exit `1`, kind `page_cap_exceeded` or `daily_page_cap_exceeded`). Configured caps apply outside agent mode too, and in the TUI. While a cap is in force, a file whose pages cannot be counted (plain text, PWG raster, office files) is refused with `page_count_unknown`; images count as one page and PDF pages are counted from the file.
+- **Cost estimate**: with `-f json`, `prt booth`, `prt article` and `prt gazette` (preview or print) add an `estimate` of the rendered pages: the page count, whether they use colour, and for each ink the share of a standard cartridge they would use, e.g. `"estimate": {"pages": 3, "colour": true, "ink": {"cyan": 1.2, "magenta": 1.0, "yellow": 1.1, "black": 3.8}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`. `ink_percent` is the cartridge that would run out first. The ink figures are rough: they assume a cartridge prints about 300 pages at 5% coverage.
+
+These guardrails stop a cooperating agent from using up a cartridge by mistake. They are not a security boundary: a process that can change its own environment or config can get around them.
+
 With the demo printer's low inks and nearly full pad, `prt -p demo maintain clean` refuses and exits with code 1:
 
 ```
@@ -388,6 +405,8 @@ host = "EPSON721655.local"
 host = "192.168.1.80"
 driver = "ipp"
 ```
+
+`max_pages_per_run = 20` and `max_pages_per_day = 50`, at the top of the file, cap how many pages a print may use (see [Agent guardrails](#agent-guardrails)). Each must be a whole number of 1 or more; leave it out for no limit. `PRT_AGENT=1` turns on agent mode.
 
 ## Install options
 

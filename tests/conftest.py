@@ -15,7 +15,7 @@ def isolated_env(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     for var in ("PRT_PRINTER", "PRT_CONFIG", "PRT_TIMEOUT", "FORCE_COLOR", "NO_COLOR", "CLICOLOR_FORCE",
-                "COLORTERM", "COLUMNS", "LC_ALL", "LC_CTYPE"):
+                "COLORTERM", "COLUMNS", "LC_ALL", "LC_CTYPE", "PRT_AGENT"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("TERM", "xterm-256color")
     monkeypatch.setenv("LANG", "C.UTF-8")
@@ -40,3 +40,13 @@ def clean_env(**extra):
 
 
 PRT = [sys.executable, "-m", "prt"]
+
+
+def without_estimate(text: str) -> dict:
+    """A booth/article/gazette JSON line minus its cost ``estimate``, after checking the estimate's shape."""
+    import json
+    data = json.loads(text)
+    est = data.pop("estimate")
+    assert set(est) == {"pages", "colour", "ink", "ink_percent", "summary"}
+    assert est["pages"] == data.get("pages", 1) and set(est["ink"]) == {"cyan", "magenta", "yellow", "black"}
+    return data

@@ -14,7 +14,7 @@ from textual.screen import ModalScreen
 from textual.widgets import (Button, DataTable, Footer, Input, Label, RichLog, Select, Static, Switch,
                              TabbedContent, TabPane)
 
-from prt import cache
+from prt import cache, guard
 from prt.config import Config
 from prt.drivers.base import Driver, PrinterError, Unreachable
 from prt.drivers.registry import make_driver
@@ -89,10 +89,12 @@ class PrtApp(App):
         *[Binding(str(k), f"switch({k - 1})", show=False) for k in range(1, 10)],
     ]
 
-    def __init__(self, targets: list[Target], timeout: float = 5.0, notice: str | None = None):
+    def __init__(self, targets: list[Target], timeout: float = 5.0, notice: str | None = None,
+                 cfg: Config | None = None):
         super().__init__()
         self.targets = targets
         self.timeout = timeout
+        self.cfg = cfg  # its page caps hold here too (prt.guard); the TUI's own dialogs are the consent
         self.active = 0
         self.drivers: dict[str, Driver] = {}
         self.status: Status | None = None
@@ -327,13 +329,15 @@ class PrtApp(App):
                     "test": "test page queued", "identify": "the printer should be flashing now"}
         try:
             d = self.driver()
-            if kind == "nozzle":
-                d.nozzle_check()
+            if kind in ("nozzle", "test"):
+                with guard.authorize(self.cfg, 1, yes=True) as ticket:
+                    ticket.attempt(1)
+                    if kind == "nozzle":
+                        d.nozzle_check()
+                    else:
+                        messages["test"] = f"test page queued as job {d.test_page()}"
             elif kind == "clean":
                 d.head_clean()
-            elif kind == "test":
-                job = d.test_page()
-                messages["test"] = f"test page queued as job {job}"
             elif kind == "identify":
                 d.identify()
             self.call_from_thread(self.log_line, "ok", messages[kind])
@@ -371,7 +375,10 @@ class PrtApp(App):
     def _send_print(self, path: Path, opts: PrintOptions) -> None:
         result = self.query_one("#print-result", Static)
         try:
-            job = self.driver().print_file(path, opts)
+            pages = guard.job_pages([path], opts.copies)
+            with guard.authorize(self.cfg, pages, yes=True) as ticket:
+                ticket.attempt(pages or 0)
+                job = self.driver().print_file(path, opts)
             msg = Text("● ", style=f"bold {GREEN}")
             msg.append(f"{path.name} sent" + (f" as job {job}" if job else ""))
             self.call_from_thread(result.update, msg)
@@ -492,4 +499,4 @@ def build_targets(cfg: Config, selector: str | None) -> tuple[list[Target], str 
 
 def run(cfg: Config, selector: str | None = None, timeout: float | None = None) -> None:
     targets, notice = build_targets(cfg, selector)
-    PrtApp(targets, timeout or cfg.timeout, notice).run()
+    PrtApp(targets, timeout or cfg.timeout, notice, cfg=cfg).run()

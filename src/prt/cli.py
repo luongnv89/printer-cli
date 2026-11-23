@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 import typer
 from rich.text import Text
 
-from prt import __version__, cache, style
+from prt import __version__, cache, guard, style
 from prt.config import Config
 from prt.drivers.base import FINAL_JOB_STATES, KIND_BY_EXIT_CODE, Driver, PrinterError, Unreachable
 from prt.drivers.registry import driver_names, make_driver
@@ -613,6 +613,7 @@ def printers_default(name: str = typer.Argument(..., help="Saved printer name.")
 
 
 def _confirm(question: str, yes: bool) -> None:
+    guard.require_consent(yes)  # agent mode: --yes, never a prompt
     if yes:
         return
     if not sys.stdin.isatty():
@@ -621,6 +622,18 @@ def _confirm(question: str, yes: bool) -> None:
     if not typer.confirm(question, default=False, err=True):
         STATE.note("info", "cancelled — nothing was sent")
         _exit_with(1, "declined", "cancelled — nothing was sent")
+
+
+def _authorize(pages: int | None, yes: bool, question: str | None):
+    """Run the print guard and the confirmation prompt; returns the ledger reservation to send under.
+
+    Agent-mode consent and the page caps are checked before the prompt, so a print that would be refused is
+    never asked about. ``question`` None skips the prompt (``prt print`` asks nothing outside agent mode).
+    """
+    guard.check(STATE.cfg, pages, yes=yes)
+    if question:
+        _confirm(question, yes)
+    return guard.reserve(STATE.cfg, pages)
 
 
 def _show_preflight(pf) -> None:
@@ -639,8 +652,9 @@ def nozzle_check(yes: bool = typer.Option(False, "--yes", "-y", help="Skip the c
     _show_preflight(pf)
     if not pf.ok:
         raise PrinterError("nozzle check not sent", hint="fix the issues above and retry", kind="refused")
-    _confirm(f"Print a nozzle check on {d.display_name}?", yes)
-    d.nozzle_check()
+    with _authorize(1, yes, f"Print a nozzle check on {d.display_name}?") as ticket:
+        ticket.attempt(1)
+        d.nozzle_check()
     STATE.note("ok", "nozzle check sent", "broken lines in the pattern → run `prt maintain clean`")
     if STATE.json:
         STATE.write(json.dumps({"action": "nozzle_check", "sent": True}) + "\n")
@@ -672,8 +686,9 @@ def test_page(yes: bool = typer.Option(False, "--yes", "-y", help="Skip the conf
     """Print prt's colour test page: ink bars, gradients, grey steps, fine lines (A4)."""
     d = STATE.driver()
     d.require(Capability.TEST_PAGE)
-    _confirm(f"Print a colour test page on {d.display_name}?", yes)
-    job = d.test_page()
+    with _authorize(1, yes, f"Print a colour test page on {d.display_name}?") as ticket:
+        ticket.attempt(1)
+        job = d.test_page()
     STATE.note("ok", f"test page queued as job {job}")
     if STATE.json:
         STATE.write(json.dumps({"action": "test_page", "job_id": job}) + "\n")
@@ -717,6 +732,7 @@ def print_cmd(
                                                     "exits non-zero when a job fails or is cancelled."),
     wait_timeout: float = typer.Option(WAIT_TIMEOUT, "--wait-timeout", min=1, metavar="SECONDS",
                                        help="With --wait: give up on a job after this many seconds."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm the print; needed in agent mode (PRT_AGENT=1)."),
 ) -> None:
     """Print one or more files."""
     d = STATE.driver()
@@ -731,12 +747,14 @@ def print_cmd(
                                "directly, other files go through CUPS", exit_code=2,
                                hint="convert it to JPEG, or print it without --wait and follow it with `lpstat`")
     results = []
-    for f in files:
-        opts = PrintOptions(copies=copies, media=media, mono=mono, quality=quality.value if quality else None,
-                            duplex=duplex, tray=tray, direct=direct, job_name=f.name)
-        job = d.print_file(f, opts)
-        results.append({"file": str(f), "job_id": job})
-        STATE.note("ok", f"{f.name} → job {job}" if job else f"{f.name} sent", d.display_name)
+    with _authorize(guard.job_pages(files, copies), yes, None) as ticket:
+        for f in files:
+            opts = PrintOptions(copies=copies, media=media, mono=mono, quality=quality.value if quality else None,
+                                duplex=duplex, tray=tray, direct=direct, job_name=f.name)
+            ticket.attempt(guard.job_pages([f], copies) or 0)
+            job = d.print_file(f, opts)
+            results.append({"file": str(f), "job_id": job})
+            STATE.note("ok", f"{f.name} → job {job}" if job else f"{f.name} sent", d.display_name)
     failure = None
     if wait:
         finished = []
@@ -823,20 +841,21 @@ def booth_cmd(
         STATE.note("ok", f"saved {path}", f"{paper.value} page · {fmt.upper()} · {size / 1024:,.0f} KiB")
         saved.append({"file": str(path), "format": fmt, "bytes": size})
     extra = {"saved": saved} if save else {}
-    fit = _fit_report(cut)
+    report = {**_fit_report(cut), **_estimate([page])} if STATE.json else {}
     if preview:
         if STATE.json:
             STATE.write(json.dumps({"action": "booth", "style": paper.value, "file": str(preview),
-                                    "bytes": preview_size, **fit, **extra}) + "\n")
+                                    "bytes": preview_size, **report, **extra}) + "\n")
         return
     d = STATE.driver()
     d.require(Capability.PRINT)
-    _confirm(f"Print {photo.name} as a {booth.KINDS[paper.value]} on {d.display_name}?", yes)
-    job = d.submit(booth.to_jpeg(page), "image/jpeg",
-                   PrintOptions(job_name=f"prt booth {photo.name}", media="a4"))
+    with _authorize(1, yes, f"Print {photo.name} as a {booth.KINDS[paper.value]} on {d.display_name}?") as ticket:
+        ticket.attempt(1)
+        job = d.submit(booth.to_jpeg(page), "image/jpeg",
+                       PrintOptions(job_name=f"prt booth {photo.name}", media="a4"))
     STATE.note("ok", f"booth page queued as job {job}", d.display_name)
     if STATE.json:
-        STATE.write(json.dumps({"action": "booth", "style": paper.value, "job_id": job, **fit, **extra}) + "\n")
+        STATE.write(json.dumps({"action": "booth", "style": paper.value, "job_id": job, **report, **extra}) + "\n")
 
 
 def _fit_report(cut: dict[str, Any]) -> dict[str, Any]:
@@ -844,6 +863,12 @@ def _fit_report(cut: dict[str, Any]) -> dict[str, Any]:
     field was cut with "…", and ``cut`` maps each cut field (in page order) to how many of its characters
     were printed (``max_fit``) and how many were given, so the text can be shortened and tried again."""
     return {"fits": not cut, "cut": {name: c.to_dict() for name, c in cut.items()}}
+
+
+def _estimate(pages: list[Any]) -> dict[str, Any]:
+    """The ``estimate`` a booth, article or gazette JSON line carries: pages, colour use and ink use of the
+    rendered pages, e.g. ``"summary": "~3 pages, colour, est. ink 4%"`` (see ``guard.estimate``)."""
+    return {"estimate": guard.estimate(pages)}
 
 
 def _save_booth_page(data: bytes, path: Path) -> int:
@@ -901,7 +926,8 @@ def article_cmd(
     files = write(preview, preview_format) if preview else []
     # Copies are written before connecting, so they exist even when the printer is unreachable.
     saved = [entry for path, fmt in copies for entry in write(path, fmt)]
-    summary = {"action": "article", "style": paper.value, "title": text.title, "pages": len(pages)}
+    summary = {"action": "article", "style": paper.value, "title": text.title, "pages": len(pages),
+               **(_estimate(pages) if STATE.json else {})}
     extra = {"saved": saved} if save else {}
     if preview:
         STATE.note("ok", f"{count} of '{text.title}' rendered", "not printed")
@@ -911,12 +937,13 @@ def article_cmd(
     d = STATE.driver()
     d.require(Capability.PRINT)
     kind = article.ARTICLE_STYLES[paper.value].kind
-    _confirm(f"Print {count} of '{text.title}' as a {kind} on {d.display_name}?", yes)
     jobs = []
-    for number, page in enumerate(pages, start=1):
-        jobs.append(d.submit(booth.to_jpeg(page), "image/jpeg",
-                             PrintOptions(job_name=f"prt article {number}/{len(pages)} {text.title[:60]}",
-                                          media="a4")))
+    with _authorize(len(pages), yes, f"Print {count} of '{text.title}' as a {kind} on {d.display_name}?") as ticket:
+        for number, page in enumerate(pages, start=1):
+            ticket.attempt(1)
+            jobs.append(d.submit(booth.to_jpeg(page), "image/jpeg",
+                                 PrintOptions(job_name=f"prt article {number}/{len(pages)} {text.title[:60]}",
+                                              media="a4")))
     STATE.note("ok", f"{count} queued as job{'s' if len(jobs) != 1 else ''} {', '.join(map(str, jobs))}",
                d.display_name)
     if STATE.json:
@@ -985,7 +1012,8 @@ def gazette_cmd(
     files = write(preview, preview_format) if preview else []
     # Copies are written before connecting, so they exist even when the printer is unreachable.
     saved = [entry for path, fmt in copies for entry in write(path, fmt)]
-    summary = {"action": "gazette", "photos": len(photos), "pages": len(pages), **_fit_report(cut)}
+    summary = {"action": "gazette", "photos": len(photos), "pages": len(pages), **_fit_report(cut),
+               **(_estimate(pages) if STATE.json else {})}
     extra = {"saved": saved} if save else {}
     if preview:
         STATE.note("ok", f"{pictures} on {sheets} rendered", "not printed")
@@ -994,20 +1022,23 @@ def gazette_cmd(
         return
     d = STATE.driver()
     d.require(Capability.PRINT)
-    _confirm(f"Print {pictures} as {sheets} of a vintage newspaper on {d.display_name}?", yes)
     jobs: list[int] = []
-    for number, page in enumerate(pages, start=1):
-        try:
-            jobs.append(d.submit(booth.to_jpeg(vintage.for_printer(page)), "image/jpeg",
-                                 PrintOptions(job_name=f"prt gazette {number}/{len(pages)}", media="a4")))
-        except (PrinterError, KeyboardInterrupt):
-            if jobs:  # say what is already on the printer, even under -q, so it can be cancelled
-                sys.stderr.write(f"page {number} of {len(pages)} may not have been sent; pages already queued as "
-                                 f"job(s) {', '.join(map(str, jobs))}: cancel them with `prt jobs cancel <id>`\n")
-                if STATE.json:
-                    STATE.write(json.dumps({"action": "gazette", "pages": len(pages), "job_ids": jobs,
-                                            "failed_page": number}) + "\n")
-            raise
+    question = f"Print {pictures} as {sheets} of a vintage newspaper on {d.display_name}?"
+    with _authorize(len(pages), yes, question) as ticket:
+        for number, page in enumerate(pages, start=1):
+            try:
+                ticket.attempt(1)
+                jobs.append(d.submit(booth.to_jpeg(vintage.for_printer(page)), "image/jpeg",
+                                     PrintOptions(job_name=f"prt gazette {number}/{len(pages)}", media="a4")))
+            except (PrinterError, KeyboardInterrupt):
+                if jobs:  # say what is already on the printer, even under -q, so it can be cancelled
+                    sys.stderr.write(f"page {number} of {len(pages)} may not have been sent; pages already queued "
+                                     f"as job(s) {', '.join(map(str, jobs))}: cancel them with "
+                                     "`prt jobs cancel <id>`\n")
+                    if STATE.json:
+                        STATE.write(json.dumps({"action": "gazette", "pages": len(pages), "job_ids": jobs,
+                                                "failed_page": number}) + "\n")
+                raise
     STATE.note("ok", f"{sheets} queued as job{'s' if len(jobs) != 1 else ''} {', '.join(map(str, jobs))}",
                d.display_name)
     if STATE.json:

@@ -89,7 +89,7 @@ With `-f json` you do not have to guess how much to cut: the output says `"fits"
 prt booth photo.jpg --style metro --story-file story.json --yes
 ```
 
-`--yes` skips the confirmation prompt, which is required when there is no terminal. The cut-to-fit warning also appears before printing, but the page is still printed. Add `-f json` to get `{"action": "booth", "style": "metro", "job_id": N, "fits": true, "cut": {}}` on stdout.
+`--yes` skips the confirmation prompt, which is required when there is no terminal and always when `PRT_AGENT=1` is set. The JSON output also carries an `estimate` of the page (`"summary": "~1 page, colour, est. ink 4%"`). If the owner's page caps refuse the print (exit code 1, kind `page_cap_exceeded` or `daily_page_cap_exceeded`), nothing was printed: tell the user rather than retrying. The cut-to-fit warning also appears before printing, but the page is still printed. Add `-f json` to get `{"action": "booth", "style": "metro", "job_id": N, "fits": true, "cut": {}}` on stdout.
 
 To keep a digital copy of the printed page, add `--save` with a `.pdf`, `.png`, `.jpg` or `.jpeg` file name (repeat it for more files):
 

@@ -6,7 +6,10 @@ from urllib.parse import parse_qs, urlencode
 
 import httpx
 import pytest
+
 from PIL import Image, ImageDraw
+
+from conftest import without_estimate
 
 from prt import __version__, article
 from prt.article import Article
@@ -620,7 +623,7 @@ def test_cli_prints_one_job_per_page(capsys, tmp_path, printer, style):
     expected = [to_jpeg(page) for page in article.compose_pages(LONG, style)]
     assert code == 0 and len(expected) > 2
     assert printer.jobs() == expected
-    assert json.loads(out) == {"action": "article", "style": style, "title": LONG.title, "pages": len(expected),
+    assert without_estimate(out) == {"action": "article", "style": style, "title": LONG.title, "pages": len(expected),
                                "job_ids": list(range(101, 101 + len(expected)))}
     assert f"{len(expected)} pages queued" in err
 
@@ -671,7 +674,7 @@ def test_cli_preview_never_creates_a_driver(capsys, tmp_path, printer):
     pages = len(article.compose_pages(LONG, "magazine"))
     files = [tmp_path / f"page-{n}.png" for n in range(1, pages + 1)]
     assert code == 0 and "not printed" in err and printer.made == []
-    assert json.loads(out) == {"action": "article", "style": "magazine", "title": LONG.title, "pages": pages,
+    assert without_estimate(out) == {"action": "article", "style": "magazine", "title": LONG.title, "pages": pages,
                                "files": [{"file": str(f), "format": "png", "bytes": f.stat().st_size}
                                          for f in files]}
     assert all(Image.open(f).size == A4_150DPI for f in files) and not out_file.exists()
