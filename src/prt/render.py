@@ -1,4 +1,4 @@
-"""Booth and article pages as callable steps, shared by the CLI commands and the MCP server.
+"""Booth, article and compose pages as callable steps, shared by the CLI commands and the MCP server.
 
 Each front end reads its own input (files and flags, or MCP tool arguments) and decides how to show the result;
 what happens in between is here: lay the pages out, say what did not fit and what printing them would cost, and
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
     from prt.article import Article
     from prt.booth import Story
+    from prt.compose import Page
     from prt.drivers.base import Driver
     from prt.layout import Cut
 
@@ -66,6 +67,17 @@ def article_pages(text: Article, style: str) -> Rendered:
 
 def article_job_names(title: str, count: int) -> list[str]:
     return [f"prt article {number}/{count} {title[:60]}" for number in range(1, count + 1)]
+
+
+def composed_pages(page: Page) -> Rendered:
+    """The pages of a checked page file (see ``compose.load``); blocks run on to the next page, so nothing is
+    ever cut."""
+    from prt import compose
+    return Rendered(compose.compose_pages(page))
+
+
+def compose_job_names(title: str, count: int) -> list[str]:
+    return [f"prt compose {number}/{count} {title[:60]}" for number in range(1, count + 1)]
 
 
 def send_pages(driver: Driver, pages: Sequence[bytes], names: Sequence[str], ticket: guard.Ticket) -> Iterator[int]:

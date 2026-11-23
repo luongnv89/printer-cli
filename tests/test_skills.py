@@ -284,7 +284,8 @@ def test_agents_md_names_the_agent_features():
     text = (ROOT / "AGENTS.md").read_text()
     for needle in ["-f json", '{"error"', "--story-file -", "prt article -", "--wait", "prt jobs wait",
                    "prt styles", "prt schema", "PRT_AGENT=1", "--yes", "max_pages_per_run", "max_pages_per_day",
-                   "estimate", "prt mcp", "printer-cli[mcp]", "prt skills install", "uv run pytest"]:
+                   "estimate", "prt mcp", "printer-cli[mcp]", "prt skills install", "uv run pytest", "prt compose",
+                   "prt schema page"]:
         assert needle in text, needle
 
 

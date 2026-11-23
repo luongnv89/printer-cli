@@ -3,7 +3,8 @@ the input files the print commands read.
 
 ``styles()`` lists the styles (``prt styles -f json``) and ``schema(name)`` returns one JSON Schema (``prt schema
 NAME``). Both are built from the constants the commands check their input against (``booth.FIELDS``,
-``booth.LIMITS``, ``article.FIELDS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept. Other front
+``booth.LIMITS``, ``article.FIELDS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
+schema is built by :mod:`prt.compose`, which checks page files against it. Other front
 ends (an MCP server, page validation) import this module instead of listing the styles again; a new input schema
 is added with ``@register_schema``.
 """
@@ -13,7 +14,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
-from prt import article, booth, vintage
+from prt import article, booth, compose, vintage
 from prt.drivers.base import PrinterError
 
 # The sample pages shown in the README; assets/ is not in the package, so they are linked, not bundled.
@@ -231,3 +232,9 @@ def gazette_schema() -> dict[str, Any]:
                          f"stdin); at most {booth.MAX_STORY_FILE // 1024} KiB. The photos, 1 to "
                          f"{vintage.MAX_PHOTOS}, are given on the command line.", GAZETTE_ROLES,
                          vintage.DEFAULT_GAZETTE_STORY)
+
+
+@register_schema("page", "compose page file: prt compose page.json (or JSON piped to prt compose -)")
+def page_schema() -> dict[str, Any]:
+    # Built by prt.compose, which checks page files against this same schema.
+    return compose.page_schema()

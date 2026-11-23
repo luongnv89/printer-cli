@@ -1039,6 +1039,67 @@ def gazette_cmd(
         STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
 
 
+@app.command("compose")
+def compose_cmd(
+    page_file: Path = typer.Argument(..., metavar="PAGE",
+                                     help="Page file (JSON): blocks of heading, text, image, qr, columns and rule. "
+                                          "Use - to read it from stdin. `prt schema page` gives its JSON Schema."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save the pages here instead of printing; the extension picks "
+                                                "the file type: .pdf (every page in one file), or .png, .jpg, "
+                                                ".jpeg (one file per page, numbered when there are several)."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of the pages here (.pdf, .png, .jpg or "
+                                                   ".jpeg) before printing them; repeat for more files."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Compose a page from blocks (heading, text, image, QR code, columns, rule) and print it (A4).
+
+    The blocks are laid out top to bottom and run on to more pages when one is full (up to 10); nothing is cut.
+    """
+    from prt import article, booth, compose, vintage
+    # Read and check the page file and every image, and lay out every page, before a file is written or a
+    # driver exists, so an invalid page file never leaves a partial result or reaches the printer.
+    preview_format = booth.format_for(preview) if preview else None
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    page = compose.load(page_file)
+    pages = render.composed_pages(page).pages
+    outputs = [(preview, preview_format)] if preview else []
+    vintage.check_outputs([file for path, fmt in outputs + copies
+                           for file in vintage.page_paths(path, fmt, len(pages))], page.inputs)
+    count = f"{len(pages)} page{'s' if len(pages) != 1 else ''}"
+
+    def write(path: Path, fmt: str) -> list[dict[str, Any]]:
+        written = []
+        for file, data in article.page_files(pages, path, fmt):
+            size = _save_booth_page(data, file)
+            STATE.note("ok", f"saved {file}", f"compose · {fmt.upper()} · {size / 1024:,.0f} KiB")
+            written.append({"file": str(file), "format": fmt, "bytes": size})
+        return written
+
+    files = write(preview, preview_format) if preview else []
+    # Copies are written before connecting, so they exist even when the printer is unreachable.
+    saved = [entry for path, fmt in copies for entry in write(path, fmt)]
+    summary = {"action": "compose", "title": page.title, "pages": len(pages),
+               **(_estimate(pages) if STATE.json else {})}
+    extra = {"saved": saved} if save else {}
+    if preview:
+        STATE.note("ok", f"{count} of '{page.title}' rendered", "not printed")
+        if STATE.json:
+            STATE.write(json.dumps({**summary, "files": files, **extra}) + "\n")
+        return
+    d = STATE.driver()
+    d.require(Capability.PRINT)
+    jobs: list[int] = []
+    with _authorize(len(pages), yes, f"Print {count} of '{page.title}' on {d.display_name}?") as ticket:
+        jobs.extend(render.send_pages(d, [booth.to_jpeg(p) for p in pages],
+                                      render.compose_job_names(page.title, len(pages)), ticket))
+    STATE.note("ok", f"{count} queued as job{'s' if len(jobs) != 1 else ''} {', '.join(map(str, jobs))}",
+               d.display_name)
+    if STATE.json:
+        STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
+
+
 # --- What can be printed -------------------------------------------------------------
 
 
@@ -1072,9 +1133,9 @@ def _schema_names(incomplete: str) -> list[str]:
 
 @app.command("schema")
 def schema_cmd(name: str = typer.Argument(..., metavar="NAME", autocompletion=_schema_names,
-                                          help="story, article or gazette.")) -> None:
+                                          help="story, article, gazette or page.")) -> None:
     """Print the JSON Schema of an input file: story (prt booth --story-file), article (an article JSON file for
-    prt article) or gazette (prt gazette --story-file).
+    prt article), gazette (prt gazette --story-file) or page (a page file for prt compose).
 
     A file that passes the schema is accepted by the command. The schema is JSON whatever -f says.
     """

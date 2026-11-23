@@ -113,7 +113,7 @@ def test_catalog_follows_the_commands():
 
 # --- prt schema ---------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", ["story", "article", "gazette"])
+@pytest.mark.parametrize("name", ["story", "article", "gazette", "page"])
 def test_schema_prints_a_valid_json_schema(capsys, name):
     code, out, err = run(capsys, "schema", name)
     assert code == 0 and err == ""
@@ -137,17 +137,17 @@ def test_schema_story_matches_the_limits():
 
 
 def test_schema_unknown_name_is_a_usage_error(capsys):
-    code, out, err = run(capsys, "schema", "poster")
-    assert code == 2 and out == "" and "unknown schema: poster" in err and "story, article, gazette" in err
-    code, _, err = run(capsys, "-f", "json", "schema", "poster")
+    code, out, err = run(capsys, "schema", "flyer")
+    assert code == 2 and out == "" and "unknown schema: flyer" in err and "story, article, gazette, page" in err
+    code, _, err = run(capsys, "-f", "json", "schema", "flyer")
     assert code == 2 and json.loads(err)["error"]["kind"] == "usage"
 
 
 def test_schema_registry_takes_new_schemas(monkeypatch):
     monkeypatch.setattr(catalog, "_SCHEMAS", dict(catalog._SCHEMAS))
-    catalog.register_schema("page", "a page")(lambda: {"type": "object"})
-    assert catalog.schema_names()[-1] == "page" and catalog.schema("page") == {"type": "object"}
-    assert catalog.schema_summaries()["page"] == "a page"
+    catalog.register_schema("poster", "a poster")(lambda: {"type": "object"})
+    assert catalog.schema_names()[-1] == "poster" and catalog.schema("poster") == {"type": "object"}
+    assert catalog.schema_summaries()["poster"] == "a poster"
     with pytest.raises(ValueError, match="already registered"):
         catalog.register_schema("story", "again")(dict)
 

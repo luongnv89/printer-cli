@@ -59,6 +59,12 @@ def _article(tmp_path, paragraphs=3):
     return path
 
 
+def _page_file(tmp_path):
+    path = tmp_path / "page.json"
+    path.write_text(json.dumps({"blocks": [{"type": "heading", "text": "Sale"}, {"type": "qr", "data": "x"}]}))
+    return path
+
+
 def _config(**keys):
     cfg = Config.load()
     for k, v in keys.items():
@@ -74,13 +80,14 @@ def _commands(tmp_path):
         "booth": ["booth", str(photo)],
         "article": ["article", str(_article(tmp_path))],
         "gazette": ["gazette", str(photo)],
+        "compose": ["compose", str(_page_file(tmp_path))],
         "test-page": ["maintain", "test-page"],
         "nozzle-check": ["maintain", "nozzle-check"],
         "clean": ["maintain", "clean", "--force"],
     }
 
 
-COMMANDS = ["print", "booth", "article", "gazette", "test-page", "nozzle-check", "clean"]
+COMMANDS = ["print", "booth", "article", "gazette", "compose", "test-page", "nozzle-check", "clean"]
 
 
 # --- agent mode ------------------------------------------------------------------------------------------
