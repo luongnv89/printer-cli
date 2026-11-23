@@ -1,7 +1,9 @@
 import gc
 import inspect
+import io
 import json
 import os
+import re
 import sys
 import time
 import weakref
@@ -642,3 +644,198 @@ def test_a_failed_first_page_has_nothing_to_report(capsys, tmp_path, monkeypatch
     _failing_submit(monkeypatch, printer.driver, 1, PrinterError("printer went to sleep"))
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "gazette", *map(str, _trip(tmp_path, 4)), "--yes")
     assert code == 1 and "printer went to sleep" in err and "may not have been sent" not in err and out == ""
+
+
+# --- landscape -------------------------------------------------------------------------------
+
+A4_LANDSCAPE = (1754, 1240)  # A4 at 150 dpi on its side
+UPRIGHT = vintage.Sheet(1240, 1754, 90, 1060, 1664, 45, masthead_max=132, headline_lines=3, plate_cols=2)
+
+
+def _bare(page, band):
+    """Like ``_paper_only``, for a page of any size: white round the edge, cream inside it, no ink in ``band``."""
+    sheet = Image.new("RGB", page.size, WHITE)
+    sheet.paste(PAPER, (INSET, INSET, page.width - INSET, page.height - INSET))
+    return ImageChops.difference(page.crop(band), sheet.crop(band)).getbbox() is None
+
+
+def _margins(size):
+    w, h = size
+    return [(0, 0, w, 80), (0, h - 80, w, h), (0, 0, 80, h), (w - 80, 0, w, h)]
+
+
+@pytest.mark.parametrize("n", [1, 4])
+def test_without_landscape_the_pages_are_the_upright_ones(monkeypatch, n):
+    photos = [Image.new("RGB", (400 + 60 * k, 300), (40 + 20 * k,) * 3) for k in range(n)]
+    default = vintage.compose_pages(photos)
+    upright = vintage.compose_pages(photos, landscape=False)
+    monkeypatch.setattr(vintage, "PORTRAIT", UPRIGHT)  # the upright sheet spelt out: A4 at 150 dpi, as before
+    explicit = vintage.compose_pages(photos)
+    assert [page.size for page in default[0]] == [A4_150DPI] * len(vintage.plan_pages(n))
+    for other in (upright, explicit):
+        assert [page.tobytes() for page in other[0]] == [page.tobytes() for page in default[0]]
+        assert other[1:] == default[1:]
+
+
+@pytest.mark.parametrize("n", [1, 3, 4, 10])
+def test_landscape_pages_are_a4_on_its_side_in_cream_with_a_white_rim(n):
+    pages, _, _ = vintage.compose_pages([Image.new("RGB", (400, 300), "white")] * n, landscape=True)
+    w, h = A4_LANDSCAPE
+    assert len(pages) == len(vintage.plan_pages(n))
+    for page in pages:
+        assert page.size == A4_LANDSCAPE
+        for x, y in [(INSET, INSET), (w - INSET - 1, INSET), (INSET, h - INSET - 1), (w - INSET - 1, h - INSET - 1)]:
+            assert page.getpixel((x, y)) == PAPER, (x, y)
+            assert page.getpixel((x - 1 if x == INSET else x + 1, y)) == WHITE, (x, y)
+            assert page.getpixel((x, y - 1 if y == INSET else y + 1)) == WHITE, (x, y)
+        assert all(_bare(page, band) for band in [(0, 0, w, INSET), (0, h - INSET, w, h)])
+        assert {PAPER, INK} <= {colour for _, colour in page.getcolors(maxcolors=1 << 16)}
+    assert pages[0].getpixel((w // 2, 90)) == INK  # the hairline above the masthead runs across the long side
+
+
+@pytest.mark.parametrize("n", [1, 2, 3, 4, 10])
+def test_landscape_prints_every_photo_in_its_own_box_on_its_planned_page(n):
+    shapes = [(300, 400), (400, 300), (500, 500)]
+    greys = [40 + 16 * k for k in range(n)]
+    photos = [Image.new("RGB", shapes[k % 3], (g, g, g)) for k, g in enumerate(greys)]
+    pages, placements, _ = vintage.compose_pages(photos, landscape=True)
+    plan = vintage.plan_pages(n)
+    assert len(pages) == len(plan) == len(placements)
+    assert sorted(k for page in placements for k, _ in page) == list(range(n))
+    assert [[k for k, _ in page] for page in placements] == plan
+    for page, placed in zip(pages, placements):
+        for k, box in placed:
+            expected = vintage._treat(Image.new("RGB", (4, 4), (greys[k],) * 3)).getpixel((0, 0))
+            mean = ImageStat.Stat(page.crop(box)).mean
+            assert all(abs(m - e) <= 2 for m, e in zip(mean, expected)), (k, mean, expected)
+
+
+@pytest.mark.parametrize("n", [1, 10])
+def test_landscape_words_are_drawn_in_a_bundled_font_that_has_their_glyphs(strict_drawing, n):
+    photos = [Image.new("RGB", (400 + 50 * k, 300), (20 * k, 80, 160)) for k in range(n)]
+    pages, _, _ = vintage.compose_pages(photos, _longest_story(DIVERGENT), landscape=True)
+    assert len(pages) == len(vintage.plan_pages(n)) and strict_drawing.fallbacks == []
+    assert any("DZ" in text for text in strict_drawing.drawn)
+
+
+def test_the_longest_story_stays_inside_the_landscape_margins():
+    pages, _, cut = vintage.compose_pages([Image.new("RGB", (1600, 400), "red")] * 10, _longest_story(),
+                                          landscape=True)
+    assert "story" in cut
+    for page in pages:
+        assert all(_bare(page, band) for band in _margins(A4_LANDSCAPE))
+
+
+def test_unbroken_story_renders_quickly_inside_the_landscape_margins():
+    story = booth.check_story(Story(headline="H", story="x" * LIMITS["story"]), 2)
+    start = time.perf_counter()
+    for n in (1, 3):
+        pages, _, _ = vintage.compose_pages([Image.new("RGB", (300, 400), "blue")] * n, story, landscape=True)
+        assert all(_bare(pages[0], band) for band in _margins(A4_LANDSCAPE)), n
+    assert time.perf_counter() - start < 10
+
+
+@pytest.mark.parametrize("n", [1, 3])
+@pytest.mark.parametrize("shape", [(800, 1200), (1200, 800), (1000, 1000)])
+def test_default_story_is_never_cut_in_landscape(n, shape):
+    _, _, cut = vintage.compose_pages([Image.new("RGB", shape, "grey")] * n, vintage.DEFAULT_GAZETTE_STORY,
+                                      landscape=True)
+    assert cut == []
+
+
+@pytest.mark.parametrize("n", [1, 3])
+@pytest.mark.parametrize("shape", [(900, 1200), (900, 1600), (600, 1200), (2400, 800), (1600, 1067)])
+@pytest.mark.parametrize("story", ["default", "longest"])
+def test_the_landscape_lead_is_printed_whole_and_no_wider_than_its_limit(n, shape, story):
+    lead = vintage._downscale(Image.new("RGB", shape, "grey"), vintage.LEAD_LIMIT)
+    photos = [lead] + [Image.new("RGB", (400, 300), "grey")] * (n - 1)
+    _, placements, _ = vintage.compose_pages(photos, None if story == "default" else _longest_story(),
+                                             landscape=True)
+    k, (x0, y0, x1, y1) = placements[0][0]
+    shown, photo = (x1 - x0) / (y1 - y0), lead.width / lead.height
+    assert k == 0 and min(shown / photo, photo / shown) >= 0.9, (shape, (x0, y0, x1, y1))
+    assert x1 - x0 <= LEAD_LIMIT and y1 - y0 <= LEAD_LIMIT  # never printed larger than it was kept
+    assert x0 < A4_LANDSCAPE[0] // 2  # the lead stands on the left, beside the story
+
+
+def test_landscape_front_page_sets_the_lead_beside_the_story_and_the_plates_under_the_story():
+    photos = [Image.new("RGB", (1200, 800), (60, 60, 60))] + [Image.new("RGB", (400, 300), (120, 120, 120))] * 2
+    _, placements, _ = vintage.compose_pages(photos, landscape=True)
+    (_, lead), (_, fig2), (_, fig3) = placements[0]
+    assert fig2[0] > lead[2] and fig3[0] > lead[2]  # both plates right of the lead
+    assert fig2[3] == fig3[3] and fig2[1] > lead[1] + 200  # one foot, below the story's first lines
+
+
+def test_a_lone_landscape_front_plate_is_centred_under_the_story():
+    photos = [Image.new("RGB", (1200, 800), (60, 60, 60)), Image.new("RGB", (400, 300), (120, 120, 120))]
+    pages, placements, _ = vintage.compose_pages(photos, landscape=True)
+    (_, lead), (_, plate) = placements[0]
+    assert plate[0] > lead[2] and abs((plate[0] + plate[2]) / 2 - (lead[2] + A4_LANDSCAPE[0] - 90) / 2) <= 30
+    assert all(lo == hi for lo, hi in pages[0].crop(plate).getextrema())  # no rule runs through it
+
+
+@pytest.mark.parametrize("lead, columns", [((1200, 800), 2), ((800, 1200), 3)])
+def test_a_narrow_landscape_lead_gives_the_story_a_third_column(monkeypatch, lead, columns):
+    asked, real = [], vintage.flow_columns
+    monkeypatch.setattr(vintage, "flow_columns", lambda *args, **kw: asked.append(args[4]) or real(*args, **kw))
+    vintage.compose_pages([Image.new("RGB", lead, "grey")] * 3, landscape=True)
+    assert set(asked) == {columns}
+
+
+@pytest.mark.parametrize("n, rows", [(4, [1]), (5, [2]), (6, [3]), (8, [3, 2]), (9, [3, 3])])
+def test_landscape_plates_stand_three_abreast_and_a_short_last_row_is_centred(n, rows):
+    shapes = [(300, 400), (400, 300), (500, 500)]
+    pages, placements, _ = vintage.compose_pages([Image.new("RGB", shapes[k % 3], "grey") for k in range(n)],
+                                                 landscape=True)
+    boxes = [box for _, box in placements[1]]
+    feet = sorted({box[3] for box in boxes})
+    assert [sum(box[3] == foot for box in boxes) for foot in feet] == rows  # one foot a row: labels line up
+    last = [box for box in boxes if box[3] == feet[-1]]
+    if len(last) < 3:  # each plate is centred in its cell, so the row's centres balance about the middle
+        assert abs(sum(b[0] + b[2] for b in last) / (2 * len(last)) - A4_LANDSCAPE[0] / 2) <= 1
+    for box in boxes:
+        assert all(lo == hi for lo, hi in pages[1].crop(box).getextrema())  # no rule runs through a plate
+        assert box[3] - box[1] <= vintage.PLATE_LIMIT
+
+
+def test_a_landscape_page_is_turned_counter_clockwise_for_the_printer():
+    page = Image.new("RGB", A4_LANDSCAPE, "white")
+    page.paste(INK, (0, 0, A4_LANDSCAPE[0], 10))  # a band along the head of the page
+    turned = vintage.for_printer(page)
+    assert turned.size == A4_150DPI
+    assert turned.getpixel((5, 5)) == INK and turned.getpixel((5, A4_150DPI[1] - 5)) == INK  # up the left edge
+    assert turned.getpixel((A4_150DPI[0] - 5, 5)) == WHITE
+    upright = Image.new("RGB", A4_150DPI, "white")
+    assert vintage.for_printer(upright) is upright
+
+
+def test_gazette_help_offers_landscape(capsys):
+    code, out, _ = run(capsys, "gazette", "--help")
+    assert code == 0 and "--landscape" in out and "--no-landscape" not in out
+
+
+def test_landscape_prints_each_page_turned_upright_and_keeps_saved_pages_landscape(capsys, tmp_path, printer):
+    photos, copy = _trip(tmp_path, 4), tmp_path / "copy.png"
+    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "gazette", *map(str, photos), "--landscape", "--save",
+                       str(copy), "--yes")
+    pages = vintage.compose_pages(vintage.load_photos(photos), landscape=True)[0]
+    assert code == 0 and json.loads(out)["job_ids"] == [101, 102]
+    assert printer.jobs() == [booth.to_jpeg(page.transpose(Image.Transpose.ROTATE_90)) for page in pages]
+    sheets = [Image.open(io.BytesIO(job)).convert("L") for job in printer.jobs()]
+    assert [sheet.size for sheet in sheets] == [A4_150DPI] * 2
+    # The hairline over the front page's masthead (y = 90 on the page) lies up the sheet's left edge, at x = 90.
+    assert ImageStat.Stat(sheets[0].crop((89, 200, 92, 1500))).mean[0] < 100
+    assert ImageStat.Stat(sheets[0].crop((1148, 200, 1151, 1500))).mean[0] > 150
+    assert [Image.open(tmp_path / f"copy-{k}.png").size for k in (1, 2)] == [A4_LANDSCAPE] * 2
+
+
+def test_landscape_preview_keeps_pages_on_their_side(capsys, tmp_path, printer):
+    photos = _trip(tmp_path, 4)
+    code, _, _ = run(capsys, "-p", "demo", "gazette", *map(str, photos), "--landscape", "-o",
+                     str(tmp_path / "page.png"))
+    assert code == 0 and printer.made == []
+    assert [Image.open(tmp_path / f"page-{k}.png").size for k in (1, 2)] == [A4_LANDSCAPE] * 2
+    code, _, _ = run(capsys, "-p", "demo", "gazette", *map(str, photos), "--landscape", "-o",
+                     str(tmp_path / "page.pdf"))
+    boxes = re.findall(rb"/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]", (tmp_path / "page.pdf").read_bytes())
+    assert code == 0 and len(boxes) == 2 and all(float(w) > float(h) for w, h in boxes), boxes
