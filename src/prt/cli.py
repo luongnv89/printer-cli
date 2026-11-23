@@ -17,10 +17,10 @@ from rich.text import Text
 
 from prt import __version__, cache, style
 from prt.config import Config
-from prt.drivers.base import Driver, PrinterError, Unreachable
+from prt.drivers.base import FINAL_JOB_STATES, KIND_BY_EXIT_CODE, Driver, PrinterError, Unreachable
 from prt.drivers.registry import driver_names, make_driver
 from prt.maintenance import head_clean_preflight, nozzle_check_preflight
-from prt.models import Capability, PrintOptions, ScanSettings, Severity, Status, Target, to_dict
+from prt.models import Capability, Job, PrintOptions, ScanSettings, Severity, Status, Target, to_dict
 from prt.style import ROLES, Mode, t
 
 if TYPE_CHECKING:
@@ -96,7 +96,7 @@ app = typer.Typer(
 printers_app = typer.Typer(help="Manage saved printers.", no_args_is_help=True)
 maintain_app = typer.Typer(help="Maintenance: nozzle check, head cleaning, test page, identify.",
                            no_args_is_help=True)
-jobs_app = typer.Typer(help="List or cancel print jobs.", invoke_without_command=True)
+jobs_app = typer.Typer(help="List, wait for or cancel print jobs.", invoke_without_command=True)
 app.add_typer(printers_app, name="printers")
 app.add_typer(maintain_app, name="maintain")
 app.add_typer(jobs_app, name="jobs")
@@ -272,9 +272,17 @@ def _quick_facts(d: Driver | None) -> tuple[str, str | None, int | None, int | N
     return d.display_name, None, None, pages
 
 
+def _exit_with(code: int, kind: str, message: str, hint: str | None = None) -> None:
+    """End a command that already said what happened: no text error, but the JSON error object under -f json."""
+    if STATE.json:
+        sys.stderr.write(_error_json(PrinterError(message, hint, exit_code=code, kind=kind)))
+    raise typer.Exit(code)
+
+
 def _finish_stale() -> None:
     if getattr(STATE, "_stale_exit", False):
-        raise typer.Exit(1)
+        _exit_with(1, "stale", "the printer is not answering — this is its last known status",
+                   "wake the printer (press a button) and retry")
 
 
 # --- Read commands -------------------------------------------------------------------
@@ -609,10 +617,10 @@ def _confirm(question: str, yes: bool) -> None:
         return
     if not sys.stdin.isatty():
         raise PrinterError("confirmation needed but stdin is not a terminal", hint="re-run with --yes",
-                           exit_code=2)
+                           exit_code=2, kind="confirmation_required")
     if not typer.confirm(question, default=False, err=True):
         STATE.note("info", "cancelled — nothing was sent")
-        raise typer.Exit(1)
+        _exit_with(1, "declined", "cancelled — nothing was sent")
 
 
 def _show_preflight(pf) -> None:
@@ -630,7 +638,7 @@ def nozzle_check(yes: bool = typer.Option(False, "--yes", "-y", help="Skip the c
     pf = nozzle_check_preflight(_fetch_status(d)[1])
     _show_preflight(pf)
     if not pf.ok:
-        raise PrinterError("nozzle check not sent", hint="fix the issues above and retry")
+        raise PrinterError("nozzle check not sent", hint="fix the issues above and retry", kind="refused")
     _confirm(f"Print a nozzle check on {d.display_name}?", yes)
     d.nozzle_check()
     STATE.note("ok", "nozzle check sent", "broken lines in the pattern → run `prt maintain clean`")
@@ -650,7 +658,8 @@ def head_clean(
     _show_preflight(pf)
     if not pf.ok and not force:
         raise PrinterError("head cleaning refused for safety",
-                           hint="replace low cartridges first, or pass --force if you understand the risk")
+                           hint="replace low cartridges first, or pass --force if you understand the risk",
+                           kind="refused")
     _confirm(f"Start head cleaning on {d.display_name}? (takes ~1 minute, uses ink)", yes)
     d.head_clean()
     STATE.note("ok", "head cleaning started", "wait until the printer is quiet, then run a nozzle check")
@@ -684,6 +693,10 @@ def identify() -> None:
 # --- print / jobs / scan -------------------------------------------------------------------
 
 
+JOB_LEVEL = {"completed": "ok", "processing": "info", "pending": "info", "canceled": "warn", "aborted": "err"}
+WAIT_TIMEOUT = 600.0  # seconds `--wait` and `prt jobs wait` wait for one job by default
+
+
 class Quality(str, Enum):
     draft = "draft"
     normal = "normal"
@@ -700,10 +713,23 @@ def print_cmd(
     duplex: bool = typer.Option(False, "--duplex", help="Print on both sides."),
     tray: Optional[str] = typer.Option(None, "--tray", "-t", help="Input tray: main, photo, disc."),
     direct: bool = typer.Option(False, "--direct", help="Send straight to the printer, never via CUPS."),
+    wait: bool = typer.Option(False, "--wait", help="Wait until each job has finished and report how it ended; "
+                                                    "exits non-zero when a job fails or is cancelled."),
+    wait_timeout: float = typer.Option(WAIT_TIMEOUT, "--wait-timeout", min=1, metavar="SECONDS",
+                                       help="With --wait: give up on a job after this many seconds."),
 ) -> None:
     """Print one or more files."""
     d = STATE.driver()
     d.require(Capability.PRINT)
+    if wait:
+        from prt.printing import sent_directly
+        d.require(Capability.JOBS)
+        # Checked before anything is sent: a job handed to CUPS has an id the printer does not know.
+        via_cups = [f for f in files if f.is_file() and not sent_directly(f)]
+        if via_cups:
+            raise PrinterError(f"--wait cannot follow {via_cups[0].name}: only images are sent to the printer "
+                               "directly, other files go through CUPS", exit_code=2,
+                               hint="convert it to JPEG, or print it without --wait and follow it with `lpstat`")
     results = []
     for f in files:
         opts = PrintOptions(copies=copies, media=media, mono=mono, quality=quality.value if quality else None,
@@ -711,8 +737,23 @@ def print_cmd(
         job = d.print_file(f, opts)
         results.append({"file": str(f), "job_id": job})
         STATE.note("ok", f"{f.name} → job {job}" if job else f"{f.name} sent", d.display_name)
+    failure = None
+    if wait:
+        finished = []
+        try:
+            for r in results:
+                job = _await_job(d, r["job_id"], wait_timeout)
+                r["state"] = job.state
+                finished.append(job)
+        except (PrinterError, KeyboardInterrupt):
+            if STATE.json:  # every job was sent: name them all, with the state reached so far (or null)
+                STATE.write(json.dumps([{"state": None, **r} for r in results]) + "\n")
+            raise
+        failure = _job_failure(finished)
     if STATE.json:
         STATE.write(json.dumps(results) + "\n")
+    if failure:
+        raise failure
 
 
 class BoothStyle(str, Enum):
@@ -974,25 +1015,65 @@ def jobs(ctx: typer.Context,
     d = STATE.driver()
     d.require(Capability.JOBS)
     items = d.jobs(include_completed=all_)
-    mode = STATE.out
+    STATE.emit([to_dict(j) for j in items],
+               lambda: _jobs_box(items, d, STATE.out, empty="no active jobs" if not all_ else "no jobs"),
+               lambda: [_job_record(j) for j in items])
 
-    def text() -> str:
-        if not items:
-            return style.box("jobs", [style.seg("no active jobs" if not all_ else "no jobs", "dim")],
-                             mode, footer=d.target.name)
-        rows = []
-        for j in items:
-            lvl = {"completed": "ok", "processing": "info", "pending": "info", "canceled": "warn",
-                   "aborted": "err"}.get(j.state, "info")
-            rows.append([str(j.id), t(j.name), style.status(lvl, j.state, mode), t(j.user or ""),
-                         str(j.pages if j.pages is not None else "")])
-        body = style.table_rows(["id", "name", "state", "user", "pages"], rows, mode, right={0, 4})
-        return style.box(f"jobs {style.glyphs(mode)['dot']} {d.target.name}", body, mode,
-                         footer=f"{len(items)} job{'s' if len(items) != 1 else ''}")
 
-    STATE.emit([to_dict(j) for j in items], text,
-               lambda: [style.plain_record(j.id, j.name, j.state, j.user or "",
-                                           "" if j.pages is None else j.pages) for j in items])
+
+def _jobs_box(items: list[Job], d: Driver, mode: Mode, empty: str) -> str:
+    if not items:
+        return style.box("jobs", [style.seg(empty, "dim")], mode, footer=d.target.name)
+    rows = [[str(j.id), t(j.name), style.status(JOB_LEVEL.get(j.state, "info"), j.state, mode), t(j.user or ""),
+             str(j.pages if j.pages is not None else "")] for j in items]
+    body = style.table_rows(["id", "name", "state", "user", "pages"], rows, mode, right={0, 4})
+    return style.box(f"jobs {style.glyphs(mode)['dot']} {d.target.name}", body, mode,
+                     footer=f"{len(items)} job{'s' if len(items) != 1 else ''}")
+
+
+def _job_record(j: Job) -> str:
+    return style.plain_record(j.id, j.name, j.state, j.user or "", "" if j.pages is None else j.pages)
+
+
+def _await_job(d: Driver, job_id: int, timeout: float) -> Job:
+    """Wait for one job to finish, noting the states it passes through (a failed end is the caller's error)."""
+    def seen(job: Job) -> None:
+        if job.state == "completed":
+            STATE.note("ok", f"job {job.id} completed", d.display_name)
+        elif job.state not in FINAL_JOB_STATES:
+            STATE.note("info", f"job {job.id} {job.state}…", d.display_name)
+
+    return d.wait_for_job(job_id, timeout, on_state=seen)
+
+
+def _job_failure(jobs: list[Job]) -> PrinterError | None:
+    """The error for jobs that ended without printing (aborted or cancelled), or None when all completed."""
+    failed = [j for j in jobs if j.state != "completed"]
+    if not failed:
+        return None
+    kind = "job_failed" if any(j.state != "canceled" for j in failed) else "job_canceled"
+    what = ", ".join(f"job {j.id} {j.state}" for j in failed)
+    message = what if len(jobs) == 1 else f"{len(failed)} of {len(jobs)} jobs did not print: {what}"
+    hint = ("the printer stopped the job — run `prt status` to see why, then print it again"
+            if kind == "job_failed" else "it was cancelled on the printer or with `prt jobs cancel`; print it again")
+    return PrinterError(message, hint=hint, kind=kind)
+
+
+@jobs_app.command("wait")
+def jobs_wait(
+    job_id: int = typer.Argument(..., help="Job id from `prt jobs` or `prt print`."),
+    wait_timeout: float = typer.Option(WAIT_TIMEOUT, "--wait-timeout", min=1, metavar="SECONDS",
+                                       help="Give up after this many seconds."),
+) -> None:
+    """Wait until a print job has finished and report how it ended; exits non-zero when it failed or was cancelled."""
+    d = STATE.driver()
+    d.require(Capability.JOBS)
+    job = _await_job(d, job_id, wait_timeout)
+    STATE.emit(to_dict(job), lambda: _jobs_box([job], d, STATE.out, empty="no such job"),
+               lambda: [_job_record(job)])
+    failure = _job_failure([job])
+    if failure:
+        raise failure
 
 
 @jobs_app.command("cancel")
@@ -1122,18 +1203,52 @@ def hoist_globals(argv: list[str]) -> list[str]:
     return front + rest
 
 
+def json_requested(argv: list[str]) -> bool:
+    """True when `-f json` is in effect; ``argv`` has its global options in front (see hoist_globals).
+
+    Read from the command line rather than from STATE, so errors raised before (or while) the global
+    options are parsed are JSON too.
+    """
+    fmt, i = Fmt.text.value, 0
+    while i < len(argv):
+        key, eq, value = argv[i].partition("=")
+        if key in ("-f", "--format"):
+            if not eq:
+                i += 1
+                value = argv[i] if i < len(argv) else ""
+            fmt = value
+        elif key in GLOBAL_WITH_VALUE:
+            i += 0 if eq else 1
+        elif argv[i] not in GLOBAL_FLAGS:
+            break  # the command: global options end here
+        i += 1
+    return fmt == Fmt.json.value
+
+
+def _error_json(err: PrinterError) -> str:
+    return json.dumps({"error": err.to_dict()}) + "\n"
+
+
+def _report(err: PrinterError, as_json: bool) -> int:
+    """Print an error on stderr (a JSON object under -f json, text otherwise); returns its exit code."""
+    sys.stderr.write(_error_json(err) if as_json else style.error(str(err), err.hint, STATE.err))
+    return err.exit_code
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = hoist_globals(list(sys.argv[1:] if argv is None else argv))
     _configure_help(argv)
+    as_json = json_requested(argv)
     try:
         rv = app(args=argv, prog_name="prt", standalone_mode=False)
         return rv if isinstance(rv, int) else 0
     except PrinterError as exc:
-        sys.stderr.write(style.error(str(exc), exc.hint, STATE.err))
-        return exc.exit_code
+        return _report(exc, as_json)
     except typer.Exit as exc:
         return exc.exit_code
     except (KeyboardInterrupt, typer.Abort):
+        if as_json:
+            return _report(PrinterError("interrupted", exit_code=130, kind="interrupted"), True)
         sys.stderr.write("\n")
         return 130
     except BrokenPipeError:
@@ -1141,6 +1256,13 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         # Usage errors from Typer's (vendored) click: they know how to print themselves.
         if hasattr(exc, "show") and hasattr(exc, "exit_code"):
+            if as_json:
+                code = int(exc.exit_code)
+                ctx = getattr(exc, "ctx", None)
+                path = ctx.command_path if ctx is not None else "prt"
+                message = exc.format_message() or f"missing command for `{path}`"  # type: ignore[attr-defined]
+                return _report(PrinterError(message, f"see `{path} --help`", exit_code=code,
+                                            kind=KIND_BY_EXIT_CODE.get(code, "error")), True)
             exc.show()
             return int(exc.exit_code)
         raise

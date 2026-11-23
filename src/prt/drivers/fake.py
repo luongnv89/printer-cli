@@ -41,6 +41,11 @@ class FakeIPPClient:
         self.requests: list[tuple[int, list, list, bytes]] = []
         self.next_job_id = 100
         self.printer_uri = "ipp://demo:631/ipp/print"
+        # Jobs submitted to this client. Like a real printer each one goes pending → processing → its
+        # final state, one step each time the active jobs are asked for; ``final_job_state`` picks how it
+        # ends (9 completed, 8 aborted, 7 canceled).
+        self.submitted: dict[int, dict[str, Any]] = {}
+        self.final_job_state = 9
 
     def get_printer_attributes(self, requested=None) -> dict[str, Any]:
         return copy.deepcopy(self.fixture["printer"])
@@ -50,14 +55,30 @@ class FakeIPPClient:
         resp = ipp.Response((1, 1), 0, len(self.requests))
         if operation == ipp.OP_GET_JOBS:
             which = next((a.value for a in operation_attrs or [] if a.name == "which-jobs"), "")
-            for j in self.fixture.get("jobs", []):
+            if which != "completed":
+                self._advance()
+            for j in [*self.fixture.get("jobs", []), *self.submitted.values()]:
                 done = j.get("job-state", 9) >= 7
                 if (which == "completed") == done:  # like a real printer: the two sets are disjoint
                     resp.groups.append((ipp.TAG_JOB, dict(j)))
         elif operation == ipp.OP_PRINT_JOB:
             self.next_job_id += 1
+            name = next((a.value for a in operation_attrs or [] if a.name == "job-name"), "prt job")
+            self.submitted[self.next_job_id] = {"job-id": self.next_job_id, "job-name": name, "job-state": 3,
+                                                "job-originating-user-name": "prt"}
             resp.groups.append((ipp.TAG_JOB, {"job-id": self.next_job_id, "job-state": 3}))
+        elif operation == ipp.OP_CANCEL_JOB:
+            job_id = next((a.value for a in operation_attrs or [] if a.name == "job-id"), None)
+            if job_id in self.submitted and self.submitted[job_id]["job-state"] < 7:
+                self.submitted[job_id]["job-state"] = 7
         return resp
+
+    def _advance(self) -> None:
+        for j in self.submitted.values():
+            if j["job-state"] == 3:
+                j["job-state"] = 5
+            elif j["job-state"] == 5:
+                j["job-state"] = self.final_job_state
 
 
 class FakeDriver(EpsonDriver):

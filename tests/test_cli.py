@@ -30,7 +30,8 @@ def run(capsys, *args):
 @pytest.mark.parametrize("argv", [[], ["--help"], ["printers", "--help"], ["maintain", "--help"],
                                   ["jobs", "--help"], ["status", "--help"], ["scan", "--help"],
                                   ["print", "--help"], ["maintain", "clean", "--help"], ["tui", "--help"],
-                                  ["booth", "--help"], ["article", "--help"], ["list", "--help"]])
+                                  ["booth", "--help"], ["article", "--help"], ["list", "--help"],
+                                  ["jobs", "wait", "--help"]])
 def test_help_everywhere(capsys, argv):
     code, out, err = run(capsys, *argv)
     assert code in (0, 2) if not argv else code == 0
@@ -847,3 +848,231 @@ def test_verbose_traces_protocol(capsys):
     assert code == 1 and "IPP → Get-Printer-Attributes" in err
     from prt.transport import ipp
     ipp.TRACE = False
+
+
+# --- errors as JSON under -f json (#20) -------------------------------------------------------
+
+def _error(err):
+    """The JSON error object on stderr: the last line, after any notes."""
+    return json.loads(err.splitlines()[-1])["error"]
+
+
+def test_json_error_has_code_kind_and_hint(capsys):
+    code, out, err = run(capsys, "-f", "json", "printers", "remove", "nope")
+    assert code == 2 and out == ""
+    assert json.loads(err) == {"error": {"code": 2, "kind": "usage", "message": "no saved printer named 'nope'",
+                                         "hint": "see `prt printers list`"}}
+
+
+@pytest.mark.parametrize("argv, code, kind", [
+    (["--timeout", "0.5", "-p", "127.0.0.1", "status"], 1, "unreachable"),
+    (["-p", "demo", "maintain", "clean", "--yes"], 1, "refused"),
+    (["status", "--bogus"], 2, "usage"),
+    (["--timeout", "soon", "status"], 2, "usage"),
+    (["-p", "demo", "print", "nope.jpg"], 3, "invalid_input"),
+])
+def test_json_error_code_matches_the_exit_code(capsys, argv, code, kind):
+    exit_code, out, err = run(capsys, "-f", "json", *argv)
+    error = _error(err)
+    assert exit_code == code and error["code"] == exit_code and error["kind"] == kind and error["message"]
+    assert out == ""
+
+
+def test_json_error_for_an_article_that_cannot_be_fetched(capsys, monkeypatch):
+    import httpx
+    from prt import article
+    real_fetch = article.fetch
+    monkeypatch.setattr(article, "fetch", lambda url, timeout, transport=None: real_fetch(
+        url, timeout, transport=httpx.MockTransport(lambda request: httpx.Response(404))))
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "article", "https://blog.example/gone")
+    error = _error(err)
+    assert code == 3 and out == "" and error["kind"] == "fetch_failed" and error["hint"]
+    assert "HTTP 404" in error["message"]
+
+
+def test_json_error_when_only_the_cached_status_is_shown(capsys):
+    cache.save("ghost", FakeDriver().status())
+    assert run(capsys, "printers", "add", "ghost", "127.0.0.1")[0] == 0
+    code, out, err = run(capsys, "--timeout", "0.5", "-p", "ghost", "-f", "json", "status")
+    assert code == 1 and json.loads(out)["stale"] is True
+    assert _error(err)["code"] == 1 and _error(err)["kind"] == "stale"
+
+
+def test_json_error_when_the_confirmation_is_declined(capsys, monkeypatch):
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True, raising=False)
+    monkeypatch.setattr("typer.confirm", lambda q, **kw: False)
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "maintain", "test-page")
+    assert code == 1 and out == "" and _error(err)["kind"] == "declined" and _error(err)["code"] == 1
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False, raising=False)
+    code, _, err = run(capsys, "-p", "demo", "-f", "json", "maintain", "test-page")
+    assert code == 2 and _error(err)["kind"] == "confirmation_required"
+
+
+def test_text_errors_are_unchanged_without_json(capsys):
+    assert run(capsys, "-f", "json", "-p", "demo", "status")[0] == 0  # an earlier JSON run must not leak
+    code, out, err = run(capsys, "--no-color", "printers", "remove", "nope")
+    assert (code, out, err) == (2, "", "x error: no saved printer named 'nope'\nhint: see `prt printers list`\n")
+    code, _, err = run(capsys, "status", "--bogus")
+    assert code == 2 and "No such option: --bogus" in err and "{" not in err
+
+
+def test_printer_error_kind_comes_from_the_raise_site_the_class_or_the_exit_code():
+    from prt.drivers.base import PrinterError, Unsupported
+    from prt.models import Capability
+    assert PrinterError("x").kind == "error"
+    assert PrinterError("x", exit_code=2).kind == "usage"
+    assert PrinterError("x", exit_code=3).kind == "invalid_input"
+    assert PrinterError("x", exit_code=3, kind="fetch_failed").kind == "fetch_failed"
+    assert Unreachable(Target("p", "h")).kind == "unreachable"
+    assert Unsupported(FakeDriver(), Capability.SCAN).kind == "unsupported"
+    assert PrinterError("boom", hint="fix it", exit_code=3).to_dict() == {
+        "code": 3, "kind": "invalid_input", "message": "boom", "hint": "fix it"}
+
+
+def test_json_requested_reads_the_global_format_option():
+    from prt.cli import json_requested
+    assert json_requested(hoist_globals(["status", "-f", "json"]))
+    assert json_requested(["--format=json", "-p", "demo", "ink"])
+    assert not json_requested(["-f", "json", "-f", "text", "ink"])
+    assert not json_requested(hoist_globals(["scan", "--format", "jpeg"]))
+    assert not json_requested(["status"])
+
+
+# --- waiting for jobs (#22) -----------------------------------------------------------------------
+
+@pytest.fixture
+def printer(monkeypatch):
+    """One FakeDriver handed to the CLI, polled without real sleeps."""
+    fake = FakeDriver()
+    monkeypatch.setattr("prt.cli.make_driver", lambda target, timeout=5.0: fake)
+    monkeypatch.setattr("prt.drivers.base.JOB_POLL_INTERVAL", 0)
+    return fake
+
+
+@pytest.fixture
+def photo(tmp_path):
+    from PIL import Image
+    path = tmp_path / "a.jpg"
+    Image.new("RGB", (10, 10), "red").save(path)
+    return path
+
+
+def test_print_wait_returns_once_the_job_completed(capsys, printer, photo):
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "print", str(photo), "--wait")
+    assert code == 0 and json.loads(out) == [{"file": str(photo), "job_id": 101, "state": "completed"}]
+    assert printer.client.submitted[101]["job-state"] == 9
+    assert "job 101 processing" in err and "job 101 completed" in err
+
+
+def test_print_without_wait_does_not_follow_the_job(capsys, printer, photo):
+    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "print", str(photo))
+    assert code == 0 and json.loads(out) == [{"file": str(photo), "job_id": 101}]
+    assert [op for op, *_ in printer.client.requests].count(ipp.OP_GET_JOBS) == 0
+
+
+@pytest.mark.parametrize("final, state, kind", [(8, "aborted", "job_failed"), (7, "canceled", "job_canceled")])
+def test_print_wait_reports_a_job_that_did_not_print_and_exits_non_zero(capsys, printer, photo, final, state,
+                                                                         kind):
+    printer.client.final_job_state = final
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "print", str(photo), "--wait")
+    assert code == 1 and json.loads(out)[0]["state"] == state
+    assert _error(err) == {"code": 1, "kind": kind, "message": f"job 101 {state}", "hint": _error(err)["hint"]}
+
+
+def test_print_wait_names_every_job_that_did_not_print(capsys, printer, photo, monkeypatch):
+    real_advance = printer.client._advance
+
+    def advance():  # job 101 completes, job 102 is aborted by the printer
+        real_advance()
+        if printer.client.submitted.get(102, {}).get("job-state") == 9:
+            printer.client.submitted[102]["job-state"] = 8
+    monkeypatch.setattr(printer.client, "_advance", advance)
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "print", str(photo), str(photo), "--wait")
+    assert code == 1 and [(r["job_id"], r["state"]) for r in json.loads(out)] == [(101, "completed"),
+                                                                                   (102, "aborted")]
+    assert _error(err)["kind"] == "job_failed"
+    assert _error(err)["message"] == "1 of 2 jobs did not print: job 102 aborted"
+
+
+def test_print_wait_text_mode_reports_the_failure(capsys, printer, photo):
+    printer.client.final_job_state = 8
+    code, out, err = run(capsys, "--no-color", "-p", "demo", "print", str(photo), "--wait")
+    assert code == 1 and out == "" and "error: job 101 aborted" in err and "hint:" in err
+
+
+def test_print_wait_refuses_files_that_go_through_cups_before_sending(capsys, printer, photo, tmp_path):
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "print", str(photo), str(pdf), "--wait")
+    assert code == 2 and out == "" and "doc.pdf" in _error(err)["message"]
+    assert printer.client.submitted == {}
+
+
+def test_jobs_wait_reports_an_existing_finished_job(capsys, printer):
+    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "jobs", "wait", "41")
+    assert code == 0 and json.loads(out)["state"] == "completed" and json.loads(out)["id"] == 41
+    code, out, _ = run(capsys, "-p", "demo", "jobs", "wait", "41")
+    assert code == 0 and out.startswith("41\tboarding-pass.pdf\tcompleted")
+
+
+def test_jobs_wait_follows_a_queued_job_to_its_end(capsys, printer, photo):
+    assert run(capsys, "-p", "demo", "print", str(photo))[0] == 0
+    assert printer.client.submitted[101]["job-state"] == 3
+    printer.client.final_job_state = 7
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "jobs", "wait", "101")
+    assert code == 1 and json.loads(out)["state"] == "canceled" and _error(err)["kind"] == "job_canceled"
+
+
+def test_print_wait_still_names_every_sent_job_when_waiting_fails(capsys, printer, photo, monkeypatch):
+    monkeypatch.setattr(printer.client, "_advance", lambda: None)
+    real_job = printer.job
+    monkeypatch.setattr(printer, "job", lambda job_id: None if job_id == 102 else real_job(job_id))
+    real_request = printer.client.request
+
+    def request(operation, **kw):  # job 101 finishes; the printer has forgotten job 102
+        if operation == ipp.OP_GET_JOBS and 101 in printer.client.submitted:
+            printer.client.submitted[101]["job-state"] = 9
+        return real_request(operation, **kw)
+    monkeypatch.setattr(printer.client, "request", request)
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "print", str(photo), str(photo), "--wait")
+    assert code == 1 and _error(err)["kind"] == "job_not_found"
+    assert [(r["job_id"], r["state"]) for r in json.loads(out)] == [(101, "completed"), (102, None)]
+
+
+def test_json_error_for_a_group_called_without_a_command(capsys):
+    code, _, err = run(capsys, "-f", "json", "printers")
+    assert code == 2 and _error(err)["kind"] == "usage" and _error(err)["message"]
+
+
+def test_jobs_wait_unknown_job(capsys, printer):
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "jobs", "wait", "999")
+    assert code == 1 and out == "" and _error(err)["kind"] == "job_not_found"
+
+
+def test_jobs_wait_gives_up_after_the_wait_timeout(capsys, printer, photo, monkeypatch):
+    from types import SimpleNamespace
+    now = [0.0]
+    monkeypatch.setattr("prt.drivers.base.time", SimpleNamespace(
+        monotonic=lambda: now[0], sleep=lambda s: now.__setitem__(0, now[0] + s)))
+    monkeypatch.setattr("prt.drivers.base.JOB_POLL_INTERVAL", 2.0)
+    monkeypatch.setattr(printer.client, "_advance", lambda: None)  # the job never leaves "pending"
+    assert run(capsys, "-p", "demo", "print", str(photo))[0] == 0
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "jobs", "wait", "101", "--wait-timeout", "5")
+    assert code == 1 and out == ""
+    assert _error(err)["kind"] == "timeout" and "still pending after 5 s" in _error(err)["message"]
+    assert now[0] == 5.0
+
+
+def test_wait_for_job_reports_each_state_change_once(printer):
+    from prt.models import PrintOptions
+    job_id = printer.submit(b"x", "image/jpeg", PrintOptions(job_name="w"))
+    seen = []
+    job = printer.wait_for_job(job_id, timeout=10, interval=0, on_state=lambda j: seen.append(j.state))
+    assert job.state == "completed" and job.name == "w" and seen == ["processing", "completed"]
+
+
+def test_cancel_reaches_a_waited_job(capsys, printer, photo):
+    assert run(capsys, "-p", "demo", "print", str(photo))[0] == 0
+    assert run(capsys, "-p", "demo", "jobs", "cancel", "101")[0] == 0
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "jobs", "wait", "101")
+    assert code == 1 and json.loads(out)["state"] == "canceled" and _error(err)["kind"] == "job_canceled"

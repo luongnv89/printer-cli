@@ -95,17 +95,17 @@ prt list
 | `prt maintain clean [--force]` | Head cleaning, with a safety check first (see [Safety](#safety)) |
 | `prt maintain test-page` | Colour test page: ink bars, gradients, grey steps, fine lines |
 | `prt maintain identify` | Flash the printer's panel |
-| `prt print FILE… [-n 2] [--media 4x6] [--tray photo] [--quality high] [--mono] [--duplex] [--direct]` | Print |
+| `prt print FILE… [-n 2] [--media 4x6] [--tray photo] [--quality high] [--mono] [--duplex] [--direct] [--wait]` | Print; `--wait` returns once each job has finished and reports how it ended |
 | `prt booth PHOTO [--style metro\|daily\|wizard\|wanted] [--story-file story.json] [--preview page.jpg] [--save page.pdf]` | Photo booth: print the photo as an A4 newspaper front page, wizard card or wanted poster (see [Photo booth](#photo-booth)) |
 | `prt article URL\|FILE [--style magazine\|classic-magazine] [--preview page.pdf] [--save page.pdf]` | Print a blog post, news article or X post as A4 magazine pages (see [Article printing](#article-printing)) |
 | `prt gazette PHOTO… [--landscape] [--story-file story.json] [--preview page.pdf] [--save page.pdf]` | Print one or more photos as a vintage newspaper, over as many A4 pages as the photos need (see [Vintage gazette](#vintage-gazette)) |
-| `prt jobs [--all]` / `prt jobs cancel ID` | List or cancel jobs |
+| `prt jobs [--all]` / `prt jobs wait ID` / `prt jobs cancel ID` | List jobs, wait for one to finish, or cancel one |
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
 | `prt tui` | Full-screen dashboard |
 
 **Global options**, which can go before or after the command:
 - `-p/--printer NAME|HOST` picks the printer.
-- `-f/--format json` prints machine-readable output.
+- `-f/--format json` prints machine-readable output, and errors as a JSON object (see [Scripting](#scripting)).
 - `--no-color` turns colour off.
 - `-q` hides notes and prints only results.
 - `--timeout S` sets the network timeout in seconds.
@@ -184,6 +184,8 @@ prt print poster.png --direct                                  # straight to the
 
 **Jobs**: `prt jobs --all` includes finished jobs; cancel one by its id with `prt jobs cancel 42`.
 
+**Waiting for a print**: `prt print photo.jpg --wait` returns only once the job has reached a final state (completed, canceled or aborted), and `prt jobs wait 42` does the same for a job already sent. A job that completed exits `0`; one that was cancelled or aborted is reported as such and exits `1`. `--wait-timeout SECONDS` (default 600) sets how long to wait for each job before giving up. With `-f json` each `prt print` result gains a `state`, and `prt jobs wait` prints the job. `--wait` follows only jobs sent to the printer directly (JPEG, PNG and other images): a PDF or other file that goes through CUPS is refused with exit code `2` before anything is sent.
+
 ```
 ╭─┐jobs · demo┌────────────────────────────────────────────────────────────────╮
 │ id  name               state        user  pages                              │
@@ -210,7 +212,33 @@ prt booth me.jpg --style daily --story-file story.json --preview page.jpg   # re
 prt article https://example.com/blog/post -o article.pdf                   # every page in one PDF, nothing printed
 ```
 
-Exit codes: `0` ok · `1` runtime/network error (also when only cached status is shown) · `2` usage error · `3` bad input file, an article that cannot be fetched or converted, or more photos than the gazette takes · `130` Ctrl-C.
+Exit codes: `0` ok · `1` runtime/network error (also when only cached status is shown, or a waited-for job did not print) · `2` usage error · `3` bad input file, an article that cannot be fetched or converted, or more photos than the gazette takes · `130` Ctrl-C.
+
+**Errors as JSON**: with `-f json`, a failing command writes one JSON object as the last line of stderr instead of the `error:`/`hint:` text, so a script or agent can branch on the kind of error. `code` is the process exit code, and `hint` may be `null`:
+
+```bash
+$ prt -f json article https://example.com/gone
+{"error": {"code": 3, "kind": "fetch_failed", "message": "cannot fetch https://example.com/gone: the site answered HTTP 404 Not Found", "hint": "..."}}
+```
+
+| kind | exit code | meaning |
+|---|---|---|
+| `unreachable` | 1 | the printer does not answer |
+| `unsupported` | 1 | the printer cannot do this (see `prt overview`) |
+| `rejected` | 1 | the printer refused the request |
+| `refused` | 1 | a safety check stopped a maintenance task |
+| `stale` | 1 | the printer is not answering; the output is its last known status |
+| `declined` | 1 | the confirmation prompt was answered no |
+| `job_failed` / `job_canceled` | 1 | a waited-for job was aborted or cancelled |
+| `job_not_found` / `timeout` | 1 | a waited-for job is unknown, or still not finished after `--wait-timeout` |
+| `error` | 1 | any other runtime failure |
+| `usage` | 2 | bad command line, option value or argument |
+| `confirmation_required` | 2 | a prompt is needed but there is no terminal: add `--yes` |
+| `fetch_failed` | 3 | an article link could not be fetched |
+| `invalid_input` | 3 | a bad input file or link |
+| `interrupted` | 130 | Ctrl-C |
+
+Without `-f json` error output is unchanged.
 
 ## The TUI
 
