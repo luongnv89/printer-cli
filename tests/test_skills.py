@@ -17,7 +17,7 @@ from prt.cli import main
 
 from conftest import ROOT
 
-NAMES = ["article-print", "letter-gazette", "photo-booth"]
+NAMES = ["article-print", "greeting-card", "letter-gazette", "photo-booth"]
 
 
 def run(capsys, *args):

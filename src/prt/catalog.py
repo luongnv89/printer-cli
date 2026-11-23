@@ -3,7 +3,7 @@ the input files the print commands read.
 
 ``styles()`` lists the styles (``prt styles -f json``) and ``schema(name)`` returns one JSON Schema (``prt schema
 NAME``). Both are built from the constants the commands check their input against (``booth.FIELDS``,
-``booth.LIMITS``, ``article.FIELDS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
+``booth.LIMITS``, ``card.LIMITS``, ``article.FIELDS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
 schema is built by :mod:`prt.compose`, which checks page files against it. Other front
 ends (an MCP server, page validation) import this module instead of listing the styles again; a new input schema
 is added with ``@register_schema``.
@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
-from prt import article, booth, compose, vintage
+from prt import article, booth, card, compose, vintage
 from prt.drivers.base import PrinterError
 
 # The sample pages shown in the README; assets/ is not in the package, so they are linked, not bundled.
@@ -118,6 +118,14 @@ STORY_ROLES = {  # every booth style at once, for the style-independent story sc
     "byline": "Author line, e.g. 'By Jo Smith'; the footer on wizard, wanted and sports, the signature on "
               "certificate, the tear-off tabs on missing, the rating on movie",
 }
+CARD_ROLES = {
+    "greeting": "Greeting on the front, under the photo, e.g. 'Happy Birthday!'",
+    "verse": "Verse on the inside right; a newline starts a new line, a blank line a new stanza",
+    "message": "Short note on the inside left; when empty that panel is left blank to write on. A newline starts a "
+               "new paragraph",
+    "signature": "Line under the verse, e.g. 'With love, Jo'",
+    "back": "Small line on the back of the card",
+}
 ARTICLE_ROLES = {
     "title": "Headline; when empty the source, else 'Untitled', is printed",
     "body": "The article text: one string with a newline between paragraphs, or a list of paragraphs",
@@ -131,6 +139,10 @@ ARTICLE_REQUIRED = ("title", "body")  # as article.parse refuses a file without 
 def story_fields(roles: dict[str, str]) -> tuple[Field, ...]:
     """The booth.Story fields with what ``roles`` says each one is, required flags and length limits."""
     return tuple(Field(name, roles[name], name in booth.REQUIRED, booth.LIMITS[name]) for name in booth.FIELDS)
+
+
+def card_fields() -> tuple[Field, ...]:
+    return tuple(Field(name, CARD_ROLES[name], name in card.REQUIRED, card.LIMITS[name]) for name in card.FIELDS)
 
 
 def article_fields() -> tuple[Field, ...]:
@@ -156,6 +168,9 @@ BOOTH = {  # style: (description, roles, sample)
     "movie": ("Movie poster: dark poster with a tagline, the photo fading into the title, stars, a release line, "
               "credits and a rating box", MOVIE_ROLES, "booth-movie.jpg"),
 }
+CARD_DESCRIPTION = ("Quarter-fold greeting card on one A4 sheet: the photo in a gold frame and the greeting on the "
+                    "front, a message inside left, the verse and signature inside right, a line on the back; folds "
+                    "into an A6 card with every panel the right way up")
 ARTICLE = {  # style: (description, sample)
     "magazine": ("Bold headline, three columns, colour accents", "article-magazine.jpg"),
     "classic-magazine": ("Ivory page, centred single column, drop cap, ornaments", "article-classic.jpg"),
@@ -168,6 +183,7 @@ def _build() -> tuple[Style, ...]:
     # Iterating the commands' own tables means a style added there and not here fails at import, in the tests.
     out = [Style(name, "booth", () if name == "metro" else ("--style", name), booth.KINDS[name], BOOTH[name][0],
                  "story", story_fields(BOOTH[name][1]), (1, 1), 1, BOOTH[name][2]) for name in booth.STYLES]
+    out.append(Style("card", "card", (), card.KIND, CARD_DESCRIPTION, "card", card_fields(), (1, 1), 1, "card.jpg"))
     out += [Style(name, "article", () if name == "magazine" else ("--style", name),
                   article.ARTICLE_STYLES[name].kind, ARTICLE[name][0], "article", article_fields(), (0, 0),
                   article.MAX_PAGES, ARTICLE[name][1]) for name in article.ARTICLE_STYLES]
@@ -279,3 +295,16 @@ def gazette_schema() -> dict[str, Any]:
 def page_schema() -> dict[str, Any]:
     # Built by prt.compose, which checks page files against this same schema.
     return compose.page_schema()
+
+
+@register_schema("card", "greeting card file: prt card PHOTO --card-file card.json")
+def card_schema() -> dict[str, Any]:
+    fields = card_fields()
+    return {"$schema": JSON_SCHEMA, "title": "prt card",
+            "description": "The card file of `prt card --card-file` (a file, or - for stdin); at most "
+                           f"{card.MAX_CARD_FILE // 1024} KiB. The photo is given on the command line. {TEXT_NOTE} "
+                           "In the verse each newline counts as a character, and a run of blank lines counts as one "
+                           "blank line.",
+            "type": "object", "properties": {f.name: _text(f) for f in fields},
+            "required": [f.name for f in fields if f.required], "additionalProperties": False,
+            "examples": [asdict(card.DEFAULT_CARD)]}

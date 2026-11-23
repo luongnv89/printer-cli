@@ -78,6 +78,7 @@ def _commands(tmp_path):
     return {
         "print": ["print", str(photo)],
         "booth": ["booth", str(photo)],
+        "card": ["card", str(photo)],
         "article": ["article", str(_article(tmp_path))],
         "gazette": ["gazette", str(photo)],
         "compose": ["compose", str(_page_file(tmp_path))],
@@ -87,7 +88,7 @@ def _commands(tmp_path):
     }
 
 
-COMMANDS = ["print", "booth", "article", "gazette", "compose", "test-page", "nozzle-check", "clean"]
+COMMANDS = ["print", "booth", "card", "article", "gazette", "compose", "test-page", "nozzle-check", "clean"]
 
 
 # --- agent mode ------------------------------------------------------------------------------------------
