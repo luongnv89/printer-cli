@@ -164,7 +164,7 @@ def _used(text: str, day: str) -> int:
 def used_today(path: Path | None = None) -> int:
     """Pages printed (or attempted) today, from the ledger; 0 when it is missing or unreadable."""
     try:
-        return _used((path or ledger_path()).read_text(), _today())
+        return _used((path or ledger_path()).read_text(encoding="utf-8", errors="replace"), _today())
     except OSError:
         return 0
 
@@ -173,7 +173,7 @@ def _update(path: Path, change) -> int:
     """Apply ``change(used) -> new`` to today's count under an exclusive lock; ``change`` may raise to refuse."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
-    with os.fdopen(fd, "r+", encoding="utf-8") as f:
+    with os.fdopen(fd, "r+", encoding="utf-8", errors="replace") as f:
         if fcntl is not None:
             fcntl.flock(f, fcntl.LOCK_EX)
         day = _today()

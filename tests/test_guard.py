@@ -184,6 +184,9 @@ def test_ledger_from_another_day_counts_as_zero(tmp_path):
     for junk in ("not json", "[]", '{"date": "x"}', json.dumps({"date": guard._today(), "pages": True})):
         path.write_text(junk)
         assert guard.used_today(path) == 0
+    path.write_bytes(b"\xff\xfe garbage")  # not even UTF-8: still 0, and the next booking rewrites it
+    assert guard.used_today(path) == 0
+    assert guard._update(path, lambda used: used + 2) == 2 and guard.used_today(path) == 2
 
 
 def test_reserve_gives_back_only_pages_never_attempted():
