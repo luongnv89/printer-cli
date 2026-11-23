@@ -72,7 +72,8 @@ Every command also works against the built-in replay: `prt -p demo status`, `prt
 | `prt ink` | Ink levels only |
 | `prt overview` | System, software and hardware: model, serial, firmware, uptime, page count, formats, media, scanner, capabilities |
 | `prt discover` | mDNS scan for printers and scanners. Saves each new printer under a short name; printers already saved and the default are left as they are |
-| `prt printers list/add/remove/default` | Manage saved printers |
+| `prt list [--no-check]` | Saved printers and whether each one is online or offline (same as `prt printers list`) |
+| `prt printers list/add/remove/default` | Manage saved printers. `list` checks each printer's connection and shows it as online or offline; `--no-check` skips the check |
 | `prt maintain nozzle-check` | Print the nozzle check pattern |
 | `prt maintain clean [--force]` | Head cleaning, with a safety check first (see [Safety](#safety)) |
 | `prt maintain test-page` | Colour test page: ink bars, gradients, grey steps, fine lines |

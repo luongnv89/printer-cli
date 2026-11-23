@@ -6,6 +6,7 @@ import json
 import re
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -19,7 +20,7 @@ from prt.config import Config
 from prt.drivers.base import Driver, PrinterError, Unreachable
 from prt.drivers.registry import driver_names, make_driver
 from prt.maintenance import head_clean_preflight, nozzle_check_preflight
-from prt.models import Capability, PrintOptions, ScanSettings, Severity, Status, to_dict
+from prt.models import Capability, PrintOptions, ScanSettings, Severity, Status, Target, to_dict
 from prt.style import ROLES, Mode, t
 
 if TYPE_CHECKING:
@@ -495,21 +496,38 @@ def discover(timeout: float = typer.Option(3.0, "--wait", help="Seconds to liste
 # --- printers ---------------------------------------------------------------------------
 
 
+MAX_PARALLEL_CHECKS = 8
+
+
+def _check_printers(targets: list[Target], timeout: float) -> list[str]:
+    """'online' or 'offline' for each target, in the same order; the checks run in parallel."""
+    def check(tgt: Target) -> str:
+        try:
+            make_driver(tgt, timeout).status()
+            return "online"
+        except Exception:  # any failure (DNS, refused, bad reply, unknown driver) means not connected
+            return "offline"
+
+    if not targets:
+        return []
+    with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_CHECKS, len(targets))) as pool:
+        return list(pool.map(check, targets))
+
+
+CHECK_OPTION_HELP = "Check each printer's connection (online/offline); --no-check skips it."
+
+
 @printers_app.command("list")
-def printers_list(check: bool = typer.Option(False, "--check", help="Ping each printer over IPP.")) -> None:
-    """Saved printers, their driver and which one is the default."""
+def printers_list(check: bool = typer.Option(True, "--check/--no-check", help=CHECK_OPTION_HELP)) -> None:
+    """Saved printers, their driver, which one is the default and their connection status."""
     cfg = STATE.cfg
-    rows_data = []
-    for name, tgt in cfg.printers.items():
-        reach = None
-        if check:
-            try:
-                make_driver(tgt, min(cfg.timeout, 3)).status()
-                reach = "online"
-            except PrinterError:
-                reach = "offline"
-        rows_data.append({"name": name, "host": tgt.host, "driver": tgt.driver,
-                          "default": name == cfg.default, "reachable": reach})
+    targets = list(cfg.printers.values())
+    states: list[str | None] = [None] * len(targets)
+    if check:
+        states = list(_check_printers(targets, STATE.timeout or min(cfg.timeout, 3)))
+    rows_data = [{"name": name, "host": tgt.host, "driver": tgt.driver,
+                  "default": name == cfg.default, "reachable": reach}
+                 for (name, tgt), reach in zip(cfg.printers.items(), states)]
     mode = STATE.out
 
     def text() -> str:
@@ -529,6 +547,12 @@ def printers_list(check: bool = typer.Option(False, "--check", help="Ping each p
     STATE.emit(rows_data, text, lambda: [style.plain_record(r["name"], r["host"], r["driver"],
                                                             "default" if r["default"] else "",
                                                             r["reachable"] or "") for r in rows_data])
+
+
+@app.command("list")
+def list_cmd(check: bool = typer.Option(True, "--check/--no-check", help=CHECK_OPTION_HELP)) -> None:
+    """Saved printers and their connection status (same as prt printers list)."""
+    printers_list(check=check)
 
 
 @printers_app.command("add")
