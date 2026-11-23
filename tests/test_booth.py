@@ -2,6 +2,7 @@ import io
 import json
 import re
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -94,7 +95,7 @@ def test_full_length_portrait_keeps_the_top_of_the_photo(monkeypatch, style):
 @pytest.mark.parametrize("shape", [(300, 400), (360, 640), (1600, 900)])
 def test_default_story_is_never_cut(style, shape):
     page, cut = booth.compose(Image.new("RGB", shape, "blue"), booth.default_story(style), style)
-    assert cut == [] and page == _render(Image.new("RGB", shape, "blue"), style=style)
+    assert cut == {} and page == _render(Image.new("RGB", shape, "blue"), style=style)
 
 
 def test_unbroken_story_renders_quickly():
@@ -136,7 +137,7 @@ def test_metro_headline_is_cut_at_a_word_boundary(monkeypatch):
     story = booth.check_story(Story(headline=words, story="S"), 2)
     cut = booth.compose(Image.new("RGB", (300, 400), "blue"), story, "metro")[1]
     headline = blocks[0]
-    assert len(headline) == 3 and cut == ["headline"]  # three lines at the smallest size, then cut
+    assert len(headline) == 3 and list(cut) == ["headline"]  # three lines at the smallest size, then cut
     assert headline[-1].endswith("…")
     printed = " ".join(headline)[:-1].split()
     assert printed == words.upper().split()[:len(printed)]  # only whole words, in order
@@ -221,21 +222,53 @@ def test_short_stories_are_not_split_across_columns():
 def test_kicker_within_the_limit_is_never_cut(style, kicker):
     assert len(kicker) == LIMITS["kicker"]
     story = booth.check_story(Story(headline="H", story="S", kicker=kicker), 2)
-    assert booth.compose(Image.new("RGB", (300, 400), "blue"), story, style)[1] == []
+    assert booth.compose(Image.new("RGB", (300, 400), "blue"), story, style)[1] == {}
 
 
 def test_compose_names_the_fields_cut_to_fit():
     portrait = Image.new("RGB", (300, 400), "blue")
     long = Story(headline="Wide headline words " * 6, story="Wide paragraph.\n" * 140, kicker="W" * 40,
                  caption="caption words " * 14, byline="B" * 80)
-    assert booth.compose(portrait, booth.check_story(long, 2), "metro")[1] == ["headline", "caption", "story"]
-    assert booth.compose(portrait, booth.check_story(long, 2), "daily")[1] == ["story"]
+    assert list(booth.compose(portrait, booth.check_story(long, 2), "metro")[1]) == ["headline", "caption", "story"]
+    assert list(booth.compose(portrait, booth.check_story(long, 2), "daily")[1]) == ["story"]
     # A 40-character kicker always fits; the rest of the card or poster is cut.
     themed = ["headline", "caption", "story", "byline"]
-    assert booth.compose(portrait, booth.check_story(long, 2), "wizard")[1] == themed
-    assert booth.compose(portrait, booth.check_story(long, 2), "wanted")[1] == themed
+    assert list(booth.compose(portrait, booth.check_story(long, 2), "wizard")[1]) == themed
+    assert list(booth.compose(portrait, booth.check_story(long, 2), "wanted")[1]) == themed
     # Text that already ends in "…" is not mistaken for a cut.
-    assert booth.compose(portrait, Story(headline="Wait for it…", story="Line one…"), "metro")[1] == []
+    assert booth.compose(portrait, Story(headline="Wait for it…", story="Line one…"), "metro")[1] == {}
+
+
+@pytest.mark.parametrize("style", STYLES)
+def test_compose_reports_how_much_of_each_cut_field_was_printed(style):
+    portrait = Image.new("RGB", (300, 400), "blue")
+    long = booth.check_story(Story(headline="Wide headline words " * 6, story="Wide paragraph.\n" * 140,
+                                   kicker="W" * 40, caption="caption words " * 14, byline="B" * 80), 2)
+    cut = booth.compose(portrait, long, style)[1]
+    assert cut
+    for name, fit in cut.items():
+        assert fit.given == len(getattr(long, name)) and 0 < fit.max_fit < fit.given, name
+        # Cut to max_fit characters, the field fits where it is (the rest of the page left as it was).
+        shorter = replace(long, **{name: getattr(long, name)[:fit.max_fit]})
+        assert name not in booth.compose(portrait, shorter, style)[1], name
+
+
+# Stand-ins ("EUR" for "€", "ss" for "ß") and dropped accent marks print more or fewer characters than given.
+STAND_IN_STORY = Story(headline=("Prix € Straße " * 20)[:120], kicker="€ß" * 20, caption=("Straße € " * 30)[:200],
+                       byline="€" * 80, story=("Die Straße kostet € 5. Cafe\u0301. " * 90)[:2500])
+
+
+@pytest.mark.parametrize("style", STYLES)
+def test_cut_counts_the_characters_given_not_their_stand_ins(style):
+    portrait = Image.new("RGB", (300, 400), "blue")
+    story = booth.check_story(STAND_IN_STORY, 2)
+    cut = booth.compose(portrait, story, style)[1]
+    assert cut and (style != "metro" or {"headline", "byline"} <= set(cut))
+    for name, fit in cut.items():
+        assert fit.given == len(getattr(story, name)) and 0 < fit.max_fit <= fit.given, name
+        # Cut to max_fit characters, the field fits where it is (the rest of the page left as it was).
+        shorter = replace(story, **{name: getattr(story, name)[:fit.max_fit]})
+        assert name not in booth.compose(portrait, shorter, style)[1], name
 
 
 @pytest.mark.parametrize("style", STYLES)
@@ -246,19 +279,19 @@ def test_kicker_fits_the_page_even_when_stand_ins_widen_it(style):
     w, h = A4_150DPI
     for band in [(0, 0, 80, h), (w - 80, 0, w, h)]:
         assert page.crop(band).getextrema() == ((255, 255),) * 3, band
-    assert cut == ["kicker"]
+    assert list(cut) == ["kicker"]
 
 
 @pytest.mark.parametrize("style", STYLES)
 def test_kicker_of_only_an_accent_mark_renders(style):
     story = booth.check_story(Story(headline="H", story="S", kicker="¨"), 2)  # prints as a blank
-    assert booth.compose(Image.new("RGB", (40, 40), "white"), story, style)[1] == []
+    assert booth.compose(Image.new("RGB", (40, 40), "white"), story, style)[1] == {}
 
 
 @pytest.mark.parametrize("style", STYLES)
 def test_empty_optional_fields_render(style):
     page, cut = booth.compose(Image.new("RGB", (40, 40), "white"), Story(headline="Hi", story="Short."), style)
-    assert page.size == A4_150DPI and cut == []
+    assert page.size == A4_150DPI and cut == {}
 
 
 # --- themed styles -------------------------------------------------------------------------------

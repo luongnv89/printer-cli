@@ -454,7 +454,8 @@ def test_booth_styles(capsys, tmp_path, booth_printer):
     photo = _booth_photo(tmp_path)
     for job_id, style in enumerate(BOOTH_STYLES, start=101):
         code, out, _ = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--style", style, "--yes")
-        assert code == 0 and json.loads(out) == {"action": "booth", "style": style, "job_id": job_id}
+        assert code == 0 and json.loads(out) == {"action": "booth", "style": style, "job_id": job_id,
+                                                 "fits": True, "cut": {}}
     pages = booth_printer.jobs()
     assert pages == [_expected_page(photo, style=style) for style in BOOTH_STYLES]
     assert len(set(pages)) == len(BOOTH_STYLES)  # every style prints a different page
@@ -511,7 +512,7 @@ def test_booth_themed_style_preview_never_creates_a_driver(capsys, tmp_path, boo
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "-s", style, "-o", str(out_file))
     assert code == 0 and "not printed" in err and booth_printer.made == []
     assert json.loads(out) == {"action": "booth", "style": style, "file": str(out_file),
-                               "bytes": out_file.stat().st_size}
+                               "bytes": out_file.stat().st_size, "fits": True, "cut": {}}
     assert out_file.read_bytes() == _expected_page(photo, style=style)
     assert Image.open(out_file).size == (1240, 1754)
 
@@ -565,7 +566,7 @@ def test_booth_preview_writes_jpeg_and_never_creates_a_driver(capsys, tmp_path, 
     assert booth_printer.made == []
     assert code == 0 and "not printed" in err
     assert json.loads(out) == {"action": "booth", "style": "daily", "file": str(out_file),
-                               "bytes": out_file.stat().st_size}
+                               "bytes": out_file.stat().st_size, "fits": True, "cut": {}}
     assert out_file.read_bytes() == _expected_page(photo, style="daily")
     assert Image.open(out_file).size == (1240, 1754)
 
@@ -599,7 +600,7 @@ def test_booth_preview_picks_the_file_type_from_the_extension(capsys, tmp_path, 
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--preview", str(out_file))
     assert code == 0 and "not printed" in err and booth_printer.made == []
     assert json.loads(out) == {"action": "booth", "style": "metro", "file": str(out_file),
-                               "bytes": out_file.stat().st_size}
+                               "bytes": out_file.stat().st_size, "fits": True, "cut": {}}
     assert out_file.read_bytes().startswith(magic)
 
 
@@ -608,7 +609,7 @@ def test_booth_save_prints_and_keeps_digital_copies(capsys, tmp_path, booth_prin
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--save", str(pdf),
                          "--save", str(png), "--yes")
     assert code == 0 and "queued as job 101" in err and f"saved {pdf}" in err and f"saved {png}" in err
-    assert json.loads(out) == {"action": "booth", "style": "metro", "job_id": 101, "saved": [
+    assert json.loads(out) == {"action": "booth", "style": "metro", "job_id": 101, "fits": True, "cut": {}, "saved": [
         {"file": str(pdf), "format": "pdf", "bytes": pdf.stat().st_size},
         {"file": str(png), "format": "png", "bytes": png.stat().st_size}]}
     assert _print_jobs(booth_printer.driver) == [("image/jpeg", _expected_page(photo))]
@@ -623,7 +624,7 @@ def test_booth_preview_with_save_writes_every_file_and_prints_nothing(capsys, tm
     assert code == 0 and "not printed" in err
     assert booth_printer.made == [] and booth_printer.jobs() == []
     assert json.loads(out) == {"action": "booth", "style": "metro", "file": str(jpg),
-                               "bytes": jpg.stat().st_size,
+                               "bytes": jpg.stat().st_size, "fits": True, "cut": {},
                                "saved": [{"file": str(pdf), "format": "pdf", "bytes": pdf.stat().st_size}]}
     assert jpg.read_bytes() == _expected_page(photo) and pdf.read_bytes().startswith(b"%PDF-")
 
@@ -686,6 +687,30 @@ def test_booth_warns_when_text_is_cut_to_fit(capsys, tmp_path, booth_printer):
     assert len(booth_printer.made) == 1  # the preview created no driver
     code, _, err = run(capsys, "-p", "demo", "booth", str(photo), "-o", str(out_file))
     assert code == 0 and "cut to fit" not in err
+
+
+def test_booth_json_reports_each_cut_field(capsys, tmp_path, booth_printer):
+    photo, out_file = _booth_photo(tmp_path), tmp_path / "page.jpg"
+    headline, story = ("Wide headline words " * 6).strip(), ("Wide paragraph.\n" * 140).strip()
+    code, out, err = run(capsys, "-f", "json", "booth", str(photo), "-o", str(out_file),
+                         "--headline", headline, "--story", story)
+    report = json.loads(out)
+    assert code == 0 and report["fits"] is False and list(report["cut"]) == ["headline", "story"]
+    assert report["cut"]["headline"]["given"] == len(headline) and report["cut"]["story"]["given"] == len(story)
+    for fit in report["cut"].values():
+        assert set(fit) == {"max_fit", "given"} and 0 < fit["max_fit"] < fit["given"]
+    # Shortened to what fitted, the headline is no longer cut.
+    code, out, _ = run(capsys, "-f", "json", "booth", str(photo), "-o", str(out_file),
+                       "--headline", headline[:report["cut"]["headline"]["max_fit"]], "--story", story)
+    assert code == 0 and list(json.loads(out)["cut"]) == ["story"]
+    # A printed page carries the same report.
+    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--yes", "--headline", headline)
+    assert code == 0 and json.loads(out)["job_id"] == 101 and list(json.loads(out)["cut"]) == ["headline"]
+
+
+def test_booth_json_says_when_nothing_was_cut(capsys, tmp_path, booth_printer):
+    code, out, _ = run(capsys, "-f", "json", "booth", str(_booth_photo(tmp_path)), "-o", str(tmp_path / "p.png"))
+    assert code == 0 and json.loads(out)["fits"] is True and json.loads(out)["cut"] == {}
 
 
 @pytest.mark.parametrize("content", [b"not a picture", b"", b"\xff\xd8\xff\xe0 truncated jpeg"])

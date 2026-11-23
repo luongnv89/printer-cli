@@ -6,6 +6,7 @@ Everything is measured with the built-in page font (``prt.testpage._font``) at 1
 from __future__ import annotations
 
 import unicodedata
+from dataclasses import dataclass
 from functools import lru_cache
 from itertools import chain, islice
 from typing import Callable, Iterator
@@ -125,17 +126,76 @@ def _ellipsize(line: str, font, width: int) -> str:
     return word[:_longest(word, fits)] + ELLIPSIS if word and fits(word[:1]) else ELLIPSIS
 
 
+@dataclass(frozen=True)
+class Cut:
+    """A text that was cut with "…" to fit: ``max_fit`` of its ``given`` characters were printed.
+
+    The printed part fits on its own, so the text cut to its first ``max_fit`` characters fits in the same box.
+    """
+    max_fit: int
+    given: int
+
+    def to_dict(self) -> dict[str, int]:
+        return {"max_fit": self.max_fit, "given": self.given}
+
+
+Cuts = dict[str, Cut]  # the fields cut to fit a page, in page order
+
+
+def _cut(text: str, lines: list[str]) -> Cut:
+    """How much of ``text`` (paragraphs split by newlines) the wrapped ``lines`` print before their "…".
+
+    ``lines`` are what ``_wrap`` or ``_paragraphs`` made of ``text``, in order, the last one shortened by
+    ``_ellipsize``; a "" line (the gap between two paragraphs) may be left out. Whitespace runs count as one
+    character, as they print.
+    """
+    paras = [" ".join(p.split()) for p in text.split("\n") if p.strip()]
+    given = len("\n".join(paras))
+    shown = [line for line in lines if line]
+    if shown:
+        shown[-1] = shown[-1].removesuffix(ELLIPSIS).rstrip()
+    i = pos = done = 0  # paragraph, where its printed part ends, and the characters of the paragraphs before it
+    for line in filter(None, shown):
+        while i < len(paras):
+            at = paras[i].find(line, pos)
+            if at >= 0 and not paras[i][pos:at].strip():  # the very next text of this paragraph
+                pos = at + len(line)
+                break
+            done, i, pos = done + len(paras[i]) + 1, i + 1, 0
+    return Cut(min(done + pos, given), given)
+
+
+def _in_source(cut: Cut, source: str, expand: Callable[[str], str]) -> Cut:
+    """``cut``, counted on the printed form of ``source``, recounted in the characters of ``source`` itself.
+
+    ``expand`` gives what one character of ``source`` prints as (itself, a stand-in such as "EUR" for "€", or
+    nothing for an accent mark). ``source`` is normalised like ``_cut`` does, and ``max_fit`` becomes the number
+    of its characters whose printed form fits in the ``cut.max_fit`` printed ones, so the source cut to that many
+    characters prints no more than the part that fitted.
+    """
+    text = "\n".join(" ".join(p.split()) for p in source.split("\n") if p.strip())
+    printed = n = 0
+    for c in text:
+        printed += 1 if c.isspace() else len(expand(c))
+        if printed > cut.max_fit:
+            break
+        n += 1
+    return Cut(n, len(text))
+
+
 def _fit(text: str, size: int, min_size: int, width: int, max_lines: int):
     """Largest font (size → min_size) that wraps ``text`` into ``max_lines``; cut with "…" at the minimum.
 
-    Returns (font, size, lines, cut), where ``cut`` says the text had to be shortened.
+    Returns (font, size, lines, cut), where ``cut`` is None when the text fits, else the ``Cut`` saying how
+    much of it was printed.
     """
     for s in range(size, min_size - 1, -2):
         font = _font(s)
         lines = _wrap(text, font, width)
         if len(lines) <= max_lines:
-            return font, s, lines, False
-    return font, s, lines[:max_lines - 1] + [_ellipsize(lines[max_lines - 1], font, width)], True
+            return font, s, lines, None
+    lines = lines[:max_lines - 1] + [_ellipsize(lines[max_lines - 1], font, width)]
+    return font, s, lines, _cut(text, lines)
 
 
 def _lead(size: int) -> int:
@@ -180,10 +240,10 @@ def _columns_height(text: str, width: int, columns: int, gutter: int, size: int)
 
 
 def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], columns: int, gutter: int,
-             size: int, min_size: int, fill, rule=None, centre: bool = False) -> bool:
+             size: int, min_size: int, fill, rule=None, centre: bool = False) -> Cut | None:
     """Flow paragraphs down ``columns`` columns, shrinking the type until it fits, else cutting with "…".
 
-    Returns True when the text was cut.
+    Returns None when the text fits, else the ``Cut`` saying how much of it was printed.
     """
     x0, y0, x1, y1 = box
     col_w = _col_width(x1 - x0, columns, gutter)
@@ -194,12 +254,13 @@ def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], 
         if len(lines) <= per_col * columns:
             break
     capacity = per_col * columns
-    cut = len(lines) > capacity
-    if cut:
+    cut = None
+    if len(lines) > capacity:
         lines = lines[:capacity]
         while len(lines) > 1 and not lines[-1]:  # end on text, not on a paragraph gap
             lines.pop()
         lines[-1] = _ellipsize(lines[-1], font, col_w)
+        cut = _cut(text, lines)
     rows = min(per_col, _rows(len(lines), columns))
     col = row = 0
     for line in lines:

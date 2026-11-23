@@ -128,3 +128,64 @@ def test_paginate_measures_only_the_pages_it_is_asked_for():
     first, second = itertools.islice(layout.paginate([huge], CountingFont(), COL_W, 3, 20, 40), 2)
     assert len(first) == 3 and len(second) == 3
     assert CountingFont.calls < 20 * 3 * 40  # a few measurements per printed line, not per word of the text
+
+
+# --- how much of a cut text was printed ----------------------------------------------------------
+
+def _printed(lines):
+    """The text that ``lines`` print, without the "…" at the end."""
+    return " ".join(line for line in lines if line).removesuffix(layout.ELLIPSIS).rstrip()
+
+
+def test_text_that_fits_reports_no_cut():
+    assert layout._fit("A short headline", 40, 40, 600, 1)[3] is None
+
+
+@pytest.mark.parametrize("text", [" ".join(WORDS), "W" * 80, "Remarkable " + "W" * 60 + " scenes as residents cheer"])
+def test_fit_reports_how_many_characters_were_printed_and_given(text):
+    _, _, lines, cut = layout._fit(text, 40, 40, 400, 2)
+    assert cut is not None and cut.given == len(text) and 0 < cut.max_fit < cut.given
+    if " " in text[:cut.max_fit]:  # a line split between words prints exactly the text up to max_fit
+        assert _printed(lines) == text[:cut.max_fit]
+    # The printed part always fits, so the text cut to max_fit characters fits as it is.
+    assert layout._fit(text[:cut.max_fit], 40, 40, 400, 2)[3] is None
+
+
+def test_fit_counts_a_word_split_over_lines_once():
+    text = "W" * 300  # one word, split by characters over both lines
+    _, _, lines, cut = layout._fit(text, 40, 40, 400, 2)
+    assert len(lines) == 2 and cut.max_fit == len(lines[0]) + len(lines[1]) - 1  # the "…" is not counted
+
+
+def test_columns_report_how_much_of_the_paragraphs_was_printed():
+    paragraphs = _article(paragraphs=6, words=40)
+    text = "\n".join(paragraphs)
+    page = Image.new("RGB", (600, 400), "white")
+    cut = layout._columns(ImageDraw.Draw(page), text, (0, 0, 600, 300), 2, 20, 20, 20, "black")
+    assert cut is not None and cut.given == len(text) and 0 < cut.max_fit < cut.given
+    assert layout._columns(ImageDraw.Draw(page), text[:cut.max_fit], (0, 0, 600, 300), 2, 20, 20, 20, "black") is None
+    assert layout._columns(ImageDraw.Draw(page), "A short story.", (0, 0, 600, 300), 2, 20, 20, 20, "black") is None
+
+
+def test_cut_follows_the_lines_over_paragraph_gaps_left_out():
+    text = "one two three\nfour five six\nseven eight"
+    # The gap between the paragraphs is missing, as at the top of a column, and the last line is shortened.
+    assert layout._cut(text, ["one two", "three", "four five six", "seven…"]) == layout.Cut(33, len(text))
+    assert layout._cut("  spaced   out \n\n words ", ["spaced out", "words"]).given == len("spaced out\nwords")
+
+
+def test_cut_reports_as_json_fields():
+    assert layout.Cut(68, 92).to_dict() == {"max_fit": 68, "given": 92}
+
+
+def test_in_source_recounts_a_cut_in_the_characters_given():
+    def expand(c):
+        return {"€": "EUR", "ß": "ss", "\u0301": ""}.get(c, c)
+    # "a € b" prints as "a EUR b": 5 of those 7 printed characters cover "a €" (3 given), not 5 given.
+    assert layout._in_source(layout.Cut(5, 7), "a € b", expand) == layout.Cut(3, 5)
+    # A stand-in only part of which fitted is left out; an accent mark costs nothing.
+    assert layout._in_source(layout.Cut(4, 7), "a € b", expand) == layout.Cut(2, 5)
+    assert layout._in_source(layout.Cut(3, 4), "e\u0301ß b", expand) == layout.Cut(3, 5)
+    # Whitespace and paragraphs are normalised as _cut does.
+    assert layout._in_source(layout.Cut(7, 9), "  ß  ß \n\n ß ", expand) == layout.Cut(4, 5)
+    assert layout._in_source(layout.Cut(5, 5), "plain", expand) == layout.Cut(5, 5)

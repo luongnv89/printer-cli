@@ -823,10 +823,11 @@ def booth_cmd(
         STATE.note("ok", f"saved {path}", f"{paper.value} page · {fmt.upper()} · {size / 1024:,.0f} KiB")
         saved.append({"file": str(path), "format": fmt, "bytes": size})
     extra = {"saved": saved} if save else {}
+    fit = _fit_report(cut)
     if preview:
         if STATE.json:
             STATE.write(json.dumps({"action": "booth", "style": paper.value, "file": str(preview),
-                                    "bytes": preview_size, **extra}) + "\n")
+                                    "bytes": preview_size, **fit, **extra}) + "\n")
         return
     d = STATE.driver()
     d.require(Capability.PRINT)
@@ -835,7 +836,14 @@ def booth_cmd(
                    PrintOptions(job_name=f"prt booth {photo.name}", media="a4"))
     STATE.note("ok", f"booth page queued as job {job}", d.display_name)
     if STATE.json:
-        STATE.write(json.dumps({"action": "booth", "style": paper.value, "job_id": job, **extra}) + "\n")
+        STATE.write(json.dumps({"action": "booth", "style": paper.value, "job_id": job, **fit, **extra}) + "\n")
+
+
+def _fit_report(cut: dict[str, Any]) -> dict[str, Any]:
+    """What a booth or gazette JSON line says about the text that did not fit: ``fits`` is false when any
+    field was cut with "…", and ``cut`` maps each cut field (in page order) to how many of its characters
+    were printed (``max_fit``) and how many were given, so the text can be shortened and tried again."""
+    return {"fits": not cut, "cut": {name: c.to_dict() for name, c in cut.items()}}
 
 
 def _save_booth_page(data: bytes, path: Path) -> int:
@@ -977,7 +985,7 @@ def gazette_cmd(
     files = write(preview, preview_format) if preview else []
     # Copies are written before connecting, so they exist even when the printer is unreachable.
     saved = [entry for path, fmt in copies for entry in write(path, fmt)]
-    summary = {"action": "gazette", "photos": len(photos), "pages": len(pages)}
+    summary = {"action": "gazette", "photos": len(photos), "pages": len(pages), **_fit_report(cut)}
     extra = {"saved": saved} if save else {}
     if preview:
         STATE.note("ok", f"{pictures} on {sheets} rendered", "not printed")
