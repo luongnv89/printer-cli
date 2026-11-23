@@ -15,6 +15,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Bundled fonts for the gazette: UnifrakturMaguntia, Playfair Display and Old Standard TT, under the SIL Open Font License 1.1, in `src/prt/fonts` with their licence texts.
 
 ### Changed
+- `prt discover` now saves each printer it finds under a short name (for example `xp-6000`), so the separate `prt printers add` step is no longer needed. Printers already saved, matched by host name or IP address, are left as they are; a name already in use gets a `-2`, `-3` suffix; scanner-only devices are not saved; the default printer is never set or changed. The config file is rewritten only when a printer was added. The output names the saved printers: an "added" line in the box, two extra fields (saved name, `added`) at the end of each tab-separated line, and `saved_as`/`added` keys on each `-f json` item.
 - `prt booth --preview`/`-o` picks the file type from the extension (`.pdf`, `.png`, `.jpg`, `.jpeg`, any case). A file name without one of these extensions is now refused with exit code 2 before anything is written, instead of being saved as JPEG.
 - The package licence is now `MIT AND OFL-1.1`, and the fonts' OFL texts are listed as licence files.
 

@@ -45,8 +45,8 @@ It started because the Epson XP-6000's web dashboard stopped working. printer-cl
 ## Use your own printer
 
 ```bash
-prt discover                                        # find printers on the LAN
-prt printers add office EPSON721655.local --default # save one under a short name
+prt discover                                        # find printers on the LAN and save new ones
+prt printers default xp-6000                        # pick the default when several were saved
 prt status                                          # ink, paper, alerts
 prt tui                                             # full-screen dashboard
 ```
@@ -71,7 +71,7 @@ Every command also works against the built-in replay: `prt -p demo status`, `prt
 | `prt status [--watch N]` | State, alerts, ink, paper, waste pad. `--watch` prints one line per sample |
 | `prt ink` | Ink levels only |
 | `prt overview` | System, software and hardware: model, serial, firmware, uptime, page count, formats, media, scanner, capabilities |
-| `prt discover` | mDNS scan for printers and scanners |
+| `prt discover` | mDNS scan for printers and scanners. Saves each new printer under a short name; printers already saved and the default are left as they are |
 | `prt printers list/add/remove/default` | Manage saved printers |
 | `prt maintain nozzle-check` | Print the nozzle check pattern |
 | `prt maintain clean [--force]` | Head cleaning, with a safety check first (see [Safety](#safety)) |
