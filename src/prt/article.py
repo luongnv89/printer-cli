@@ -92,7 +92,7 @@ def fetch(url: str, timeout: float, transport: httpx.BaseTransport | None = None
             with client.stream("GET", url) as response:
                 if response.status_code >= 400:
                     raise PrinterError(f"cannot fetch {url}: the site answered HTTP {response.status_code} "
-                                       f"{response.reason_phrase}".rstrip(), hint=FILE_HINT, exit_code=3)
+                                       f"{response.reason_phrase}".rstrip(), hint=FILE_HINT, exit_code=3, kind="fetch_failed")
                 declared = response.headers.get("content-length", "")
                 if declared.isdigit() and int(declared) > MAX_BYTES:
                     raise _too_large(url)
@@ -106,18 +106,18 @@ def fetch(url: str, timeout: float, transport: httpx.BaseTransport | None = None
                 return Fetched(str(response.url), media_type, response.charset_encoding, b"".join(chunks))
     except httpx.TooManyRedirects as exc:
         raise PrinterError(f"cannot fetch {url}: more than {MAX_REDIRECTS} redirects", hint="check the link",
-                           exit_code=3) from exc
+                           exit_code=3, kind="fetch_failed") from exc
     except httpx.TimeoutException as exc:
         raise PrinterError(f"cannot fetch {url}: no answer within {timeout:g} s",
-                           hint="try again, or allow longer with --timeout", exit_code=3) from exc
+                           hint="try again, or allow longer with --timeout", exit_code=3, kind="fetch_failed") from exc
     except (httpx.HTTPError, httpx.InvalidURL, UnicodeError) as exc:  # UnicodeError: a host IDNA refuses
         raise PrinterError(f"cannot fetch {url}: {exc}", hint="check the link and your connection",
-                           exit_code=3) from exc
+                           exit_code=3, kind="fetch_failed") from exc
 
 
 def _too_large(url: str) -> PrinterError:
     return PrinterError(f"cannot fetch {url}: larger than {MAX_BYTES // (1024 * 1024)} MiB",
-                        hint="link to the article page itself, or " + FILE_HINT, exit_code=3)
+                        hint="link to the article page itself, or " + FILE_HINT, exit_code=3, kind="fetch_failed")
 
 
 def from_link(url: str, timeout: float) -> Article:
@@ -173,13 +173,13 @@ def from_x(url: str, timeout: float) -> Article:
     try:
         page = fetch(f"{OEMBED}?{urlencode({'url': url, 'omit_script': 'true', 'dnt': 'true'})}", timeout)
     except PrinterError as exc:
-        raise PrinterError(f"X did not return the post {url} ({exc})", hint=hint, exit_code=3) from exc
+        raise PrinterError(f"X did not return the post {url} ({exc})", hint=hint, exit_code=3, kind="fetch_failed") from exc
     try:
         data = json.loads(page.content)
     except ValueError as exc:
-        raise PrinterError(f"X sent an unreadable answer for {url}", hint=hint, exit_code=3) from exc
+        raise PrinterError(f"X sent an unreadable answer for {url}", hint=hint, exit_code=3, kind="fetch_failed") from exc
     if not isinstance(data, dict) or not isinstance(data.get("html"), str):
-        raise PrinterError(f"X sent no post text for {url}", hint=hint, exit_code=3)
+        raise PrinterError(f"X sent no post text for {url}", hint=hint, exit_code=3, kind="fetch_failed")
     parser = _Extractor()
     parser.feed(data["html"])
     parser.close()

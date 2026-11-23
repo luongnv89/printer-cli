@@ -67,6 +67,15 @@ def cups_print(queue: str, path: Path, options: PrintOptions) -> int:
     return int(m.group(1)) if m else 0
 
 
+def sent_directly(path: Path) -> bool:
+    """True when ``print_file`` sends this file to the printer itself, False when CUPS takes it.
+
+    Only a job sent directly has a printer job id that can be followed with ``prt jobs wait``.
+    """
+    from prt.drivers.ipp import DIRECT_FORMATS
+    return path.suffix.lower() in DIRECT_FORMATS or path.suffix.lower() in IMAGE_EXT
+
+
 def print_file(driver, path: Path, options: PrintOptions) -> int:
     from prt.drivers.ipp import DIRECT_FORMATS
 

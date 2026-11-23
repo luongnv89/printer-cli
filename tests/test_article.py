@@ -367,7 +367,17 @@ def test_network_failures_are_refused_with_exit_code_3(web, error, message):
     web.routes[URL] = fail
     with pytest.raises(PrinterError, match=message) as err:
         article.load(URL, 5)
-    assert err.value.exit_code == 3
+    assert err.value.exit_code == 3 and err.value.kind == "fetch_failed"
+
+
+def test_error_kind_tells_a_failed_fetch_from_a_bad_link(web):
+    web.routes[URL] = httpx.Response(503)
+    with pytest.raises(PrinterError) as err:
+        article.load(URL, 5)
+    assert err.value.kind == "fetch_failed"
+    with pytest.raises(PrinterError) as err:
+        article.load("ftp://blog.example/paper", 5)
+    assert err.value.kind == "invalid_input"
 
 
 # --- files -----------------------------------------------------------------------------------

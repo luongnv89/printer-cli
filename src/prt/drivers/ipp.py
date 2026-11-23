@@ -107,7 +107,7 @@ class IPPDriver(Driver):
         except (httpx.TransportError, OSError) as exc:
             raise Unreachable(self.target, type(exc).__name__) from exc
         except IPPError as exc:
-            raise PrinterError(f"printer rejected the request: {exc}") from exc
+            raise PrinterError(f"printer rejected the request: {exc}", kind="rejected") from exc
 
     def attributes(self, refresh: bool = True) -> dict[str, Any]:
         if self._fresh and self._attrs_cache is not None:
