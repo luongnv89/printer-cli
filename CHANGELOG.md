@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-23
+
 ### Added
 - `prt booth PHOTO`: photo booth that prints a photo as an A4 newspaper front page with a short news story. Two styles, `--style metro` (colour tabloid) and `--style daily` (black-and-white broadsheet); a built-in default story; your own story via `--story-file story.json` or `--headline`/`--story`/`--kicker`/`--caption`/`--byline`; `--preview FILE` to render without printing; a warning names any text cut to fit the page. Unreadable photos and bad story files are rejected before anything is sent to the printer.
 - `prt booth --style wizard` (an ornate trading card with an arched gold portrait frame, emblem, name ribbon and lore box) and `--style wanted` (a weathered parchment WANTED poster with a framed photo, name and reward line). Both reuse the story fields (headline as the name, kicker as the top label or "dead or alive" line, caption as the subtitle or reward, story as the lore, byline as the footer) and print their own built-in text when no story is given.
@@ -40,4 +42,5 @@ First public release of printer-cli (command: `prt`), a CLI and full-screen TUI 
 - Logo, MIT license, and a `printer-cli` command alias alongside `prt`.
 
 
+[0.2.0]: https://github.com/luongnv89/printer-cli/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/luongnv89/printer-cli/releases/tag/v0.1.0

@@ -1,7 +1,7 @@
 [project]
 name = "printer-cli"
-version = "0.1.0"
-description = "Your printer's dashboard in the terminal: ink, paper, alerts, nozzle checks, head cleaning, printing and scanning for network printers (IPP, eSCL, SNMP, Epson ESC/P2)."
+version = "0.2.0"
+description = "Your printer's dashboard in the terminal: ink, paper, alerts, nozzle checks, head cleaning, printing and scanning for network printers (IPP, eSCL, SNMP, Epson ESC/P2), plus photo booth, magazine article and vintage newspaper printing."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT AND OFL-1.1"

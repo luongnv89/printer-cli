@@ -3,7 +3,7 @@ name: article-print
 description: "Print a blog post, news article or X post as A4 magazine pages with printer-cli's `prt article`, fetching the text yourself when the tool cannot (login walls, JavaScript-only pages, long X threads). Use when asked to print an article, a blog post, a tweet or an X thread in a magazine layout. Don't use for printing PDFs or photos (use `prt print`), photo-booth pages (use the photo-booth skill), or summarising an article."
 license: MIT
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   author: "Luong NGUYEN"
 ---
 

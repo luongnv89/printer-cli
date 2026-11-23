@@ -38,7 +38,7 @@ def test_help_everywhere(capsys, argv):
 
 
 def test_version(capsys):
-    assert run(capsys, "--version") == (0, "prt 0.1.0\n", "")
+    assert run(capsys, "--version") == (0, "prt 0.2.0\n", "")
 
 
 def test_usage_error_exit_2(capsys):

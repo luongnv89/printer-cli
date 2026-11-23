@@ -3,7 +3,7 @@ name: photo-booth
 description: "Turn a photo of a person into a printed newspaper front page, wizard trading card or wanted poster with short text written for that photo, using printer-cli's `prt booth`. Use when asked for a photo-booth print, a newspaper clipping, a front page, a themed card or a wanted poster made from someone's picture. Don't use for plain photo printing (use `prt print`), editing the photo itself, or real news reporting."
 license: MIT
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   author: "Luong NGUYEN"
 ---
 

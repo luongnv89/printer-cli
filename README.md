@@ -2,7 +2,7 @@
 
 <p align="center"><a href="https://pypi.org/project/printer-cli/"><img src="https://img.shields.io/pypi/v/printer-cli" alt="PyPI"></a> <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+"> <a href="https://github.com/luongnv89/printer-cli/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license"></a></p>
 
-Check ink, paper and alerts, run nozzle checks and head cleaning, print and scan on network printers, from a scriptable CLI or a full-screen TUI.
+Check ink, paper and alerts, run nozzle checks and head cleaning, print and scan on network printers, and print photos and web articles as newspaper and magazine pages, from a scriptable CLI or a full-screen TUI.
 
 ## Install
 
@@ -36,7 +36,7 @@ prt -p demo status
 ╰─┘4 alerts · checked 17:42└───────────────────────────────────────────────╯
 ```
 
-Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Photo booth](#photo-booth) · [Article printing](#article-printing) · [Safety](#safety)
+Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Photo booth](#photo-booth) · [Article printing](#article-printing) · [Vintage gazette](#vintage-gazette) · [Safety](#safety)
 
 ## Why printer-cli
 
@@ -233,7 +233,7 @@ To add a vendor, subclass `IPPDriver`, declare its `capabilities`, override what
 
 ```bash
 uv sync
-uv run pytest            # 215 tests, no printer needed
+uv run pytest            # 559 tests, no printer needed
 uv run prt -p demo tui
 ```
 
