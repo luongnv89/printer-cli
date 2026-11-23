@@ -99,8 +99,9 @@ prt list
 | `prt booth PHOTO [--style metro\|daily\|wizard\|wanted] [--story-file story.json] [--preview page.jpg] [--save page.pdf]` | Photo booth: print the photo as an A4 newspaper front page, wizard card or wanted poster (see [Photo booth](#photo-booth)) |
 | `prt article URL\|FILE [--style magazine\|classic-magazine] [--preview page.pdf] [--save page.pdf]` | Print a blog post, news article or X post as A4 magazine pages (see [Article printing](#article-printing)) |
 | `prt gazette PHOTO… [--landscape] [--story-file story.json] [--preview page.pdf] [--save page.pdf]` | Print one or more photos as a vintage newspaper, over as many A4 pages as the photos need (see [Vintage gazette](#vintage-gazette)) |
+| `prt compose PAGE.json [--preview page.pdf] [--save page.pdf]` | Print a page you describe as blocks: headings, text, images, QR codes, columns and rules (see [Compose a page](#compose-a-page)) |
 | `prt styles` | Every booth, article and gazette style and the options that pick it; with `-f json`, also each style's fields, character limits, photo count and a sample image (see [Styles and schemas](#styles-and-schemas)) |
-| `prt schema story\|article\|gazette` | The JSON Schema of a booth story file, an article JSON file or a gazette story file |
+| `prt schema story\|article\|gazette\|page` | The JSON Schema of a booth story file, an article JSON file, a gazette story file or a `prt compose` page file |
 | `prt jobs [--all]` / `prt jobs wait ID` / `prt jobs cancel ID` | List jobs, wait for one to finish, or cancel one |
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
 | `prt tui` | Full-screen dashboard |
@@ -214,9 +215,10 @@ prt status | grep '^alert'            # piped output is tab-separated, no colour
 prt scan -o - --type jpeg > page.jpg
 prt booth me.jpg --style daily --story-file story.json --preview page.jpg   # render only, nothing printed
 prt article https://example.com/blog/post -o article.pdf                   # every page in one PDF, nothing printed
+prt compose flyer.json --preview flyer.png                                 # a page of blocks, nothing printed
 ```
 
-Exit codes: `0` ok · `1` runtime/network error (also when only cached status is shown, or a waited-for job did not print) · `2` usage error · `3` bad input file, an article that cannot be fetched or converted, or more photos than the gazette takes · `130` Ctrl-C.
+Exit codes: `0` ok · `1` runtime/network error (also when only cached status is shown, or a waited-for job did not print) · `2` usage error · `3` bad input file (including a page file that fails its schema or names an image that cannot be read), an article that cannot be fetched or converted, or more photos than the gazette takes · `130` Ctrl-C.
 
 **Errors as JSON**: with `-f json`, a failing command writes one JSON object as the last line of stderr instead of the `error:`/`hint:` text, so a script or agent can branch on the kind of error. `code` is the process exit code, and `hint` may be `null`:
 
@@ -264,7 +266,7 @@ $ prt styles -f json | jq -c '.[] | {name, command, args, schema}'
 {"name":"gazette-landscape","command":"gazette","args":["--landscape"],"schema":"gazette"}
 ```
 
-`prt schema story`, `prt schema article` and `prt schema gazette` print the JSON Schema (draft 2020-12) of the file `prt booth --story-file`, `prt article FILE.json` and `prt gazette --story-file` read. A file that passes the schema is accepted by the command; the one thing the schema cannot check is the character set, so text in a script the page font cannot print (emoji, Chinese) is still refused. In Python the same data is in `prt.catalog` (`styles()`, `schema(name)`, and `register_schema` to add one).
+`prt schema story`, `prt schema article`, `prt schema gazette` and `prt schema page` print the JSON Schema (draft 2020-12) of the file `prt booth --story-file`, `prt article FILE.json`, `prt gazette --story-file` and `prt compose` read. A file that passes the schema is accepted by the command; the one thing the schema cannot check is the character set, so text in a script the page font cannot print (emoji, Chinese) is still refused. For a page file, the image files must also exist and be readable, and the page must fit in 10 pages. In Python the same data is in `prt.catalog` (`styles()`, `schema(name)`, and `register_schema` to add one).
 
 ## The TUI
 
@@ -355,21 +357,65 @@ Both samples: `prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file s
 - Every photo is read before anything is written or sent, so an unreadable or unsupported photo exits with code 3, names the file and prints nothing. Each page prints as its own job after one confirmation (`--yes` skips it). If a later page fails, the jobs already queued are named so you can cancel them with `prt jobs cancel`.
 - The type is UnifrakturMaguntia, Playfair Display and Old Standard TT, which ship with printer-cli (see [License](#license)). Letters these fonts lack print without their accents, and other scripts and emoji are refused as in the photo booth.
 
+## Compose a page
+
+`prt compose page.json` prints a page you describe as a list of blocks, for printables no other command makes: a flyer, a sign, a label sheet, a Wi-Fi card. The blocks are laid out top to bottom on A4 and run on to more pages when one is full.
+
+```json
+{
+  "title": "Garden party",
+  "blocks": [
+    {"type": "heading", "text": "Garden Party", "align": "center"},
+    {"type": "image", "path": "garden.jpg", "height": 80, "caption": "Last year"},
+    {"type": "text", "text": "Saturday from 3 pm, at number 12.\nBring something to share.", "size": "large"},
+    {"type": "rule"},
+    {"type": "columns", "columns": [
+      [{"type": "heading", "text": "Menu", "level": 2}, {"type": "text", "text": "Lemonade\nStrawberry cake"}],
+      [{"type": "qr", "data": "https://example.com/rsvp", "size": 35, "caption": "Reply here"}]
+    ]}
+  ]
+}
+```
+
+```bash
+prt compose party.json --preview party.pdf   # render only, nothing printed
+prt compose party.json --save party.pdf      # keep a copy and print
+cat party.json | prt compose - --yes         # read the page from stdin
+prt schema page                              # the page file's JSON Schema
+```
+
+| Block | Fields |
+|---|---|
+| `heading` | `text` (required), `level` 1 (largest, the default), 2 or 3, `align` |
+| `text` | `text` (required; a newline starts a new paragraph), `size` `small`, `normal` or `large`, `align` |
+| `image` | `path` (required), `height` in mm (at most), `caption`, `align` (default `center`) |
+| `qr` | `data` (required, up to 500 characters), `size` in mm (15 to 150, default 40), `caption`, `align` (default `center`) |
+| `columns` | `columns`: 2 to 4 lists of blocks side by side (any block but `columns`) |
+| `rule` | `weight` `thin` (the default) or `thick` |
+
+`align` is `left`, `center` or `right`. `title` names the print job and is not printed; it defaults to the first heading.
+
+- The page file is checked against `prt schema page` before anything is drawn, written or sent: an unknown block type or field, a missing field or a value out of range exits with code 3 and says where, e.g. `page.json: blocks[2].level must be one of 1, 2, 3, not 4`. Nothing is printed.
+- Images are read from local files only (JPEG, PNG, WebP, GIF, BMP or TIFF): a relative path is read from the page file's folder (the current folder for `prt compose -`), a web link is refused and nothing is downloaded. Each image may be at most 30 MiB and 50 megapixels, and a page file may use 20 images. An image that is missing or cannot be read exits with code 3.
+- Text runs on to the next page between lines, a heading moves to the next page rather than end one, and any other block moves whole. A `columns` block must fit on one page. A page file that needs more than 10 pages is refused with exit code 3.
+- `--preview`/`-o` and `--save` work as in `prt article`: a `.pdf` holds every page, while `.png`, `.jpg` or `.jpeg` save one image per page (`page-1.png`, `page-2.png`, …). A name that would overwrite the page file or one of its images is refused with exit code 2. With `-f json` the output carries the `estimate` like the other page commands.
+- The text font covers Latin letters, as in the photo booth: accents print without their marks, and emoji or other scripts are refused. A QR code may hold any text.
+
 ## Safety
 
 - **Head cleaning is refused** while any ink is at or below its low level, or while the waste ink pad is flagged. Cleaning flushes ink into the pad, and a full pad locks the printer until it's serviced. `--force` overrides this, and the TUI offers "Clean anyway".
-- Nozzle check, cleaning, the test page, the photo booth, article printing and the gazette ask for confirmation first. In scripts, pass `--yes`.
+- Nozzle check, cleaning, the test page, the photo booth, article printing, the gazette and composed pages ask for confirmation first. In scripts, pass `--yes`.
 - printer-cli never resets the waste ink counter or writes to the printer's EEPROM.
 
 ### Agent guardrails
 
 Before you let an AI agent print unattended, set `PRT_AGENT=1` in its environment and, if you like, page caps in the config file:
 
-- **Agent mode** (`PRT_AGENT=1`, also `true`, `yes` or `on`): every command that prints or uses ink — `print`, `booth`, `article`, `gazette`, `maintain test-page`, `maintain nozzle-check`, `maintain clean` — refuses to run without `--yes`, even at a terminal, so an agent never sits waiting on a prompt and never prints without deciding to. The refusal exits `2` with kind `agent_confirmation_required`. `--preview` needs no `--yes`: it prints nothing.
+- **Agent mode** (`PRT_AGENT=1`, also `true`, `yes` or `on`): every command that prints or uses ink — `print`, `booth`, `article`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean` — refuses to run without `--yes`, even at a terminal, so an agent never sits waiting on a prompt and never prints without deciding to. The refusal exits `2` with kind `agent_confirmation_required`. `--preview` needs no `--yes`: it prints nothing.
 - **Per-run cap**: `max_pages_per_run` in the config limits the pages one command may print (copies count). In agent mode it defaults to 10 when not set.
 - **Daily cap**: `max_pages_per_day` in the config limits the pages printed per calendar day, counted across every command in `~/.cache/prt/pages.json`. A page counts once its job has been sent, even if sending failed, because the printer may have taken it.
 - A print over a cap is refused whole, before the prompt and before anything is sent (exit `1`, kind `page_cap_exceeded` or `daily_page_cap_exceeded`). Configured caps apply outside agent mode too, and in the TUI. While a cap is in force, a file whose pages cannot be counted (plain text, PWG raster, office files) is refused with `page_count_unknown`; images count as one page and PDF pages are counted from the file.
-- **Cost estimate**: with `-f json`, `prt booth`, `prt article` and `prt gazette` (preview or print) add an `estimate` of the rendered pages: the page count, whether they use colour, and for each ink the share of a standard cartridge they would use, e.g. `"estimate": {"pages": 3, "colour": true, "ink": {"cyan": 1.2, "magenta": 1.0, "yellow": 1.1, "black": 3.8}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`. `ink_percent` is the cartridge that would run out first. The ink figures are rough: they assume a cartridge prints about 300 pages at 5% coverage.
+- **Cost estimate**: with `-f json`, `prt booth`, `prt article`, `prt gazette` and `prt compose` (preview or print) add an `estimate` of the rendered pages: the page count, whether they use colour, and for each ink the share of a standard cartridge they would use, e.g. `"estimate": {"pages": 3, "colour": true, "ink": {"cyan": 1.2, "magenta": 1.0, "yellow": 1.1, "black": 3.8}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`. `ink_percent` is the cartridge that would run out first. The ink figures are rough: they assume a cartridge prints about 300 pages at 5% coverage.
 
 These guardrails stop a cooperating agent from using up a cartridge by mistake. They are not a security boundary: a process that can change its own environment or config can get around them.
 
