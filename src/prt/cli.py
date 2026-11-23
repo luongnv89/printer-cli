@@ -1014,6 +1014,49 @@ def gazette_cmd(
         STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
 
 
+# --- What can be printed -------------------------------------------------------------
+
+
+@app.command("styles")
+def styles_cmd() -> None:
+    """List every page style of booth, article and gazette: what it prints and the options that pick it.
+
+    With -f json each style also lists its fields, their character limits, how many photos it takes and a
+    link to a sample page. `prt schema NAME` prints the JSON Schema of a style's input file.
+    """
+    from prt import catalog
+    items = catalog.styles()
+    mode = STATE.out
+
+    def picked(s: dict[str, Any]) -> str:
+        return " ".join(["prt", s["command"], *s["args"]])
+
+    def text() -> str:
+        rows = [[t(s["name"], "accent"), t(picked(s)), t(s["kind"]), t(s["schema"])] for s in items]
+        return style.box("styles", style.table_rows(["style", "command", "prints", "schema"], rows, mode), mode,
+                         footer="fields and limits: prt styles -f json")
+
+    STATE.emit(items, text, lambda: [style.plain_record(s["name"], picked(s), s["kind"], s["schema"], s["sample"])
+                                     for s in items])
+
+
+def _schema_names(incomplete: str) -> list[str]:
+    from prt import catalog
+    return [name for name in catalog.schema_names() if name.startswith(incomplete)]
+
+
+@app.command("schema")
+def schema_cmd(name: str = typer.Argument(..., metavar="NAME", autocompletion=_schema_names,
+                                          help="story, article or gazette.")) -> None:
+    """Print the JSON Schema of an input file: story (prt booth --story-file), article (an article JSON file for
+    prt article) or gazette (prt gazette --story-file).
+
+    A file that passes the schema is accepted by the command. The schema is JSON whatever -f says.
+    """
+    from prt import catalog
+    STATE.write(json.dumps(catalog.schema(name), indent=2) + "\n")
+
+
 @jobs_app.callback()
 def jobs(ctx: typer.Context,
          all_: bool = typer.Option(False, "--all", "-a", help="Include completed jobs.")) -> None:

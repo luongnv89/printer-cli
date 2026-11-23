@@ -53,6 +53,8 @@ Without any text, each style prints its own built-in example: a news story on `m
 | `caption` | no | 200 | Line under the photo |
 | `byline` | no | 80 | Author line: above the story (metro) or under the headline (daily) |
 
+`prt schema story` prints these rules as a JSON Schema, and `prt styles -f json` lists each style with its fields and limits, so you can check a story before printing it.
+
 On the themed styles the same fields fill the card or poster:
 
 | Field | `wizard` card | `wanted` poster |

@@ -99,6 +99,8 @@ prt list
 | `prt booth PHOTO [--style metro\|daily\|wizard\|wanted] [--story-file story.json] [--preview page.jpg] [--save page.pdf]` | Photo booth: print the photo as an A4 newspaper front page, wizard card or wanted poster (see [Photo booth](#photo-booth)) |
 | `prt article URL\|FILE [--style magazine\|classic-magazine] [--preview page.pdf] [--save page.pdf]` | Print a blog post, news article or X post as A4 magazine pages (see [Article printing](#article-printing)) |
 | `prt gazette PHOTO… [--landscape] [--story-file story.json] [--preview page.pdf] [--save page.pdf]` | Print one or more photos as a vintage newspaper, over as many A4 pages as the photos need (see [Vintage gazette](#vintage-gazette)) |
+| `prt styles` | Every booth, article and gazette style and the options that pick it; with `-f json`, also each style's fields, character limits, photo count and a sample image (see [Styles and schemas](#styles-and-schemas)) |
+| `prt schema story\|article\|gazette` | The JSON Schema of a booth story file, an article JSON file or a gazette story file |
 | `prt jobs [--all]` / `prt jobs wait ID` / `prt jobs cancel ID` | List jobs, wait for one to finish, or cancel one |
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
 | `prt tui` | Full-screen dashboard |
@@ -239,6 +241,20 @@ $ prt -f json article https://example.com/gone
 | `interrupted` | 130 | Ctrl-C |
 
 Without `-f json` error output is unchanged.
+
+### Styles and schemas
+
+An agent or script can find out what can be printed without reading this README. `prt styles -f json` lists every style as a JSON array; each entry has the command and the `args` that pick it, what it prints, its `fields` (with `required` and `max_length` in characters), how many `photos` it takes, `max_pages`, the name of its input `schema` and a link to a `sample` page:
+
+```bash
+$ prt styles -f json | jq -c '.[] | {name, command, args, schema}'
+{"name":"metro","command":"booth","args":[],"schema":"story"}
+{"name":"daily","command":"booth","args":["--style","daily"],"schema":"story"}
+...
+{"name":"gazette-landscape","command":"gazette","args":["--landscape"],"schema":"gazette"}
+```
+
+`prt schema story`, `prt schema article` and `prt schema gazette` print the JSON Schema (draft 2020-12) of the file `prt booth --story-file`, `prt article FILE.json` and `prt gazette --story-file` read. A file that passes the schema is accepted by the command; the one thing the schema cannot check is the character set, so text in a script the page font cannot print (emoji, Chinese) is still refused. In Python the same data is in `prt.catalog` (`styles()`, `schema(name)`, and `register_schema` to add one).
 
 ## The TUI
 
