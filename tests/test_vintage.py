@@ -26,7 +26,7 @@ from prt.transport import ipp
 
 A4_150DPI = (1240, 1754)
 PAPER, INK = (244, 236, 216), (26, 26, 26)  # #f4ecd8 and #1a1a1a, the reference gazette's two tones
-FAMILIES = {"Old Standard TT", "Playfair Display", "UnifrakturMaguntia"}
+FAMILIES = {"Old Standard TT", "Playfair Display", "UnifrakturMaguntia", "Caveat"}
 DRAWN_ROLES = ["body", "body-bold", "body-italic", "display-bold", "display-black"]  # the masthead is fixed ASCII
 DIVERGENT = "Ǆ Ǫ Ĳ ſ Ǎ ǆ Ǧ "  # each one is missing from at least one bundled face
 LEAD_LIMIT, PLATE_LIMIT, MAX_PHOTOS, MAX_PAGES = 1060, 540, 57, 10  # from the issue's agreed plan

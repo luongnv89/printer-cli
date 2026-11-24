@@ -9,7 +9,7 @@ metadata:
 
 # Photo booth
 
-Write a short, light-hearted news story (or card lore, a citation, a wanted notice or film credits) that fits the photo you were given, then print it with `prt booth`, which lays out the photo and text as an A4 newspaper front page, a wizard or sports trading card, a certificate, or a wanted, missing-pet or movie poster. The command needs printer-cli installed (`prt` on the PATH). Add `-p NAME` to pick a saved printer, or `-p demo` to try everything without a printer.
+Write a short, light-hearted news story (or card lore, a citation, a wanted notice or film credits) that fits the photo you were given, then print it with `prt booth`, which lays out the photo and text as an A4 newspaper front page, a wizard or sports trading card, a certificate, or a wanted, missing-pet or movie poster. For a classic four-frame photo-booth strip (`prt strip A B C D --caption TEXT`) or a Polaroid-style instant photo (`prt instant PHOTO --caption TEXT`) on 4×6 photo paper, write a short caption instead of a story; both take `--preview` like `prt booth`. The command needs printer-cli installed (`prt` on the PATH). Add `-p NAME` to pick a saved printer, or `-p demo` to try everything without a printer.
 
 ## Workflow
 

@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from PIL import Image
 
     from prt.config import Config
+    from prt.paper import Paper
 
 AGENT_ENV = "PRT_AGENT"
 DEFAULT_AGENT_MAX_PAGES_PER_RUN = 10  # per-run cap in agent mode when the config sets none
@@ -372,13 +373,16 @@ def _coverage(page: Image.Image) -> tuple[dict[str, float], bool]:
     return coverage, colour
 
 
-def estimate(pages: Iterable[Image.Image]) -> dict[str, Any]:
+def estimate(pages: Iterable[Image.Image], paper: Paper | None = None) -> dict[str, Any]:
     """What printing these rendered pages costs, roughly.
 
     ``ink`` gives, for each colour, the estimated share of one standard cartridge the job uses, in percent;
     ``ink_percent`` is the highest of them (the cartridge that runs out first). ``summary`` reads like
-    "~3 pages, colour, est. ink 4%".
+    "~3 pages, colour, est. ink 4%". ``paper`` is the sheet the pages print on (A4 when None): a cartridge's
+    yield is rated in A4 pages, so the ink of a smaller sheet counts by its area, and the summary names a sheet
+    other than A4, e.g. "~1 page (4×6), colour, est. ink 1%".
     """
+    scale = paper.ink_scale if paper is not None else 1.0
     used = dict.fromkeys(INKS, 0.0)
     count, colour = 0, False
     for page in pages:
@@ -386,11 +390,12 @@ def estimate(pages: Iterable[Image.Image]) -> dict[str, Any]:
         count += 1
         colour = colour or coloured
         for ink, share in coverage.items():
-            used[ink] += share / RATED_COVERAGE / CARTRIDGE_PAGES * 100
+            used[ink] += share * scale / RATED_COVERAGE / CARTRIDGE_PAGES * 100
     if not colour:  # a black-and-white job: the printer mixes no colour in
         used.update(cyan=0.0, magenta=0.0, yellow=0.0)
     ink = {k: round(v, 1) for k, v in used.items()}
     top = max(used.values()) if count else 0.0
     shown = f"{top:.0f}%" if top >= 0.5 else "<1%"
-    summary = f"~{_pages(count)}, {'colour' if colour else 'black and white'}, est. ink {shown}"
+    sheet = f" ({paper.label})" if paper is not None and paper.name != "a4" else ""
+    summary = f"~{_pages(count)}{sheet}, {'colour' if colour else 'black and white'}, est. ink {shown}"
     return {"pages": count, "colour": colour, "ink": ink, "ink_percent": round(top, 1), "summary": summary}

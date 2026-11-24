@@ -1,8 +1,9 @@
-"""Typefaces bundled for the vintage gazette (see ``prt.vintage``), each under the SIL Open Font License 1.1.
+"""Typefaces bundled with prt, each under the SIL Open Font License 1.1.
 
-UnifrakturMaguntia (blackletter masthead), Playfair Display (headlines; one variable font, set to a weight
-per role) and Old Standard TT (body, bold and italic). The licence texts sit next to the fonts as
-``OFL-*.txt``.
+For the vintage gazette (see ``prt.vintage``): UnifrakturMaguntia (blackletter masthead), Playfair Display
+(headlines; one variable font, set to a weight per role) and Old Standard TT (body, bold and italic). For the
+handwritten captions and titles of the 4×6 prints (see ``prt.photocard`` and ``prt.recipe``): Caveat, a variable
+font set to Regular or Bold. The licence texts sit next to the fonts as ``OFL-*.txt``.
 """
 
 from __future__ import annotations
@@ -23,6 +24,8 @@ ROLES: dict[str, tuple[str, str | None]] = {
     "body": ("OldStandard-Regular.ttf", None),
     "body-bold": ("OldStandard-Bold.ttf", None),
     "body-italic": ("OldStandard-Italic.ttf", None),
+    "hand": ("Caveat-Variable.ttf", "Regular"),
+    "hand-bold": ("Caveat-Variable.ttf", "Bold"),
 }
 
 

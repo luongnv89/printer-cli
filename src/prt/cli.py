@@ -961,6 +961,175 @@ def card_cmd(
         STATE.write(json.dumps({"action": "card", "job_id": job, **report, **extra}) + "\n")
 
 
+def _print_sheet(action: str, rendered: render.Rendered, label: str, preview: Optional[Path],
+                 copies: list[tuple[Path, str]], question: str, job_name: str, yes: bool,
+                 info: dict[str, Any], done: str | None = None) -> None:
+    """Save, preview or print one rendered sheet on its own paper (``prt strip``, ``prt instant``): the preview
+    and the copies are written before a driver exists, then the sheet is sent under the print guard."""
+    from prt import booth
+    page, paper = rendered.pages[0], rendered.paper
+    preview_format = booth.format_for(preview) if preview else None
+    if rendered.cut:
+        STATE.note("warn", f"{', '.join(rendered.cut)} cut to fit the {label}",
+                   "shorten it, or check the print with --preview")
+    if preview:
+        preview_size = _save_booth_page(paper.to_bytes(page, preview_format), preview)
+        STATE.note("ok", f"saved {preview}", f"{label} · {paper.label} · {preview_format.upper()} · "
+                                             f"{preview_size / 1024:,.0f} KiB · not printed")
+    # Copies are written before connecting, so they exist even when the printer is unreachable.
+    saved = []
+    for path, fmt in copies:
+        size = _save_booth_page(paper.to_bytes(page, fmt), path)
+        STATE.note("ok", f"saved {path}", f"{label} · {paper.label} · {fmt.upper()} · {size / 1024:,.0f} KiB")
+        saved.append({"file": str(path), "format": fmt, "bytes": size})
+    extra = {"saved": saved} if copies else {}
+    report = {**info, "paper": paper.to_dict(), **rendered.fit(), **rendered.estimate()} if STATE.json else {}
+    if preview:
+        if done:
+            STATE.note("info", done)
+        if STATE.json:
+            STATE.write(json.dumps({"action": action, "file": str(preview), "bytes": preview_size, **report,
+                                    **extra}) + "\n")
+        return
+    d = STATE.driver()
+    d.require(Capability.PRINT)
+    with _authorize(1, yes, f"{question} on {d.display_name}? (load {paper.loaded})") as ticket:
+        job, = render.send_pages(d, rendered.jpegs(), [job_name], ticket, paper)
+    STATE.note("ok", f"{label} queued as job {job}", f"{d.display_name} · {paper.loaded}")
+    if done:
+        STATE.note("info", done)
+    if STATE.json:
+        STATE.write(json.dumps({"action": action, "job_id": job, **report, **extra}) + "\n")
+
+
+PREVIEW_4X6_HELP = ("Save the print here instead of printing; the extension picks the file type: .pdf, .png, .jpg "
+                    "or .jpeg (4×6 in at 300 dpi).")
+SAVE_4X6_HELP = "Also save a copy of the print here (.pdf, .png, .jpg or .jpeg) before printing it; repeat for more files."
+
+
+@app.command("strip")
+def strip_cmd(
+    photos: list[Path] = typer.Argument(..., help="Four photos (JPEG, PNG, WebP, GIF, BMP or TIFF), in the order of "
+                                                  "the frames from the top."),
+    caption: Optional[str] = typer.Option(None, "--caption",
+                                          help="Handwritten line under the frames, up to 60 characters; today's "
+                                               "date when not given, '' for none."),
+    mono: bool = typer.Option(False, "--mono", help="Print the photos in black and white, like a classic booth."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o", help=PREVIEW_4X6_HELP),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>", help=SAVE_4X6_HELP),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Photo-booth strip: four photos in a column, printed twice side by side on 4×6 photo paper (photo tray).
+
+    Cut the sheet along the dashed line for two 2×6 in strips.
+    """
+    from prt import booth, photocard, vintage
+    # Check every input before a file is written or a driver exists, so a bad file name, a wrong number of
+    # photos or an unreadable photo never leaves a partial result or reaches the printer.
+    photocard.check_count(len(photos))
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    if preview:
+        booth.format_for(preview)
+    vintage.check_outputs([path for path in [preview] + [p for p, _ in copies] if path], photos)
+    text = photocard.check_caption(photocard.today() if caption is None else caption, photocard.STRIP_CAPTION_LIMIT)
+    images = photocard.load_photos(photos)
+    rendered = render.strip_page(images, text, mono)
+    _print_sheet("strip", rendered, photocard.STRIP_KIND, preview, copies,
+                 f"Print {len(photos)} photos as a {photocard.STRIP_KIND}", f"prt strip {photos[0].name}", yes,
+                 {"photos": len(photos)}, done=photocard.CUT_HINT)
+
+
+@app.command("instant")
+def instant_cmd(
+    photo: Path = typer.Argument(..., help="Photo: JPEG, PNG, WebP, GIF, BMP or TIFF; it is cropped square."),
+    caption: Optional[str] = typer.Option(None, "--caption",
+                                          help="Handwritten caption under the photo, up to 80 characters; today's "
+                                               "date when not given, '' to leave the space blank to write on."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o", help=PREVIEW_4X6_HELP),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>", help=SAVE_4X6_HELP),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Instant photo: a photo in a wide white frame with a handwritten caption, Polaroid-style, on 4×6 photo paper
+    (photo tray)."""
+    from prt import booth, photocard, vintage
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    if preview:
+        booth.format_for(preview)
+    vintage.check_outputs([path for path in [preview] + [p for p, _ in copies] if path], [photo])
+    text = photocard.check_caption(photocard.today() if caption is None else caption,
+                                   photocard.INSTANT_CAPTION_LIMIT)
+    image, = photocard.load_photos([photo])
+    rendered = render.instant_page(image, text)
+    _print_sheet("instant", rendered, photocard.INSTANT_KIND, preview, copies,
+                 f"Print {photo.name} as an {photocard.INSTANT_KIND}", f"prt instant {photo.name}", yes, {})
+
+
+@app.command("recipe")
+def recipe_cmd(
+    source: str = typer.Argument(..., help="Link to a recipe page (http or https), or a saved file: recipe JSON, "
+                                           "HTML or plain text, or - to read it from stdin."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save the cards here instead of printing; the extension picks the "
+                                                "file type: .pdf (every card in one file), or .png, .jpg, .jpeg (one "
+                                                "file per card, numbered when there are several)."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of the cards here (.pdf, .png, .jpg or .jpeg) "
+                                                   "before printing them; repeat for more files."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Print a recipe as 4×6 index cards (photo tray): the title, the ingredients and the numbered steps.
+
+    From a web page the recipe is read from its schema.org Recipe data, or else from its Ingredients and
+    Instructions headings. A recipe too long for one card runs on to more cards, up to 6.
+    """
+    from prt import article, booth, recipe, vintage
+    # Fetch, read and lay out every card before a file is written or a driver exists, so a page that cannot be
+    # fetched or holds no recipe never leaves a partial result or reaches the printer.
+    preview_format = booth.format_for(preview) if preview else None
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    text = recipe.load(source, STATE.timeout or STATE.cfg.timeout)
+    rendered = render.recipe_cards(text)
+    pages, paper = rendered.pages, rendered.paper
+    if rendered.cut:
+        STATE.note("warn", "title cut to fit the card", "shorten it in a recipe file, or check the card with --preview")
+    inputs = [Path(source)] if source != booth.STDIN and not article._LINK.match(source) else []
+    outputs = [(preview, preview_format)] if preview else []
+    vintage.check_outputs([file for path, fmt in outputs + copies
+                           for file in vintage.page_paths(path, fmt, len(pages))], inputs)
+    count = f"{len(pages)} card{'s' if len(pages) != 1 else ''}"
+
+    def write(path: Path, fmt: str) -> list[dict[str, Any]]:
+        written = []
+        for file, data in article.page_files(pages, path, fmt, paper):
+            size = _save_booth_page(data, file)
+            STATE.note("ok", f"saved {file}", f"recipe card · {paper.label} · {fmt.upper()} · {size / 1024:,.0f} KiB")
+            written.append({"file": str(file), "format": fmt, "bytes": size})
+        return written
+
+    files = write(preview, preview_format) if preview else []
+    # Copies are written before connecting, so they exist even when the printer is unreachable.
+    saved = [entry for path, fmt in copies for entry in write(path, fmt)]
+    summary = {"action": "recipe", "title": text.title, "pages": len(pages), "paper": paper.to_dict(),
+               **rendered.fit(), **(rendered.estimate() if STATE.json else {})}
+    extra = {"saved": saved} if save else {}
+    if preview:
+        STATE.note("ok", f"{count} of '{text.title}' rendered", "not printed")
+        if STATE.json:
+            STATE.write(json.dumps({**summary, "files": files, **extra}) + "\n")
+        return
+    d = STATE.driver()
+    d.require(Capability.PRINT)
+    jobs: list[int] = []
+    question = f"Print {count} of '{text.title}' on {d.display_name}? (load {paper.loaded})"
+    with _authorize(len(pages), yes, question) as ticket:
+        jobs.extend(render.send_pages(d, rendered.jpegs(), render.recipe_job_names(text.title, len(pages)), ticket,
+                                      paper))
+    STATE.note("ok", f"{count} queued as job{'s' if len(jobs) != 1 else ''} {', '.join(map(str, jobs))}",
+               f"{d.display_name} · {paper.loaded}")
+    if STATE.json:
+        STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
+
+
 class ArticleStyle(str, Enum):
     magazine = "magazine"
     classic_magazine = "classic-magazine"
@@ -1189,7 +1358,8 @@ def compose_cmd(
 
 @app.command("styles")
 def styles_cmd() -> None:
-    """List every page style of booth, card, article and gazette: what it prints and the options that pick it.
+    """List every page style of booth, card, strip, instant, article, recipe and gazette: what it prints and the
+    options that pick it.
 
     With -f json each style also lists its fields, their character limits, how many photos it takes and a
     link to a sample page. `prt schema NAME` prints the JSON Schema of a style's input file.
@@ -1202,11 +1372,12 @@ def styles_cmd() -> None:
         return " ".join(["prt", s["command"], *s["args"]])
 
     def text() -> str:
-        rows = [[t(s["name"], "accent"), t(picked(s)), t(s["kind"]), t(s["schema"])] for s in items]
+        rows = [[t(s["name"], "accent"), t(picked(s)), t(s["kind"]), t(s["schema"] or "-")] for s in items]
         return style.box("styles", style.table_rows(["style", "command", "prints", "schema"], rows, mode), mode,
                          footer="fields and limits: prt styles -f json")
 
-    STATE.emit(items, text, lambda: [style.plain_record(s["name"], picked(s), s["kind"], s["schema"], s["sample"])
+    STATE.emit(items, text, lambda: [style.plain_record(s["name"], picked(s), s["kind"], s["schema"] or "-",
+                                                        s["sample"])
                                      for s in items])
 
 
