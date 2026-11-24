@@ -167,10 +167,16 @@ class PrintOptions:
     mono: bool = False
     quality: str | None = None  # draft | normal | high
     duplex: bool = False
+    sides: str | None = None  # IPP sides keyword, e.g. two-sided-short-edge; overrides duplex (long edge)
     tray: str | None = None
     media_type: str | None = None  # e.g. photographic, stationery
     direct: bool = False
     job_name: str | None = None
+
+    @property
+    def sides_keyword(self) -> str | None:
+        """The IPP ``sides`` value to send, or None for the printer's default (one-sided)."""
+        return self.sides or ("two-sided-long-edge" if self.duplex else None)
 
 
 def to_dict(obj: Any) -> Any:

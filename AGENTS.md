@@ -1,6 +1,6 @@
 # AGENTS.md
 
-printer-cli (`prt`) is a CLI and TUI for network printers: status, ink, maintenance, printing and scanning over IPP, eSCL, SNMP and Epson ESC/P2. It can also print a photo as a newspaper front page, a wizard or sports card, a certificate, or a wanted, missing-pet or movie poster (`prt booth`), a photo and a verse as a greeting card that folds from one A4 sheet (`prt card`), four photos as a photo-booth strip or a photo as a Polaroid-style instant photo on 4×6 photo paper (`prt strip`, `prt instant`), a recipe as 4×6 index cards (`prt recipe`), a web article as magazine pages (`prt article`), photos as a vintage newspaper (`prt gazette`) and any page described as blocks of headings, text, images, QR codes, columns and rules (`prt compose`). This file is for AI agents. The first part covers using `prt`, the second covers working on this repository. The [README](README.md) is the full user guide.
+printer-cli (`prt`) is a CLI and TUI for network printers: status, ink, maintenance, printing and scanning over IPP, eSCL, SNMP and Epson ESC/P2. It can also print a photo as a newspaper front page, a wizard or sports card, a certificate, or a wanted, missing-pet or movie poster (`prt booth`), a photo and a verse as a greeting card that folds from one A4 sheet (`prt card`), four photos as a photo-booth strip or a photo as a Polaroid-style instant photo on 4×6 photo paper (`prt strip`, `prt instant`), a photo and a message as a two-sided postcard (`prt postcard`), a recipe as 4×6 index cards (`prt recipe`), a web article as magazine pages (`prt article`), photos as a vintage newspaper (`prt gazette`) and any page described as blocks of headings, text, images, QR codes, columns and rules (`prt compose`). This file is for AI agents. The first part covers using `prt`, the second covers working on this repository. The [README](README.md) is the full user guide.
 
 ## Using prt
 
@@ -21,8 +21,8 @@ Add `-p demo` to any command to use the built-in demo printer, which needs no ha
 
 ### Find out what can be printed
 
-- `prt styles -f json` lists every booth, card, strip, instant, article, recipe and gazette style: the command and `args` that pick it, its fields with `required` and `max_length`, how many photos it takes, `max_pages`, its input `schema`, the `paper` it prints on (A4, or 4×6 from the photo tray) and a `sample` image.
-- `prt schema story`, `prt schema article`, `prt schema gazette`, `prt schema page`, `prt schema card` and `prt schema recipe` print the JSON Schema (draft 2020-12) of the booth story file, the article JSON file, the gazette story file, the `prt compose` page file, the `prt card` card file and the `prt recipe` recipe file. A file that passes the schema is accepted, except for text in a script the page font cannot print, such as emoji or Chinese (and, for a page file, image files that cannot be read or a page longer than 10 pages).
+- `prt styles -f json` lists every booth, card, strip, instant, postcard, article, recipe and gazette style: the command and `args` that pick it, its fields with `required` and `max_length`, how many photos it takes, `max_pages`, its input `schema`, the `paper` it prints on (A4, or 4×6 from the photo tray) and a `sample` image.
+- `prt schema story`, `prt schema article`, `prt schema gazette`, `prt schema page`, `prt schema card`, `prt schema recipe` and `prt schema postcard` print the JSON Schema (draft 2020-12) of the booth story file, the article JSON file, the gazette story file, the `prt compose` page file, the `prt card` card file, the `prt recipe` recipe file and the `prt postcard` postcard file. A file that passes the schema is accepted, except for text in a script the page font cannot print, such as emoji or Chinese (and, for a page file, image files that cannot be read or a page longer than 10 pages).
 
 ### Make a page no other command makes
 
@@ -44,20 +44,30 @@ Add `-p demo` to any command to use the built-in demo printer, which needs no ha
 
 ### Pass text without writing a file
 
-- `prt booth PHOTO --story-file -` and `prt gazette PHOTO… --story-file -` read the story JSON from stdin, and `prt card PHOTO --card-file -` the card JSON (`greeting` and `verse` required; `message`, `signature`, `back` optional).
+- `prt booth PHOTO --story-file -` and `prt gazette PHOTO… --story-file -` read the story JSON from stdin, and `prt card PHOTO --card-file -` the card JSON (`greeting` and `verse` required; `message`, `signature`, `back` optional), and `prt postcard PHOTO --postcard-file -` the postcard JSON (`message` required; `greeting`, `signature`, `address` optional, the address one line per newline, up to 4).
 - `prt article -` and `prt recipe -` read the article or recipe from stdin: JSON when it starts with `{`, HTML when it starts with `<`, plain text otherwise.
 - Bad input on stdin fails like a bad file (exit `3`), and nothing is printed.
 
 ### Preview, then print
 
 1. Render without printing: `prt booth photo.jpg --story-file story.json --preview page.jpg -f json` (or `prt compose page.json --preview page.pdf -f json`). `--preview` (also `-o`) writes `.pdf`, `.png`, `.jpg` or `.jpeg` and sends nothing to the printer.
-2. Check the fit. For `booth`, `card` and `gazette`, the JSON line has `"fits"` and `"cut"`. When text was cut with `…`, `cut` gives each field's `max_fit` (characters printed) and `given`. Shorten each field to `max_fit` and preview again. `"fits": true, "cut": {}` means everything fitted. Article text is never cut, because it runs on over more pages.
-3. Check the cost. With `-f json`, `booth`, `card`, `strip`, `instant`, `article`, `recipe`, `gazette` and `compose` add an `estimate` (the ink of a 4×6 sheet counts by its area), e.g. `{"pages": 3, "colour": true, "ink": {…}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`.
+2. Check the fit. For `booth`, `card`, `postcard` and `gazette`, the JSON line has `"fits"` and `"cut"`. When text was cut with `…`, `cut` gives each field's `max_fit` (characters printed) and `given`. Shorten each field to `max_fit` and preview again. `"fits": true, "cut": {}` means everything fitted. Article text is never cut, because it runs on over more pages.
+3. Check the cost. With `-f json`, `booth`, `card`, `strip`, `instant`, `postcard`, `article`, `recipe`, `gazette` and `compose` add an `estimate` (the ink of a 4×6 sheet counts by its area), e.g. `{"pages": 3, "colour": true, "ink": {…}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`.
 4. Print with `--yes`. Without a terminal, a command that would ask for confirmation fails with kind `confirmation_required` instead.
+
+### Print a two-sided postcard
+
+`prt postcard` prints on both sides of one 4×6 card. Unless the user asks for `--duplex` (one two-sided job; refused with kind `duplex_unavailable` when the printer cannot do it), someone has to turn the card over between the sides, so an agent prints one side at a time (both sides in one run fails with exit `2`, kind `manual_flip_required`, and sends nothing):
+
+1. `prt postcard photo.jpg --postcard-file postcard.json --side front --yes -f json`.
+2. Tell the user what the JSON line's `flip` says: put the card back in the photo tray turned over, the blank side facing the way the photo side did, with the same edge going in first. Wait until they have.
+3. `prt postcard photo.jpg --postcard-file postcard.json --side back --yes -f json`.
+
+`--preview card.pdf` saves both sides (a `.png` name gives `card-front.png` and `card-back.png`).
 
 ### Guardrails
 
-- Run agents with `PRT_AGENT=1`. Every command that prints or uses ink (`print`, `booth`, `card`, `strip`, `instant`, `article`, `recipe`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean`) then refuses to run without `--yes`, even at a terminal (exit `2`, kind `agent_confirmation_required`). `--preview` never needs `--yes`.
+- Run agents with `PRT_AGENT=1`. Every command that prints or uses ink (`print`, `booth`, `card`, `strip`, `instant`, `postcard`, `article`, `recipe`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean`) then refuses to run without `--yes`, even at a terminal (exit `2`, kind `agent_confirmation_required`). `--preview` never needs `--yes`.
 - Page caps: `max_pages_per_run` and `max_pages_per_day` at the top of `~/.config/prt/config.toml`. In agent mode the per-run cap defaults to 10. A print over a cap is refused whole before anything is sent (exit `1`, kind `page_cap_exceeded` or `daily_page_cap_exceeded`). Tell the user instead of retrying, and never raise a cap yourself.
 - Head cleaning is refused while ink is low or the waste pad is nearly full. Do not pass `--force` unless the user asks for it.
 

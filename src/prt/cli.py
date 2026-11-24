@@ -1130,6 +1130,143 @@ def recipe_cmd(
         STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
 
 
+class PostcardSide(str, Enum):
+    both = "both"
+    front = "front"
+    back = "back"
+
+
+@app.command("postcard")
+def postcard_cmd(
+    photo: Path = typer.Argument(..., help="Photo for the front: JPEG, PNG, WebP, GIF, BMP or TIFF; it is cropped to "
+                                           "fill the card on its side."),
+    postcard_file: Optional[Path] = typer.Option(None, "--postcard-file",
+                                                 help="JSON postcard: message required; greeting, signature, "
+                                                      "address optional. Use - to read it from stdin."),
+    greeting: Optional[str] = typer.Option(None, "--greeting",
+                                           help="Handwritten line across the foot of the photo, e.g. 'Greetings "
+                                                "from Lisbon'; '' for none (overrides the postcard file)."),
+    message: Optional[str] = typer.Option(None, "--message",
+                                          help="The message on the left of the back; a newline starts a new "
+                                               "paragraph."),
+    signature: Optional[str] = typer.Option(None, "--signature", help="Line under the message, e.g. 'Love, Jo'."),
+    address: Optional[list[str]] = typer.Option(None, "--address", metavar="LINE",
+                                                help="One line of the address on the back; repeat it for each "
+                                                     "line, up to 4. Without it the lines are left blank to write on."),
+    side: PostcardSide = typer.Option(PostcardSide.both, "--side",
+                                      help="both (default), or front or back alone: print one side at a time when "
+                                           "there is no terminal to say when the card is turned over."),
+    duplex: bool = typer.Option(False, "--duplex",
+                                help="Print both sides in one two-sided job, through the printer's CUPS queue; for "
+                                     "a printer whose duplexer takes the card."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save both sides here instead of printing; the extension picks the "
+                                                "file type: .pdf (one file, front then back), or .png, .jpg, .jpeg "
+                                                "(NAME-front and NAME-back)."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of both sides here (.pdf, .png, .jpg or "
+                                                   ".jpeg) before printing; repeat for more files."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Postcard: the photo on the front, the message, address lines and a stamp box on the back, on 4×6 photo
+    paper (photo tray).
+
+    Both sides print on one card: in one two-sided job when the printer can turn the card over itself (--duplex),
+    else the front first, then you put the card back turned over and the back is printed. Without a postcard the
+    built-in one is printed. Postcard flags override --postcard-file.
+    """
+    from prt import article, booth, postcard, vintage
+    # Check every input and lay out both sides before a file is written or a driver exists, so a bad file name,
+    # a bad postcard or a --side that cannot go with --duplex never leaves a partial result or reaches the printer.
+    postcard.check_side(side.value, duplex)
+    outputs = [(preview, booth.format_for(preview))] if preview else []
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    inputs = [photo] + ([postcard_file] if postcard_file and str(postcard_file) != booth.STDIN else [])
+    vintage.check_outputs([file for path, fmt in outputs + copies for file in postcard.side_paths(path, fmt)],
+                          inputs)
+    image = booth.load_photo(photo)
+    text = postcard.with_overrides(postcard.load_postcard(postcard_file) if postcard_file
+                                   else postcard.DEFAULT_POSTCARD, greeting=greeting, message=message,
+                                   signature=signature, address="\n".join(address) if address else None)
+    rendered = render.postcard_sides(image, text)
+    paper = rendered.paper
+    sides = dict(zip(postcard.SIDES, rendered.pages))
+    if rendered.cut:
+        STATE.note("warn", f"{', '.join(rendered.cut)} cut to fit the postcard",
+                   "shorten it, or check the postcard with --preview")
+
+    def write(path: Path, fmt: str) -> list[dict[str, Any]]:
+        written = []
+        files = (article.page_files(rendered.pages, path, fmt, paper) if fmt == "pdf"
+                 else [(file, paper.to_bytes(page, fmt))
+                       for file, page in zip(postcard.side_paths(path, fmt), rendered.pages)])
+        for file, data in files:
+            size = _save_booth_page(data, file)
+            what = "both sides" if fmt == "pdf" else file.stem.rsplit("-", 1)[-1]
+            STATE.note("ok", f"saved {file}", f"postcard {what} · {paper.label} · {fmt.upper()} · "
+                                              f"{size / 1024:,.0f} KiB")
+            written.append({"file": str(file), "format": fmt, "bytes": size})
+        return written
+
+    files = write(preview, outputs[0][1]) if preview else []
+    # Copies are written before connecting, so they exist even when the printer is unreachable.
+    saved = [entry for path, fmt in copies for entry in write(path, fmt)]
+    extra = {"saved": saved} if save else {}
+    printed = list(postcard.SIDES) if side == PostcardSide.both else [side.value]
+    summary = {"action": "postcard", "pages": len(printed), "paper": paper.to_dict(), **rendered.fit()}
+    if STATE.json:
+        summary["estimate"] = guard.estimate([sides[name] for name in printed], paper)
+    if preview:
+        STATE.note("ok", "postcard rendered, front and back", "not printed")
+        if STATE.json:
+            STATE.write(json.dumps({**summary, "files": files, **extra}) + "\n")
+        return
+    d = STATE.driver()
+    d.require(Capability.PRINT)
+    guard.require_consent(yes)  # agent mode: --yes first, so a refused flip is never the first thing an agent hears
+
+    def two_sided() -> bool:
+        return bool(d.info().duplex)
+
+    def queue() -> str | None:
+        from prt import printing
+        return printing.queue_for(d)
+
+    interactive = sys.stdin.isatty() and not guard.agent_mode()
+    method, found = postcard.print_method(side.value, duplex, paper, two_sided, queue, interactive)
+    name = f"prt postcard {photo.name}"
+    what = {"duplex": "a two-sided postcard", "flip": "a postcard, front then back",
+            "front": "the front of a postcard", "back": "the back of a postcard"}[method]
+    jobs: dict[str, int | None] = {}
+    with _authorize(len(printed), yes, f"Print {photo.name} as {what} on {d.display_name}? (load {paper.loaded})") \
+            as ticket:
+        if method == "duplex":
+            job = render.send_two_sided(found or "", rendered.pages, name, ticket, paper)
+            jobs = {"front": job, "back": job}
+            STATE.note("ok", f"postcard queued as two-sided job {job}", f"{d.display_name} · {paper.loaded}")
+        else:
+            if method in ("flip", "front"):
+                jobs["front"], = render.send_pages(d, [paper.to_jpeg(sides["front"])], [f"{name} (front)"],
+                                                   ticket, paper)
+                STATE.note("ok", f"postcard front queued as job {jobs['front']}",
+                           f"{d.display_name} · {paper.loaded}")
+            turned = method == "back" or (method == "flip" and typer.confirm(
+                f"When the front is out: {postcard.FLIP} Print the back now?", default=True, err=True))
+            if turned:
+                jobs["back"], = render.send_pages(d, [paper.to_jpeg(postcard.flipped(sides["back"]))],
+                                                  [f"{name} (back)"], ticket, paper)
+                STATE.note("ok", f"postcard back queued as job {jobs['back']}",
+                           f"{d.display_name} · {paper.loaded}")
+            elif method == "flip":
+                jobs["back"] = None
+                STATE.note("warn", "the back was not printed", "print it later with --side back")
+    if method == "front":
+        STATE.note("info", f"{postcard.FLIP} Then print the back with --side back.")
+    if STATE.json:
+        manual = {"flip": postcard.FLIP} if method != "duplex" else {}
+        STATE.write(json.dumps({**summary, "method": method, "jobs": jobs, **manual, **extra}) + "\n")
+
+
 class ArticleStyle(str, Enum):
     magazine = "magazine"
     classic_magazine = "classic-magazine"

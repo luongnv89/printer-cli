@@ -315,8 +315,8 @@ class IPPDriver(Driver):
             job_attrs.append(Attr("print-color-mode", ipp.KEYWORD, "monochrome"))
         if options.quality:
             job_attrs.append(Attr("print-quality", ipp.ENUM, QUALITY[options.quality]))
-        if options.duplex:
-            job_attrs.append(Attr("sides", ipp.KEYWORD, "two-sided-long-edge"))
+        if options.sides_keyword:
+            job_attrs.append(Attr("sides", ipp.KEYWORD, options.sides_keyword))
         resp = self._call(self.client.request, ipp.OP_PRINT_JOB, operation_attrs=[
             Attr("requesting-user-name", ipp.NAME, "prt"),
             Attr("job-name", ipp.NAME, options.job_name or "prt job"),

@@ -91,14 +91,15 @@ def _commands(tmp_path):
         "strip": ["strip", str(photo), str(photo), str(photo), str(photo)],
         "instant": ["instant", str(photo)],
         "recipe": ["recipe", str(_recipe_file(tmp_path))],
+        "postcard": ["postcard", str(photo), "--side", "front"],
         "test-page": ["maintain", "test-page"],
         "nozzle-check": ["maintain", "nozzle-check"],
         "clean": ["maintain", "clean", "--force"],
     }
 
 
-COMMANDS = ["print", "booth", "card", "article", "gazette", "compose", "strip", "instant", "recipe", "test-page",
-            "nozzle-check", "clean"]
+COMMANDS = ["print", "booth", "card", "article", "gazette", "compose", "strip", "instant", "recipe", "postcard",
+            "test-page", "nozzle-check", "clean"]
 
 
 # --- agent mode ------------------------------------------------------------------------------------------
