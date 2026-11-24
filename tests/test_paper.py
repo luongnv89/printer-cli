@@ -6,9 +6,9 @@ import re
 import pytest
 from PIL import Image
 
-from prt import guard, render, testpage
+from prt import guard, media, render, testpage
 from prt.drivers.fake import FakeDriver
-from prt.paper import A4, PAPERS, PHOTO_4X6, Paper
+from prt.paper import A4, DISC, PAPERS, PHOTO_4X6, Paper
 from prt.transport import ipp
 
 
@@ -61,6 +61,30 @@ def test_another_sheet_is_one_more_paper():
     fake, _, _ = _send(a6)
     assert _sent(fake) == [{"media-size": {"x-dimension": 10500, "y-dimension": 14800}, "media-source": "main",
                             "media-type": "stationery"}]
+
+
+def test_a_disc_is_the_120mm_square_round_it_from_the_disc_tray():
+    assert DISC.size == (1417, 1417) and DISC.dpi == 300 and PAPERS["disc"] is DISC
+    assert DISC.tray == "disc" and DISC.media_type == "disc" and media.resolve_alias(DISC.media) == "disc_12cm_18x120mm"
+    assert DISC.to_dict() == {"size": "disc", "media": "disc", "tray": "disc"}
+    assert DISC.loaded == "a printable CD/DVD in the disc tray, printable side up"
+    assert DISC.ink_scale == pytest.approx(120 * 120 / (210 * 297))
+    square = Image.new("RGB", DISC.size, "white")
+    assert DISC.for_printer(square) is square
+
+
+def test_a_disc_media_name_gives_the_disc_size_not_its_hub_and_diameter():
+    """'disc_12cm_18x120mm' names an 18 mm hub on a 120 mm disc; the printer reports the disc as 120 x 120 mm."""
+    assert media.size_of("disc_12cm_18x120mm") == (12000, 12000)
+    assert media.size_of(media.resolve_alias("disc")) == (12000, 12000)
+    assert media.size_of("iso_a4_210x297mm") == (21000, 29700) and media.size_of("disc_odd") is None
+
+
+def test_send_pages_on_a_disc_asks_for_the_disc_size_tray_and_media():
+    fake, jobs, _ = _send(DISC)
+    assert len(jobs) == 1
+    assert _sent(fake) == [{"media-size": {"x-dimension": 12000, "y-dimension": 12000}, "media-source": "disc",
+                            "media-type": "disc"}]
 
 
 def test_estimate_counts_the_ink_of_a_small_sheet_by_its_area():

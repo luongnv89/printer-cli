@@ -6,7 +6,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from PIL import Image
 
-from prt import article, booth, card, catalog, photocard, postcard, recipe, vintage
+from prt import article, booth, card, catalog, disc, photocard, postcard, recipe, vintage
 from prt.cli import ArticleStyle, BoothStyle, main
 from prt.drivers.base import PrinterError
 
@@ -54,8 +54,8 @@ def test_styles_json_lists_every_style_with_fields_limits_and_sample(capsys):
     assert code == 0 and err == ""
     styles = {s["name"]: s for s in json.loads(out)}
     assert list(styles) == ["metro", "daily", "wizard", "wanted", "certificate", "sports", "missing", "movie",
-                            "card", "strip", "instant", "postcard", "magazine", "classic-magazine", "recipe",
-                            "gazette", "gazette-landscape"]
+                            "card", "strip", "instant", "postcard", "disc", "magazine", "classic-magazine",
+                            "recipe", "gazette", "gazette-landscape"]
     metro = styles["metro"]
     assert metro["command"] == "booth" and metro["args"] == [] and metro["default"] is True
     assert metro["kind"] == "metro newspaper page" and metro["schema"] == "story"
@@ -118,9 +118,10 @@ def test_catalog_follows_the_commands():
     assert by_command["strip"] == ["strip"] and by_command["instant"] == ["instant"]
     assert by_command["recipe"] == ["recipe"]
     assert by_command["postcard"] == ["postcard"]
+    assert by_command["disc"] == ["disc"]
     assert len({s.name for s in catalog.STYLES}) == len(catalog.STYLES)
     fields = {"article": article.FIELDS, "card": card.FIELDS, "recipe": recipe.FIELDS, "strip": ("caption",),
-              "instant": ("caption",), "postcard": postcard.FIELDS}
+              "instant": ("caption",), "postcard": postcard.FIELDS, "disc": disc.FIELDS}
     for s in catalog.STYLES:
         names = [f.name for f in s.fields]
         assert names == list(fields.get(s.command, booth.FIELDS))
@@ -130,7 +131,7 @@ def test_catalog_follows_the_commands():
 
 # --- prt schema ---------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", ["story", "article", "gazette", "page", "card", "postcard"])
+@pytest.mark.parametrize("name", ["story", "article", "gazette", "page", "card", "postcard", "disc"])
 def test_schema_prints_a_valid_json_schema(capsys, name):
     code, out, err = run(capsys, "schema", name)
     assert code == 0 and err == ""

@@ -49,9 +49,18 @@ def resolve_alias(name: str) -> str:
 
 
 def size_of(keyword: str) -> tuple[int, int] | None:
-    """Media size in hundredths of mm, parsed from a PWG name like 'iso_a4_210x297mm'."""
+    """Media size in hundredths of mm, parsed from a PWG name like 'iso_a4_210x297mm'.
+
+    A disc name gives the hub and outer diameters, not a width and height ('disc_12cm_18x120mm': an 18 mm hub on a
+    120 mm disc), so a disc is the square around it, as printers report it in media-col-ready (120 x 120 mm).
+    """
     import re
 
+    if keyword.startswith("disc_"):
+        m = re.search(r"x(\d+(?:\.\d+)?)mm$", keyword)
+        if m:
+            return round(float(m.group(1)) * 100), round(float(m.group(1)) * 100)
+        return None
     m = re.search(r"_(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)(mm|in)$", keyword)
     if not m:
         return None

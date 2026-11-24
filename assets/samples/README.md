@@ -16,6 +16,7 @@ These images are the sample pages shown in the main README. They were rendered w
 | `strip.jpg` | `prt strip astronaut.jpg launch.jpg earthrise.jpg bluemarble.jpg --caption "Apollo 11 · July 1969" -o strip.png` |
 | `instant.jpg` | `prt instant earthrise.jpg --caption "Earthrise, Christmas Eve 1968" -o instant.png` |
 | `postcard.jpg` | `prt postcard earthrise.jpg --postcard-file postcard.json -o postcard.png`: `postcard-front.png` above `postcard-back.png` |
+| `disc.jpg` | `prt disc bluemarble.jpg --disc-file disc.json -o disc.png` |
 | `recipe.jpg` | `prt recipe recipe.json -o recipe.png` |
 | `article-magazine.jpg` | `prt article article.json -o article-magazine.png` |
 | `article-classic.jpg` | `prt article article.json --style classic-magazine -o article-classic.png` (page 1) |
@@ -23,7 +24,7 @@ These images are the sample pages shown in the main README. They were rendered w
 | `gazette-landscape.jpg` | the same with `--landscape` |
 | `tui.jpg` | `prt -p demo tui`, saved as a Textual screenshot at 120×36 |
 
-`story.json`, `article.json`, `recipe.json` and `postcard.json` are the inputs used above. The article text, the recipe and the postcard were written for these samples.
+`story.json`, `article.json`, `recipe.json`, `postcard.json` and `disc.json` are the inputs used above. The article text, the recipe, the postcard and the disc's track list were written for these samples (the track titles are made up).
 
 ## Photo credits
 
