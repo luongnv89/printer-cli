@@ -11,7 +11,8 @@ before anything is drawn.
 
 The last step (:func:`clip`) whitens everything outside the ring, the corners of the square and the hub, so the printer
 puts no ink on the tray or on the clear centre of the disc, and the ink estimate counts the ring alone. The JPEG the
-printer is sent can ring by up to about 1.5 mm across the ring's edges (faint, near-white), well clear of both.
+printer is sent can ring by up to about 1.5 mm across the ring's edges (faint, near-white). That stays on the disc,
+clear of the tray, and well clear of the centre hole.
 """
 
 from __future__ import annotations
