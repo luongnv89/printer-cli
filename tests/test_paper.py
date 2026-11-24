@@ -39,6 +39,7 @@ def test_4x6_photo_paper_is_drawn_at_300_dpi_for_the_photo_tray():
     assert PHOTO_4X6.size == (1200, 1800) and PHOTO_4X6.landscape_size == (1800, 1200)
     assert PHOTO_4X6.tray == "photo" and PHOTO_4X6.media_type == "photographic"
     assert PHOTO_4X6.mm(25.4) == 300 and PAPERS["4x6"] is PHOTO_4X6
+    assert PHOTO_4X6.loaded == "4×6 paper in the photo tray" and A4.loaded == "A4 paper"
 
 
 def test_send_pages_asks_for_the_4x6_size_photo_tray_and_photo_media():

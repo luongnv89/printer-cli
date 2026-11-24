@@ -10,7 +10,8 @@ the list under an "Ingredients" heading and the steps under an "Instructions", "
 The card is a 6×4 in index card, laid out on its side on :data:`prt.paper.PHOTO_4X6` at 300 dpi: the title in
 handwriting over a red rule, then the ingredients and the numbered steps on blue lines in two columns. The type
 is set as large as lets the recipe fit on one card; a longer recipe runs on to more cards (up to ``MAX_CARDS``),
-so nothing is ever cut. Each card is turned upright only for the printer.
+so every ingredient and step is printed. Only a title too long for two lines is cut with "…", and reported. Each
+card is turned upright only for the printer.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from PIL import Image, ImageDraw
 from prt import article, fonts
 from prt.booth import STDIN, read_stdin
 from prt.drivers.base import PrinterError
-from prt.layout import _clean, _ellipsize, _wrap
+from prt.layout import Cuts, _clean, _ellipsize, _wrap
 from prt.paper import PHOTO_4X6
 from prt.testpage import _font
 from prt.vintage import _fit_face
@@ -213,7 +214,7 @@ def recipe_data(page: str) -> dict[str, Any] | None:
     for block in parser.blocks:
         try:
             data = json.loads(block, strict=False)
-        except ValueError:
+        except (ValueError, RecursionError):  # RecursionError: a block nested thousands deep
             continue  # one broken block must not hide a good one
         for obj in _walk(data):
             if "Recipe" in _types(obj):
@@ -507,9 +508,18 @@ def plan(recipe: Recipe) -> tuple[int, list[list[list[Row]]]]:
     return RUN_ON_SIZE, cards
 
 
+def fit_title(title: str):
+    """The title in handwriting: on one line from 104 px down to 72, else on two lines from 60 px down to 44, cut
+    with "…" at the smallest. Returns (font, size, lines, cut) as ``vintage._fit_face`` does."""
+    fitted = _fit_face(title, "hand-bold", 104, 72, W - 2 * MARGIN, 1)
+    return fitted if fitted[3] is None else _fit_face(title, "hand-bold", 60, 44, W - 2 * MARGIN, 2)
+
+
 def _header(d: ImageDraw.ImageDraw, recipe: Recipe, number: int) -> None:
-    font, _, lines, _ = _fit_face(recipe.title, "hand-bold", 104, 60, W - 2 * MARGIN, 1)
-    d.text((MARGIN, TITLE_BASELINE), lines[0], font=font, fill=PEN, anchor="ls")
+    font, size, lines, _ = fit_title(recipe.title)
+    lead = round(size * 1.05)
+    for i, line in enumerate(lines):  # the last line sits on the title baseline
+        d.text((MARGIN, TITLE_BASELINE - (len(lines) - 1 - i) * lead), line, font=font, fill=PEN, anchor="ls")
     meta = " · ".join(t for t in (recipe.servings, recipe.time) if t) if number == 1 else "continued"
     if meta:
         small = _font(30)
@@ -546,8 +556,9 @@ def _column(d: ImageDraw.ImageDraw, column: list[Row], x: int, recipe: Recipe, s
             d.text((x + indent, baseline), row.text, font=font, fill=INK, anchor="ls")
 
 
-def compose_cards(recipe: Recipe) -> list[Image.Image]:
-    """The recipe's cards, each 6×4 in on its side at 300 dpi (see ``plan``)."""
+def compose_cards(recipe: Recipe) -> tuple[list[Image.Image], Cuts]:
+    """The recipe's cards, each 6×4 in on its side at 300 dpi (see ``plan``), and the fields cut with "…" to fit:
+    only ever ``title`` (see ``fit_title``)."""
     size, cards = plan(recipe)
     lead = _lead(size)
     lines = (BODY_BOTTOM - BODY_TOP) // lead
@@ -563,4 +574,5 @@ def compose_cards(recipe: Recipe) -> list[Image.Image]:
             _column(d, column, x, recipe, size)
         _footer(d, recipe, number, len(cards))
         out.append(card)
-    return out
+    cut = fit_title(recipe.title)[3]
+    return out, ({"title": cut} if cut else {})

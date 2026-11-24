@@ -993,10 +993,9 @@ def _print_sheet(action: str, rendered: render.Rendered, label: str, preview: Op
         return
     d = STATE.driver()
     d.require(Capability.PRINT)
-    with _authorize(1, yes, f"{question} on {d.display_name}? (load {paper.label} paper in the {paper.tray} tray)"
-                    ) as ticket:
+    with _authorize(1, yes, f"{question} on {d.display_name}? (load {paper.loaded})") as ticket:
         job, = render.send_pages(d, rendered.jpegs(), [job_name], ticket, paper)
-    STATE.note("ok", f"{label} queued as job {job}", f"{d.display_name} · {paper.label} from the {paper.tray} tray")
+    STATE.note("ok", f"{label} queued as job {job}", f"{d.display_name} · {paper.loaded}")
     if done:
         STATE.note("info", done)
     if STATE.json:
@@ -1091,6 +1090,8 @@ def recipe_cmd(
     text = recipe.load(source, STATE.timeout or STATE.cfg.timeout)
     rendered = render.recipe_cards(text)
     pages, paper = rendered.pages, rendered.paper
+    if rendered.cut:
+        STATE.note("warn", "title cut to fit the card", "shorten it in a recipe file, or check the card with --preview")
     inputs = [Path(source)] if source != booth.STDIN and not article._LINK.match(source) else []
     outputs = [(preview, preview_format)] if preview else []
     vintage.check_outputs([file for path, fmt in outputs + copies
@@ -1109,7 +1110,7 @@ def recipe_cmd(
     # Copies are written before connecting, so they exist even when the printer is unreachable.
     saved = [entry for path, fmt in copies for entry in write(path, fmt)]
     summary = {"action": "recipe", "title": text.title, "pages": len(pages), "paper": paper.to_dict(),
-               **(rendered.estimate() if STATE.json else {})}
+               **rendered.fit(), **(rendered.estimate() if STATE.json else {})}
     extra = {"saved": saved} if save else {}
     if preview:
         STATE.note("ok", f"{count} of '{text.title}' rendered", "not printed")
@@ -1119,13 +1120,12 @@ def recipe_cmd(
     d = STATE.driver()
     d.require(Capability.PRINT)
     jobs: list[int] = []
-    question = (f"Print {count} of '{text.title}' on {d.display_name}? (load {paper.label} paper in the "
-                f"{paper.tray} tray)")
+    question = f"Print {count} of '{text.title}' on {d.display_name}? (load {paper.loaded})"
     with _authorize(len(pages), yes, question) as ticket:
         jobs.extend(render.send_pages(d, rendered.jpegs(), render.recipe_job_names(text.title, len(pages)), ticket,
                                       paper))
     STATE.note("ok", f"{count} queued as job{'s' if len(jobs) != 1 else ''} {', '.join(map(str, jobs))}",
-               f"{d.display_name} · {paper.label} from the {paper.tray} tray")
+               f"{d.display_name} · {paper.loaded}")
     if STATE.json:
         STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
 

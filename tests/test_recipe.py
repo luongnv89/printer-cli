@@ -1,6 +1,7 @@
 """prt recipe: a recipe from the web, a saved page or a recipe file, printed as 4×6 index cards (#28)."""
 
 import json
+from dataclasses import replace
 from types import SimpleNamespace
 
 import httpx
@@ -126,6 +127,22 @@ def test_a_broken_json_ld_block_does_not_hide_a_good_one():
     assert recipe.from_html(page).title == "Lemon Drizzle Cake"
 
 
+def test_a_deeply_nested_json_ld_block_falls_back_to_the_headings():
+    """Untrusted JSON nested thousands deep must not crash the command (RecursionError)."""
+    deep = '<script type="application/ld+json">' + "[" * 100000 + "</script>"
+    page = HEADINGS_PAGE.replace("<head>", "<head>" + deep)
+    assert recipe.from_html(page).steps == ("Whisk everything together.", "Fry in a hot pan.")
+
+
+def test_a_long_title_goes_on_two_lines_and_a_longer_one_is_cut_and_reported():
+    medium = "Grandma's Famous Slow-Cooked Sunday Lemon Drizzle Cake With Extra Icing | The Kitchen"
+    _, size, lines, cut = recipe.fit_title(medium)
+    assert len(lines) == 2 and cut is None and size <= 60
+    assert recipe.compose_cards(recipe.normalise(replace(SHORT, title=medium)))[1] == {}
+    _, cut = recipe.compose_cards(recipe.normalise(replace(SHORT, title="WWWWWWWWW " * 20)))
+    assert set(cut) == {"title"} and 0 < cut["title"].max_fit < cut["title"].given
+
+
 def test_a_recipe_nested_in_another_object_is_found():
     page = _page({"@type": "WebPage", "mainEntity": {**LD["@graph"][1], "@type": "http://schema.org/Recipe"}})
     assert recipe.from_html(page).steps[-1] == "Bake for 45 minutes."
@@ -187,8 +204,8 @@ def test_too_many_items_are_refused():
 def test_a_short_recipe_fits_one_card_at_the_largest_type():
     size, cards = recipe.plan(recipe.normalise(SHORT))
     assert size == recipe.SIZES[0] and len(cards) == 1
-    pages = recipe.compose_cards(recipe.normalise(SHORT))
-    assert len(pages) == 1 and pages[0].size == (1800, 1200) == PHOTO_4X6.landscape_size
+    pages, cut = recipe.compose_cards(recipe.normalise(SHORT))
+    assert len(pages) == 1 and cut == {} and pages[0].size == (1800, 1200) == PHOTO_4X6.landscape_size
 
 
 def test_a_long_recipe_runs_on_to_more_cards_and_nothing_is_cut():
@@ -197,7 +214,7 @@ def test_a_long_recipe_runs_on_to_more_cards_and_nothing_is_cut():
     assert size == recipe.RUN_ON_SIZE and 1 < len(cards) <= recipe.MAX_CARDS
     printed = [row for card in cards for column in card for row in column]
     assert [row.mark for row in printed if row.kind == "item"][-1] == f"{len(long.steps)}."
-    assert len(recipe.compose_cards(long)) == len(cards)
+    assert len(recipe.compose_cards(long)[0]) == len(cards)
 
 
 def test_a_recipe_too_long_for_six_cards_is_refused():
@@ -253,7 +270,7 @@ def test_recipe_link_preview_saves_the_card_and_prints_nothing(capsys, tmp_path,
     assert "not printed" in err and printer.made == [] and guard.used_today() == 0
     data = without_estimate(out)
     assert data == {"action": "recipe", "title": "Lemon Drizzle Cake", "pages": 1,
-                    "paper": {"size": "4x6", "media": "4x6", "tray": "photo"},
+                    "paper": {"size": "4x6", "media": "4x6", "tray": "photo"}, "fits": True, "cut": {},
                     "files": [{"file": str(out_file), "format": "png", "bytes": out_file.stat().st_size}]}
     assert Image.open(out_file).size == (1800, 1200)
 
@@ -266,10 +283,10 @@ def test_recipe_prints_every_card_upright_from_the_photo_tray(capsys, tmp_path, 
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "recipe", str(path), "--yes")
     assert code == 0, err
     data = json.loads(out)
-    cards = recipe.compose_cards(recipe.normalise(long))
+    cards, _ = recipe.compose_cards(recipe.normalise(long))
     assert data["pages"] == len(cards) > 1 and len(data["job_ids"]) == len(cards)
     assert data["estimate"]["pages"] == len(cards) and "(4×6)" in data["estimate"]["summary"]
-    assert printer.jobs() == [PHOTO_4X6.to_jpeg(card) for card in cards]
+    assert printer.jobs() == [PHOTO_4X6.to_jpeg(card) for card in cards] and data["fits"] is True
     for request in printer.requests():
         col = next(a.value for a in request[2] if a.name == "media-col")
         assert col["media-source"][1] == "photo" and col["media-size"][1]["x-dimension"][1] == 10160
@@ -315,3 +332,12 @@ def test_output_over_the_recipe_file_is_refused(capsys, tmp_path, printer):
     original = path.read_bytes()
     code, _, err = run(capsys, "-f", "json", "recipe", str(path), "-o", str(path))
     assert code == 2 and "overwrite" in _error(err)["message"] and path.read_bytes() == original
+
+
+def test_a_cut_title_is_warned_and_reported(capsys, tmp_path, printer):
+    path = tmp_path / "r.json"
+    path.write_text(json.dumps({"title": "WWWWWWWWW " * 20, "ingredients": ["a"], "steps": ["b"]}))
+    code, out, err = run(capsys, "-f", "json", "recipe", str(path), "-o", str(tmp_path / "r.png"))
+    assert code == 0 and "title cut to fit" in err
+    data = json.loads(out)
+    assert data["fits"] is False and set(data["cut"]) == {"title"}

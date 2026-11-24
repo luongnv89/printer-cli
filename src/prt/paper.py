@@ -50,6 +50,11 @@ class Paper:
         """How much of an A4 page one sheet of this paper is, for the ink estimate."""
         return self.width_mm * self.height_mm / A4_AREA_MM2
 
+    @property
+    def loaded(self) -> str:
+        """Where the paper goes, for a prompt: e.g. "4×6 paper in the photo tray"."""
+        return f"{self.label} paper in the {self.tray} tray" if self.tray else f"{self.label} paper"
+
     def mm(self, length: float) -> int:
         """``length`` millimetres in pixels at ``dpi``."""
         return round(length / MM_PER_INCH * self.dpi)

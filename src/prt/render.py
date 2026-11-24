@@ -112,10 +112,11 @@ def instant_page(photo: Image.Image, caption: str) -> Rendered:
 
 
 def recipe_cards(recipe: Recipe) -> Rendered:
-    """The 4×6 cards of a normalised recipe (see ``recipe.compose_cards``); every word is printed, over more
-    cards when one is not enough, so nothing is ever cut."""
+    """The 4×6 cards of a normalised recipe (see ``recipe.compose_cards``); every ingredient and step is printed,
+    over more cards when one is not enough. Only a title too long for two lines is cut, and named in ``cut``."""
     from prt import recipe as recipes
-    return Rendered(recipes.compose_cards(recipe), paper=PHOTO_4X6)
+    pages, cut = recipes.compose_cards(recipe)
+    return Rendered(pages, cut, PHOTO_4X6)
 
 
 def recipe_job_names(title: str, count: int) -> list[str]:
