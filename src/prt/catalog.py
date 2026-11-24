@@ -3,7 +3,7 @@ the input files the print commands read.
 
 ``styles()`` lists the styles (``prt styles -f json``) and ``schema(name)`` returns one JSON Schema (``prt schema
 NAME``). Both are built from the constants the commands check their input against (``booth.FIELDS``,
-``booth.LIMITS``, ``card.LIMITS``, ``comic.LIMITS``, ``postcard.LIMITS``, ``disc.LIMITS``, ``bingo.LIMITS``, ``article.FIELDS``, ``recipe.LIMITS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
+``booth.LIMITS``, ``card.LIMITS``, ``comic.LIMITS``, ``postcard.LIMITS``, ``disc.LIMITS``, ``bingo.LIMITS``, ``puzzle.LIMITS``, ``article.FIELDS``, ``recipe.LIMITS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
 schema is built by :mod:`prt.compose`, which checks page files against it. Other front
 ends (an MCP server, page validation) import this module instead of listing the styles again; a new input schema
 is added with ``@register_schema``.
@@ -14,7 +14,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
-from prt import article, bingo, booth, card, colourin, comic, compose, disc, photocard, postcard, recipe, vintage
+from prt import (article, bingo, booth, card, colourin, comic, compose, disc, photocard, postcard, puzzle, recipe,
+                 vintage)
 from prt.drivers.base import PrinterError
 from prt.paper import PAPERS
 
@@ -172,6 +173,23 @@ BINGO_ROLES = {
              f"up to {bingo.MAX_WORDS}, of up to {bingo.MAX_WORD} characters each; each card takes "
              f"{bingo.PER_CARD} of them, and no two cards in a run take the same set",
 }
+PUZZLE_TITLE = (f"The title at the top of the page, in large handwriting; '<Theme> Word Search', 'Sudoku', "
+                "'Crossword' or 'Maze' when not given (--title overrides it)")
+PUZZLE_ROLES = {  # by puzzle kind: field name: (description, max length)
+    "sudoku": {"title": (PUZZLE_TITLE, puzzle.LIMITS["title"])},
+    "wordsearch": {"title": (PUZZLE_TITLE, puzzle.LIMITS["title"]),
+                   "words": (f"The words to hide, {puzzle.MIN_SEARCH_WORDS} to {puzzle.MAX_SEARCH_WORDS}, each "
+                             f"{puzzle.MIN_LETTERS} to {puzzle.MAX_LETTERS} letters (spaces, hyphens and apostrophes "
+                             "are left out of the grid) and all different; listed under the grid as written",
+                             puzzle.MAX_SEARCH_WORD)},
+    "crossword": {"title": (PUZZLE_TITLE, puzzle.LIMITS["title"]),
+                  "entries[].answer": (f"An answer, 2 to {puzzle.MAX_ANSWER} letters; spaces, hyphens and "
+                                       "apostrophes are left out of the grid and shown in the letter count after "
+                                       "the clue, e.g. (4,6)", puzzle.MAX_ANSWER_TEXT),
+                  "entries[].clue": ("The clue printed for the answer, under the grid by its number",
+                                     puzzle.MAX_CLUE)},
+    "maze": {"title": (PUZZLE_TITLE, puzzle.LIMITS["title"])},
+}
 RECIPE_ROLES = {
     "title": "The recipe's name, in handwriting at the top of the card",
     "ingredients": "The ingredients, one per item: a list of texts, or one text with a newline between items",
@@ -210,6 +228,12 @@ def disc_fields() -> tuple[Field, ...]:
 def bingo_fields() -> tuple[Field, ...]:
     limits = {**bingo.LIMITS, "words": bingo.MAX_WORD}
     return tuple(Field(name, BINGO_ROLES[name], name in bingo.REQUIRED, limits[name]) for name in bingo.FIELDS)
+
+
+def puzzle_fields(kind: str) -> tuple[Field, ...]:
+    required = {"words", "entries[].answer", "entries[].clue"}
+    return tuple(Field(name, description, name in required, limit)
+                 for name, (description, limit) in PUZZLE_ROLES[kind].items())
 
 
 def recipe_fields() -> tuple[Field, ...]:
@@ -268,6 +292,16 @@ DISC_DESCRIPTION = ("Disc label on a printable 12 cm CD or DVD, through the disc
 BINGO_DESCRIPTION = ("Bingo card on A4, one per player: the title in handwriting, a row of coloured B-I-N-G-O "
                      "letters and a 5×5 grid of words round a free centre square; every card in a run holds a "
                      "different set of words, dealt from a bundled theme or a words file")
+PUZZLE = {  # kind: (description, schema)
+    "sudoku": ("Sudoku on A4: a 9×9 grid with exactly one solution, rows A to I and columns 1 to 9 labelled; easy, "
+               "medium or hard by how many digits are given", None),
+    "wordsearch": ("Word search on A4: words from a bundled theme or a words file hidden in a square of letters "
+                   "(10, 13 or 15 across by difficulty), listed under it", "wordsearch"),
+    "crossword": ("Crossword on A4: prt lays the answers of a crossword file out so they cross, numbers the squares "
+                  "and lists the Across and Down clues under the grid", "crossword"),
+    "maze": ("Maze on A4: one way through from Start at the top left to Finish at the bottom right; easy, medium "
+             "or hard by its size", None),
+}
 RECIPE_DESCRIPTION = ("6×4 in index card on 4×6 photo paper: the title in handwriting over a red rule, the "
                       "ingredients and numbered steps on blue lines in two columns; runs on to more cards when needed")
 GAZETTE_KIND = "vintage newspaper"
@@ -300,6 +334,8 @@ def _build() -> tuple[Style, ...]:
                      recipe.MAX_CARDS, "recipe.jpg", paper="4x6"))
     out.append(Style("bingo", "bingo", (), bingo.KIND, BINGO_DESCRIPTION, "bingo", bingo_fields(), (0, 0),
                      bingo.MAX_CARDS, "bingo.jpg"))
+    out += [Style(kind, "puzzle", (kind,), puzzle.NAMES[kind], PUZZLE[kind][0], PUZZLE[kind][1], puzzle_fields(kind),
+                  (0, 0), 1, f"puzzle-{kind}.jpg") for kind in puzzle.KINDS]
     gazette: dict[str, Any] = {"command": "gazette", "kind": GAZETTE_KIND, "schema": "gazette",
                                "fields": story_fields(GAZETTE_ROLES), "photos": (1, vintage.MAX_PHOTOS),
                                "max_pages": vintage.MAX_PAGES}
@@ -553,3 +589,52 @@ def bingo_schema() -> dict[str, Any]:
                                     "Tulip", "Sunflower", "Watering can", "Wheelbarrow", "Spade", "Shed", "Pond",
                                     "Frog", "Bird bath", "Bench", "Hedge", "Apple tree", "Spider web", "Squirrel",
                                     "Hose", "Gnome", "Bird feeder", "Swing", "Cat on the fence", "Bumblebee"]}]}
+
+
+PUZZLE_NOTE = ("The grid takes Latin letters only, in capitals and without their accents. Titles and clues may "
+               "hold accents, and characters the page fonts cannot print, such as emoji or Chinese, are refused. "
+               "Lengths count characters, with each run of spaces as one.")
+
+
+@register_schema("wordsearch", "word search words file: prt puzzle wordsearch --words-file words.json")
+def wordsearch_schema() -> dict[str, Any]:
+    fields = {f.name: f for f in puzzle_fields("wordsearch")}
+    word = {"type": "string", "maxLength": puzzle.MAX_SEARCH_WORD, "pattern": NON_BLANK}
+    return {"$schema": JSON_SCHEMA, "title": "prt puzzle wordsearch",
+            "description": "The words file of `prt puzzle wordsearch --words-file` (a file, or - for stdin); at most "
+                           f"{puzzle.MAX_PUZZLE_FILE // 1024} KiB. Every word is hidden in the grid. A word may hold "
+                           "only letters, spaces, hyphens and apostrophes, and no two words may have the same "
+                           "letters (ignoring case, spaces and accents), which the schema cannot check. "
+                           + PUZZLE_NOTE,
+            "type": "object",
+            "properties": {"title": _text(fields["title"]),
+                           "words": {"type": "array", "description": fields["words"].description, "items": word,
+                                     "minItems": puzzle.MIN_SEARCH_WORDS, "maxItems": puzzle.MAX_SEARCH_WORDS,
+                                     "uniqueItems": True}},
+            "required": ["words"], "additionalProperties": False,
+            "examples": [{"title": "Garden Word Search",
+                          "words": ["Daisy", "Tulip", "Robin", "Snail", "Watering can", "Sunflower", "Bee", "Pond"]}]}
+
+
+@register_schema("crossword", "crossword file: prt puzzle crossword --crossword-file crossword.json")
+def crossword_schema() -> dict[str, Any]:
+    fields = {f.name: f for f in puzzle_fields("crossword")}
+    entry = {"type": "object", "description": "One answer and its clue.",
+             "properties": {"answer": _text(fields["entries[].answer"], non_blank=True),
+                            "clue": _text(fields["entries[].clue"], non_blank=True)},
+             "required": ["answer", "clue"], "additionalProperties": False}
+    return {"$schema": JSON_SCHEMA, "title": "prt puzzle crossword",
+            "description": "The crossword file of `prt puzzle crossword --crossword-file` (a file, or - for stdin); "
+                           f"at most {puzzle.MAX_PUZZLE_FILE // 1024} KiB. prt lays the answers out so that each "
+                           "crosses another, in a grid of at most "
+                           f"{puzzle.MAX_CROSSWORD}×{puzzle.MAX_CROSSWORD} squares, and numbers them; the layout "
+                           "depends on the entries alone. An answer may hold only letters, spaces, hyphens and "
+                           "apostrophes, no two answers may have the same letters, and an answer that shares no "
+                           "letter it can cross with the others is refused: the schema cannot check these. "
+                           + PUZZLE_NOTE,
+            "type": "object",
+            "properties": {"title": _text(fields["title"]),
+                           "entries": {"type": "array", "items": entry, "minItems": puzzle.MIN_ENTRIES,
+                                       "maxItems": puzzle.MAX_ENTRIES}},
+            "required": ["entries"], "additionalProperties": False,
+            "examples": [puzzle.to_dict(puzzle.DEFAULT_CROSSWORD)]}

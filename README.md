@@ -36,7 +36,7 @@ prt -p demo status
 ╰─┘4 alerts · checked 17:42└───────────────────────────────────────────────╯
 ```
 
-Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Photo booth](#photo-booth) · [Greeting card](#greeting-card) · [4×6 photo prints](#46-photo-prints) · [Colouring pages](#colouring-pages) · [Postcards](#postcards) · [Disc labels](#disc-labels) · [Recipe cards](#recipe-cards) · [Bingo cards](#bingo-cards) · [Article printing](#article-printing) · [Vintage gazette](#vintage-gazette) · [Safety](#safety)
+Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Photo booth](#photo-booth) · [Greeting card](#greeting-card) · [4×6 photo prints](#46-photo-prints) · [Colouring pages](#colouring-pages) · [Postcards](#postcards) · [Disc labels](#disc-labels) · [Recipe cards](#recipe-cards) · [Bingo cards](#bingo-cards) · [Puzzles](#puzzles) · [Article printing](#article-printing) · [Vintage gazette](#vintage-gazette) · [Safety](#safety)
 
 ## Why printer-cli
 
@@ -106,11 +106,12 @@ prt list
 | `prt disc PHOTO [--disc-file disc.json] [--title TEXT] [--track TEXT]… [--preview disc.png] [--save disc.pdf]` | Print a circular label on a printable CD/DVD through the disc tray: the photo, a title and a track list (see [Disc labels](#disc-labels)) |
 | `prt recipe URL\|FILE [--preview card.pdf] [--save card.pdf]` | Print a recipe as 4×6 index cards from the photo tray (see [Recipe cards](#recipe-cards)) |
 | `prt bingo [--theme "road trip"] [-n 8] [--words-file words.json] [--seed N] [--preview cards.pdf] [--save cards.pdf]` | Print bingo cards, a different one for each player, one per A4 page (see [Bingo cards](#bingo-cards)) |
+| `prt puzzle sudoku\|wordsearch\|crossword\|maze [--difficulty easy\|medium\|hard] [--seed N] [--crossword-file crossword.json] [--answers answers.json] [--preview page.png] [--save page.pdf]` | Print a sudoku, word search, crossword or maze on A4, and keep its solution to check the filled-in sheet (see [Puzzles](#puzzles)) |
 | `prt article URL\|FILE [--style magazine\|classic-magazine] [--preview page.pdf] [--save page.pdf]` | Print a blog post, news article or X post as A4 magazine pages (see [Article printing](#article-printing)) |
 | `prt gazette PHOTO… [--landscape] [--story-file story.json] [--preview page.pdf] [--save page.pdf]` | Print one or more photos as a vintage newspaper, over as many A4 pages as the photos need (see [Vintage gazette](#vintage-gazette)) |
 | `prt compose PAGE.json [--preview page.pdf] [--save page.pdf]` | Print a page you describe as blocks: headings, text, images, QR codes, columns and rules (see [Compose a page](#compose-a-page)) |
-| `prt styles` | Every booth, card, comic, strip, instant, colour-in, postcard, disc, article, recipe, bingo and gazette style and the options that pick it; with `-f json`, also each style's fields, character limits, photo count and a sample image (see [Styles and schemas](#styles-and-schemas)) |
-| `prt schema story\|article\|gazette\|page\|card\|comic\|recipe\|postcard\|disc\|bingo` | The JSON Schema of a booth story file, an article JSON file, a gazette story file, a `prt compose` page file, a `prt card` card file, a `prt comic` comic file, a `prt recipe` recipe file, a `prt postcard` postcard file, a `prt disc` label file or a `prt bingo` words file |
+| `prt styles` | Every booth, card, comic, strip, instant, colour-in, postcard, disc, article, recipe, bingo, puzzle and gazette style and the options that pick it; with `-f json`, also each style's fields, character limits, photo count and a sample image (see [Styles and schemas](#styles-and-schemas)) |
+| `prt schema story\|article\|gazette\|page\|card\|comic\|recipe\|postcard\|disc\|bingo\|wordsearch\|crossword` | The JSON Schema of a booth story file, an article JSON file, a gazette story file, a `prt compose` page file, a `prt card` card file, a `prt comic` comic file, a `prt recipe` recipe file, a `prt postcard` postcard file, a `prt disc` label file, a `prt bingo` words file, a `prt puzzle wordsearch` words file or a `prt puzzle crossword` crossword file |
 | `prt jobs [--all]` / `prt jobs wait ID` / `prt jobs cancel ID` | List jobs, wait for one to finish, or cancel one |
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
 | `prt tui` | Full-screen dashboard |
@@ -258,7 +259,7 @@ $ prt -f json article https://example.com/gone
 | `page_ledger_unavailable` | 1 | `max_pages_per_day` is set but the page count cannot be recorded in the cache folder |
 | `manual_flip_required` | 2 | `prt postcard` would print both sides with the card turned over by hand, and there is no terminal to say when (or agent mode): print `--side front`, then `--side back`. Nothing was sent |
 | `duplex_unavailable` | 1 | `prt postcard --duplex`: the printer does not report two-sided printing, or has no CUPS queue to send the two-sided job to. Nothing was sent |
-| `unknown_theme` | 2 | `prt bingo --theme` names no bundled theme and no `--words-file` gives the words: nothing was written or sent |
+| `unknown_theme` | 2 | `prt bingo --theme` or `prt puzzle wordsearch --theme` names no bundled theme and no `--words-file` gives the words: nothing was written or sent |
 | `disc_tray_unavailable` | 1 | `prt disc`: the printer lists its trays and none of them is a disc tray. Nothing was sent (`--save` copies are still written) |
 | `missing_dependency` | 2 | `prt mcp` was run without the MCP SDK: install `printer-cli[mcp]` |
 | `skill_exists` | 1 | `prt skills install` found an installed skill file that differs from the bundled one: nothing was installed, `--force` replaces it |
@@ -272,7 +273,7 @@ Without `-f json` error output is unchanged.
 
 ### Styles and schemas
 
-An agent or script can find out what can be printed without reading this README. `prt styles -f json` lists every style as a JSON array; each entry has the command and the `args` that pick it, what it prints, its `fields` (with `required` and `max_length` in characters), how many `photos` it takes, `max_pages`, the `paper` it prints on (`size`, `media` and `tray`: A4, 4×6 from the photo tray, or a disc from the disc tray), the name of its input `schema` (`null` for `strip` and `instant`, whose only text is `--caption`, and for `colour-in`, which prints no text and has no `fields`; `postcard` has a `max_pages` of 2, its two sides, and `bingo` of 30, its cards per run) and a link to a `sample` page:
+An agent or script can find out what can be printed without reading this README. `prt styles -f json` lists every style as a JSON array; each entry has the command and the `args` that pick it, what it prints, its `fields` (with `required` and `max_length` in characters), how many `photos` it takes, `max_pages`, the `paper` it prints on (`size`, `media` and `tray`: A4, 4×6 from the photo tray, or a disc from the disc tray), the name of its input `schema` (`null` for `strip` and `instant`, whose only text is `--caption`, and for `colour-in`, which prints no text and has no `fields`, and for the `sudoku` and `maze` puzzles, whose only text is `--title`; `postcard` has a `max_pages` of 2, its two sides, and `bingo` of 30, its cards per run). The four puzzles share the command `puzzle`, and their `args` name the kind, e.g. `["sudoku"]` and a link to a `sample` page:
 
 ```bash
 $ prt styles -f json | jq -c '.[] | {name, command, args, schema}'
@@ -282,7 +283,7 @@ $ prt styles -f json | jq -c '.[] | {name, command, args, schema}'
 {"name":"gazette-landscape","command":"gazette","args":["--landscape"],"schema":"gazette"}
 ```
 
-`prt schema story`, `prt schema article`, `prt schema gazette`, `prt schema page`, `prt schema card`, `prt schema comic`, `prt schema recipe`, `prt schema postcard`, `prt schema disc` and `prt schema bingo` print the JSON Schema (draft 2020-12) of the file `prt booth --story-file`, `prt article FILE.json`, `prt gazette --story-file`, `prt compose`, `prt card --card-file`, `prt comic --comic-file`, `prt recipe FILE.json`, `prt postcard --postcard-file`, `prt disc --disc-file` and `prt bingo --words-file` read. A file that passes the schema is accepted by the command; the one thing the schema cannot check is the character set, so text in a script the page font cannot print (emoji, Chinese) is still refused, and so is a bingo word that repeats another in different case or spacing (`Tractor`, `tractor`). For a page file, the image files must also exist and be readable, and the page must fit in 10 pages. In Python the same data is in `prt.catalog` (`styles()`, `schema(name)`, and `register_schema` to add one).
+`prt schema story`, `prt schema article`, `prt schema gazette`, `prt schema page`, `prt schema card`, `prt schema comic`, `prt schema recipe`, `prt schema postcard`, `prt schema disc`, `prt schema bingo`, `prt schema wordsearch` and `prt schema crossword` print the JSON Schema (draft 2020-12) of the file `prt booth --story-file`, `prt article FILE.json`, `prt gazette --story-file`, `prt compose`, `prt card --card-file`, `prt comic --comic-file`, `prt recipe FILE.json`, `prt postcard --postcard-file`, `prt disc --disc-file`, `prt bingo --words-file`, `prt puzzle wordsearch --words-file` and `prt puzzle crossword --crossword-file` read. A file that passes the schema is accepted by the command; the one thing the schema cannot check is the character set, so text in a script the page font cannot print (emoji, Chinese) is still refused, and so is a bingo word that repeats another in different case or spacing (`Tractor`, `tractor`), a word search word or crossword answer with characters other than letters, spaces, hyphens and apostrophes or with the same letters as another, and a crossword answer that cannot be made to cross the others. For a page file, the image files must also exist and be readable, and the page must fit in 10 pages. In Python the same data is in `prt.catalog` (`styles()`, `schema(name)`, and `register_schema` to add one).
 
 ## The TUI
 
@@ -525,6 +526,32 @@ The sample uses [bingo.json](https://github.com/luongnv89/printer-cli/blob/main/
 - `--preview`/`-o` saves the cards without printing: `.pdf` holds every card, `.png`, `.jpg` and `.jpeg` one image per card (`cards-1.png`, `cards-2.png`, …). `--save` keeps the same copies and prints. A file name that would overwrite the words file is refused with exit code 2.
 - Each card is one page and one job, so the page caps count every card: in agent mode the per-run cap of 10 refuses `-n 12` whole before anything is sent (kind `page_cap_exceeded`). With `-f json` the line carries the `title`, the bundled `theme` (`null` with a words file), the number of cards (`pages`), the `seed`, the number of `words` dealt from, the `paper`, the fit report and the `estimate`.
 
+## Puzzles
+
+`prt puzzle sudoku`, `prt puzzle wordsearch`, `prt puzzle crossword` and `prt puzzle maze` print a puzzle on an A4 page, and keep its solution so you, or an agent, can check the filled-in sheet later.
+
+```bash
+prt puzzle sudoku --difficulty hard --preview sudoku.png              # look first, nothing printed
+prt puzzle sudoku --difficulty hard --seed 4821 --answers key.json --yes   # print it, and keep the answers
+prt puzzle wordsearch --theme zoo --difficulty easy --yes             # words from a bundled theme
+prt puzzle wordsearch --words-file words.json --title "Our Holiday"   # your own words
+prt puzzle crossword --crossword-file crossword.json --answers key.json --yes
+prt puzzle maze --difficulty easy --yes
+```
+
+<table><tr><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/puzzle-sudoku.jpg" width="190" alt="sudoku sample page: the handwritten title 'Sudoku' over a 9×9 grid with some digits given, rows labelled A to I and columns 1 to 9"><br><code>sudoku</code></td><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/puzzle-wordsearch.jpg" width="190" alt="word search sample page: the title 'Space Word Search' over a square of capital letters and a list of twelve space words to find"><br><code>wordsearch</code></td><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/puzzle-crossword.jpg" width="190" alt="crossword sample page: the title 'Apollo Crossword' over a grid of numbered white squares, and the Across and Down clues under it"><br><code>crossword</code></td><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/puzzle-maze.jpg" width="190" alt="maze sample page: the title 'Maze' over a rectangular maze with Start at the top left and Finish at the bottom right"><br><code>maze</code></td></tr></table>
+
+The crossword sample uses [crossword.json](https://github.com/luongnv89/printer-cli/blob/main/assets/samples/crossword.json); the others use a seed and a bundled theme.
+
+- **Sudoku.** A 9×9 grid with exactly one solution. `--difficulty` (`-d`) `easy`, `medium` (the default) or `hard` gives 38, 31 or about 26 digits. The rows are labelled A to I and the columns 1 to 9, so a square can be named, e.g. `C7`.
+- **Word search.** Words hidden in a square of letters, listed under it. `--theme` picks a random handful from a bundled list (the bingo themes: `road trip`, the default, `beach`, `zoo`, `birthday` or `space`); `--words-file words.json` (or `-` for stdin) hides your own: `{"title": "Our Holiday", "words": ["Beach", "Sandcastle", "Ice cream"]}`, 3 to 20 words of 3 to 15 letters, no two the same. Spaces, hyphens and apostrophes are left out of the grid, and accents are dropped. `easy` is a 10×10 grid with words running forwards and down, `medium` 13×13 and also diagonally, `hard` 15×15 and any of the eight ways, backwards too; a longer word makes the grid bigger, up to 15. `prt schema wordsearch` prints the file's JSON Schema.
+- **Crossword.** Write the answers and clues in a JSON crossword file, `--crossword-file crossword.json` (or `-` for stdin): `{"title": "Apollo Crossword", "entries": [{"answer": "Armstrong", "clue": "The first person to walk on the Moon"}, …]}`, 2 to 20 entries, each answer 2 to 15 letters. prt lays the answers out so that each crosses another, in a grid of at most 21×21 squares, numbers them, and prints the Across and Down clues with each answer's letter count, e.g. `(4,6)` for "Buzz Aldrin". The layout depends on the entries alone, so the same file always makes the same crossword. An answer that cannot be made to cross the others is refused with exit code 3, naming it (e.g. `entries[4] ('Xylophone') cannot cross the other answers`); give it a partner with a shared letter or leave it out. Without a file, a built-in space crossword is printed. `prt schema crossword` prints the file's JSON Schema.
+- **Maze.** One way through, from Start at the top left to Finish at the bottom right: 10×13 squares when `easy`, 16×21 when `medium`, 24×32 when `hard`.
+- **The solution.** With `-f json` the line carries the puzzle's `kind`, `title`, `seed`, `difficulty` and its `solution`: the sudoku's `puzzle` and solved `grid` row by row (A to I), the word search's `grid` and each word's start `row` and `col`, `direction` and `cells`, the crossword's `across` and `down` answers by number with their `row`, `col` and clue, and the maze's `path` of squares from start to finish (rows and columns count from 1). `--answers key.json` saves the same object to a file before anything is printed, also with `--preview`.
+- **Make it again.** The sudoku, word search and maze are random: the `-f json` line, the note after the run and the foot of the page give the `seed` (e.g. `sudoku · hard · seed 4821`), and `--seed N` with the same options makes the same puzzle again, so a printed sheet is enough to get its answers back. Preview first, then print with the seed the preview reported, so the page you print is the one you looked at. A word search from a words file needs the same file too.
+- **Check a filled-in sheet.** Scan the finished puzzle with `prt scan --format jpeg -o filled.jpg` and compare it with the answers. The `puzzle-check` [agent skill](#agent-skills) does this: it prints the puzzle with `--answers`, scans the sheet back, reads what was written and reports what is right, wrong and missing.
+- `--title` sets the title (up to 60 characters). `--preview`/`-o` saves the page without printing, `--save` keeps a copy and prints, and printing goes through the print guard as one A4 page. A file name that would overwrite the words or crossword file is refused with exit code 2, and so is an `--answers` name that does not end in `.json`.
+
 ## Article printing
 
 `prt article https://example.com/blog/post` prints a web article as A4 magazine pages. It keeps the title, author, site name and the full text, and leaves out navigation, ads, share bars, comments and other page clutter.
@@ -627,18 +654,18 @@ prt schema page                              # the page file's JSON Schema
 ## Safety
 
 - **Head cleaning is refused** while any ink is at or below its low level, or while the waste ink pad is flagged. Cleaning flushes ink into the pad, and a full pad locks the printer until it's serviced. `--force` overrides this, and the TUI offers "Clean anyway".
-- Nozzle check, cleaning, the test page, the photo booth, greeting cards, the 4×6 prints and postcards, disc labels, bingo cards, article printing, the gazette and composed pages ask for confirmation first. In scripts, pass `--yes`.
+- Nozzle check, cleaning, the test page, the photo booth, greeting cards, the 4×6 prints and postcards, disc labels, bingo cards, puzzles, article printing, the gazette and composed pages ask for confirmation first. In scripts, pass `--yes`.
 - printer-cli never resets the waste ink counter or writes to the printer's EEPROM.
 
 ### Agent guardrails
 
 Before you let an AI agent print unattended, set `PRT_AGENT=1` in its environment and, if you like, page caps in the config file:
 
-- **Agent mode** (`PRT_AGENT=1`, also `true`, `yes` or `on`): every command that prints or uses ink — `print`, `booth`, `card`, `comic`, `strip`, `instant`, `colour-in`, `postcard`, `disc`, `article`, `recipe`, `bingo`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean` — refuses to run without `--yes`, even at a terminal, so an agent never sits waiting on a prompt and never prints without deciding to. The refusal exits `2` with kind `agent_confirmation_required`. `--preview` needs no `--yes`: it prints nothing.
+- **Agent mode** (`PRT_AGENT=1`, also `true`, `yes` or `on`): every command that prints or uses ink — `print`, `booth`, `card`, `comic`, `strip`, `instant`, `colour-in`, `postcard`, `disc`, `article`, `recipe`, `bingo`, `puzzle`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean` — refuses to run without `--yes`, even at a terminal, so an agent never sits waiting on a prompt and never prints without deciding to. The refusal exits `2` with kind `agent_confirmation_required`. `--preview` needs no `--yes`: it prints nothing.
 - **Per-run cap**: `max_pages_per_run` in the config limits the pages one command may print (copies count). In agent mode it defaults to 10 when not set.
 - **Daily cap**: `max_pages_per_day` in the config limits the pages printed per calendar day, counted across every command in `~/.cache/prt/pages.json`. A page counts once its job has been sent, even if sending failed, because the printer may have taken it.
 - A print over a cap is refused whole, before the prompt and before anything is sent (exit `1`, kind `page_cap_exceeded` or `daily_page_cap_exceeded`). Configured caps apply outside agent mode too, and in the TUI. While a cap is in force, a file whose pages cannot be counted (plain text, PWG raster, office files) is refused with `page_count_unknown`; images count as one page and PDF pages are counted from the file.
-- **Cost estimate**: with `-f json`, `prt booth`, `prt card`, `prt strip`, `prt instant`, `prt colour-in`, `prt postcard`, `prt disc`, `prt article`, `prt recipe`, `prt bingo`, `prt gazette` and `prt compose` (preview or print) add an `estimate` of the rendered pages: the page count, whether they use colour, and for each ink the share of a standard cartridge they would use, e.g. `"estimate": {"pages": 3, "colour": true, "ink": {"cyan": 1.2, "magenta": 1.0, "yellow": 1.1, "black": 3.8}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`. `ink_percent` is the cartridge that would run out first. The ink figures are rough: they assume a cartridge prints about 300 A4 pages at 5% coverage, and a smaller sheet (4×6, a disc) counts by its area, its summary naming the size (`"~1 page (4×6), …"`); on a disc the white hub and corners use no ink, so only the printed ring counts.
+- **Cost estimate**: with `-f json`, `prt booth`, `prt card`, `prt strip`, `prt instant`, `prt colour-in`, `prt postcard`, `prt disc`, `prt article`, `prt recipe`, `prt bingo`, `prt puzzle`, `prt gazette` and `prt compose` (preview or print) add an `estimate` of the rendered pages: the page count, whether they use colour, and for each ink the share of a standard cartridge they would use, e.g. `"estimate": {"pages": 3, "colour": true, "ink": {"cyan": 1.2, "magenta": 1.0, "yellow": 1.1, "black": 3.8}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`. `ink_percent` is the cartridge that would run out first. The ink figures are rough: they assume a cartridge prints about 300 A4 pages at 5% coverage, and a smaller sheet (4×6, a disc) counts by its area, its summary naming the size (`"~1 page (4×6), …"`); on a disc the white hub and corners use no ink, so only the printed ring counts.
 
 These guardrails stop a cooperating agent from using up a cartridge by mistake. They are not a security boundary: a process that can change its own environment or config can get around them.
 
@@ -671,7 +698,7 @@ Without it, `prt mcp` exits with code 2 (kind `missing_dependency`) and says how
 |---|---|
 | `status` | State, alerts, ink, paper and waste pad, as `prt status -f json` |
 | `ink` | Ink levels, as `prt ink -f json` |
-| `list_styles` | Every booth, card, strip, instant, colour-in, postcard, disc, article, recipe and gazette style with its fields and character limits, as `prt styles -f json` |
+| `list_styles` | Every booth, card, comic, strip, instant, colour-in, postcard, disc, article, recipe, bingo, puzzle and gazette style with its fields and character limits, as `prt styles -f json` |
 | `preview_booth` | Render a photo (a file path) as a booth page in `metro`, `daily`, `wizard`, `wanted`, `certificate`, `sports`, `missing` or `movie` style, with an optional `story` object (`headline`, `story`, `kicker`, `caption`, `byline`). Prints nothing |
 | `preview_article` | Render an article as magazine pages from a `source` (link or file) or from `content` (the article JSON object, HTML or text). Prints nothing |
 | `print_file` | Print what a preview rendered (`token`), or a file (`path`) with `confirm: true` |
@@ -680,7 +707,7 @@ The preview tools return the rendered page image in the tool result (scaled to 1
 
 ## Agent skills
 
-Four [agent skills](https://github.com/luongnv89/printer-cli/tree/main/skills) come with prt: `photo-booth`, which looks at a photo, writes a story that fits it and prints it with `prt booth`; `greeting-card`, which writes a verse for a photo and the occasion and prints it as a folding card with `prt card`; `article-print`, which prints an article with `prt article` and fetches the text itself when the command cannot; and `letter-gazette`, which scans a handwritten letter with `prt scan`, transcribes it and prints it as a vintage newspaper edition with `prt gazette`. `prt skills install` copies them where agents look for skills:
+Five [agent skills](https://github.com/luongnv89/printer-cli/tree/main/skills) come with prt: `photo-booth`, which looks at a photo, writes a story that fits it and prints it with `prt booth`; `greeting-card`, which writes a verse for a photo and the occasion and prints it as a folding card with `prt card`; `article-print`, which prints an article with `prt article` and fetches the text itself when the command cannot; and `letter-gazette`, which scans a handwritten letter with `prt scan`, transcribes it and prints it as a vintage newspaper edition with `prt gazette`; and `puzzle-check`, which prints a puzzle with `prt puzzle` and keeps its answers, then scans the filled-in sheet with `prt scan` and checks what was written against them. `prt skills install` copies them where agents look for skills:
 
 ```bash
 prt skills list                          # the bundled skills (-f json for name, version, description, files)
@@ -692,7 +719,7 @@ prt skills install photo-booth --dir ~/my-agent/skills   # one skill, into any s
 
 Name skills to install only those; the default is all of them. Installing again leaves skills that match the bundled ones alone. An installed file that differs from the bundled one, because you edited it or it came from another prt version, is never replaced: the command lists the files, installs nothing, and exits with code 1 (kind `skill_exists`). After upgrading prt, run `prt skills install --force` to replace the old skills with the new ones; this also replaces any edits you made to them. Files in a skill folder that prt does not ship are always left alone. With `-f json` the output is `{"action": "skills_install", "skills": [{"name": "photo-booth", "target": "claude", "path": "...", "status": "installed"}]}`, where `status` is `installed`, `updated`, `unchanged` or `replaced`.
 
-**Claude Code plugin.** The repository is also a Claude Code plugin with the four skills and the [MCP server](#mcp-server):
+**Claude Code plugin.** The repository is also a Claude Code plugin with the five skills and the [MCP server](#mcp-server):
 
 ```text
 /plugin install printer-cli --marketplace luongnv89/printer-cli

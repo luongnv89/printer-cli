@@ -1,0 +1,17 @@
+{
+  "title": "Apollo Crossword",
+  "entries": [
+    {"answer": "Armstrong", "clue": "The first person to walk on the Moon"},
+    {"answer": "Eagle", "clue": "The lunar module that landed on the Moon in July 1969"},
+    {"answer": "Saturn", "clue": "The family of rockets that launched the Apollo crews"},
+    {"answer": "Houston", "clue": "The city whose mission control spoke to the crews"},
+    {"answer": "Crater", "clue": "A bowl-shaped hole in the Moon's surface"},
+    {"answer": "Tranquility", "clue": "The Sea of ___, where Apollo 11 landed"},
+    {"answer": "Buzz Aldrin", "clue": "The second person to walk on the Moon"},
+    {"answer": "Earthrise", "clue": "Apollo 8's famous photo of our planet over the Moon"},
+    {"answer": "Collins", "clue": "He stayed in orbit in Columbia while the others landed"},
+    {"answer": "Splashdown", "clue": "The landing in the ocean at the end of a mission"},
+    {"answer": "Rover", "clue": "The car the last three crews drove on the Moon"},
+    {"answer": "Footprint", "clue": "A mark in the lunar dust that may last a million years"}
+  ]
+}

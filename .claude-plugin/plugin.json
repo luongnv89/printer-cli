@@ -2,7 +2,7 @@
   "name": "printer-cli",
   "displayName": "printer-cli",
   "version": "0.2.0",
-  "description": "Print photos as newspaper pages and web articles as magazine pages with prt: the photo-booth, article-print and letter-gazette skills, and the prt MCP server for printer status, ink, page previews and printing.",
+  "description": "Print photos as newspaper pages, greeting cards and web articles as magazine pages, and puzzles you can check once filled in, with prt: the photo-booth, greeting-card, article-print, letter-gazette and puzzle-check skills, and the prt MCP server for printer status, ink, page previews and printing.",
   "author": {
     "name": "Luong NGUYEN",
     "url": "https://github.com/luongnv89"
@@ -19,6 +19,7 @@
     "article",
     "gazette",
     "scan",
+    "puzzle",
     "mcp"
   ],
   "icon": "./assets/logo/png/logo-icon-512.png",

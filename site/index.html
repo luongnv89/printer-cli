@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>printer-cli: what prt prints</title>
-<meta name="description" content="A slideshow of every printer-cli example: the photo booth, cards, comics, postcards, disc labels, recipe and bingo cards, magazine articles, the vintage gazette and the terminal commands, each with the prt command and a prompt for your AI agent.">
+<meta name="description" content="A slideshow of every printer-cli example: the photo booth, cards, comics, postcards, disc labels, recipe and bingo cards, puzzles, magazine articles, the vintage gazette and the terminal commands, each with the prt command and a prompt for your AI agent.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#d6d6d6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#262626" media="(prefers-color-scheme: dark)">
@@ -320,6 +320,58 @@
   "prompt": "Use prt to deal bingo cards from the words in bingo.json (\"Space Camp Bingo\") with seed 1969, saved as bingo.png.",
   "image": "samples/bingo.jpg",
   "alt": "bingo card sample: the title 'Space Camp Bingo' in handwriting over coloured B-I-N-G-O letters and a 5×5 grid of space words with a yellow 'LIFT OFF' square in the centre",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "puzzle-sudoku",
+  "kind": "image",
+  "title": "Sudoku",
+  "group": "Puzzles",
+  "blurb": "A sudoku with exactly one solution, easy, medium or hard; its solution is kept for checking.",
+  "command": "prt puzzle sudoku --seed 1969 -o puzzle-sudoku.png",
+  "prompt": "Use prt to make a medium sudoku with seed 1969, saved as puzzle-sudoku.png.",
+  "image": "samples/puzzle-sudoku.jpg",
+  "alt": "sudoku sample page: the handwritten title 'Sudoku' over a 9×9 grid with some digits given, rows labelled A to I and columns 1 to 9",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "puzzle-wordsearch",
+  "kind": "image",
+  "title": "Word search",
+  "group": "Puzzles",
+  "blurb": "Words from a bundled theme or your own list, hidden in a square of letters.",
+  "command": "prt puzzle wordsearch --theme space --seed 1969 -o puzzle-wordsearch.png",
+  "prompt": "Use prt to make a space word search with seed 1969, saved as puzzle-wordsearch.png.",
+  "image": "samples/puzzle-wordsearch.jpg",
+  "alt": "word search sample page: the title 'Space Word Search' over a square of capital letters and a list of twelve space words to find",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "puzzle-crossword",
+  "kind": "image",
+  "title": "Crossword",
+  "group": "Puzzles",
+  "blurb": "Write the answers and clues; prt lays out the grid so they cross and numbers it.",
+  "command": "prt puzzle crossword --crossword-file crossword.json -o puzzle-crossword.png",
+  "prompt": "Use prt to make a crossword from the answers and clues in crossword.json (\"Apollo Crossword\"), saved as puzzle-crossword.png.",
+  "image": "samples/puzzle-crossword.jpg",
+  "alt": "crossword sample page: the title 'Apollo Crossword' over a grid of numbered white squares, and the Across and Down clues under it",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "puzzle-maze",
+  "kind": "image",
+  "title": "Maze",
+  "group": "Puzzles",
+  "blurb": "A maze with one way through, from Start at the top left to Finish at the bottom right.",
+  "command": "prt puzzle maze --seed 1969 -o puzzle-maze.png",
+  "prompt": "Use prt to make a medium maze with seed 1969, saved as puzzle-maze.png.",
+  "image": "samples/puzzle-maze.jpg",
+  "alt": "maze sample page: the title 'Maze' over a rectangular maze with Start at the top left and Finish at the bottom right",
   "width": 800,
   "height": 1132
  },

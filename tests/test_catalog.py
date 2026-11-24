@@ -6,7 +6,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from PIL import Image
 
-from prt import article, bingo, booth, card, catalog, comic, disc, photocard, postcard, recipe, vintage
+from prt import article, bingo, booth, card, catalog, comic, disc, photocard, postcard, puzzle, recipe, vintage
 from prt.cli import ArticleStyle, BoothStyle, main
 from prt.drivers.base import PrinterError
 
@@ -55,7 +55,8 @@ def test_styles_json_lists_every_style_with_fields_limits_and_sample(capsys):
     styles = {s["name"]: s for s in json.loads(out)}
     assert list(styles) == ["metro", "daily", "wizard", "wanted", "certificate", "sports", "missing", "movie",
                             "card", "comic", "strip", "instant", "colour-in", "postcard", "disc", "magazine",
-                            "classic-magazine", "recipe", "bingo", "gazette", "gazette-landscape"]
+                            "classic-magazine", "recipe", "bingo", "sudoku", "wordsearch", "crossword", "maze", "gazette",
+                            "gazette-landscape"]
     metro = styles["metro"]
     assert metro["command"] == "booth" and metro["args"] == [] and metro["default"] is True
     assert metro["kind"] == "metro newspaper page" and metro["schema"] == "story"
@@ -125,12 +126,21 @@ def test_catalog_follows_the_commands():
     assert by_command["postcard"] == ["postcard"]
     assert by_command["disc"] == ["disc"]
     assert by_command["bingo"] == ["bingo"]
+    assert by_command["puzzle"] == list(puzzle.KINDS)
     assert len({s.name for s in catalog.STYLES}) == len(catalog.STYLES)
     fields = {"article": article.FIELDS, "card": card.FIELDS, "recipe": recipe.FIELDS, "strip": ("caption",),
               "instant": ("caption",), "postcard": postcard.FIELDS, "disc": disc.FIELDS,
               "comic": tuple(catalog.COMIC_ROLES), "bingo": bingo.FIELDS, "colour-in": ()}
+    # the puzzles share one command, so their fields and schema follow the kind, which is the style's name
+    puzzles = {"sudoku": ("title",), "wordsearch": ("title", "words"),
+               "crossword": ("title", "entries[].answer", "entries[].clue"), "maze": ("title",)}
     for s in catalog.STYLES:
         names = [f.name for f in s.fields]
+        if s.command == "puzzle":
+            assert s.args == (s.name,) and names == list(puzzles[s.name])
+            # sudoku and maze take their only text from --title, so they have no input file
+            assert s.schema == (s.name if s.name in ("wordsearch", "crossword") else None)
+            continue
         assert names == list(fields.get(s.command, booth.FIELDS))
         # strip and instant take their only text from --caption, and colour-in has none, so they have no input file
         assert s.schema in catalog.schema_names() if s.command not in ("strip", "instant", "colour-in") \
@@ -140,7 +150,7 @@ def test_catalog_follows_the_commands():
 # --- prt schema ---------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("name", ["story", "article", "gazette", "page", "card", "comic", "postcard", "disc",
-                                  "bingo"])
+                                  "bingo", "wordsearch", "crossword"])
 def test_schema_prints_a_valid_json_schema(capsys, name):
     code, out, err = run(capsys, "schema", name)
     assert code == 0 and err == ""

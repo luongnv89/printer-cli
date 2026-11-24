@@ -21,13 +21,17 @@ These images are the sample pages shown in the main README. They were rendered w
 | `disc.jpg` | `prt disc bluemarble.jpg --disc-file disc.json -o disc.png` |
 | `recipe.jpg` | `prt recipe recipe.json -o recipe.png` |
 | `bingo.jpg` | `prt bingo --words-file bingo.json --seed 1969 -o bingo.png` |
+| `puzzle-sudoku.jpg` | `prt puzzle sudoku --seed 1969 -o puzzle-sudoku.png` |
+| `puzzle-wordsearch.jpg` | `prt puzzle wordsearch --theme space --seed 1969 -o puzzle-wordsearch.png` |
+| `puzzle-crossword.jpg` | `prt puzzle crossword --crossword-file crossword.json -o puzzle-crossword.png` |
+| `puzzle-maze.jpg` | `prt puzzle maze --seed 1969 -o puzzle-maze.png` |
 | `article-magazine.jpg` | `prt article article.json -o article-magazine.png` |
 | `article-classic.jpg` | `prt article article.json --style classic-magazine -o article-classic.png` (page 1) |
 | `gazette.jpg` | `prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file story.json -o gazette.png` |
 | `gazette-landscape.jpg` | the same with `--landscape` |
 | `tui.jpg` | `prt -p demo tui`, saved as a Textual screenshot at 120×36 |
 
-`story.json`, `article.json`, `recipe.json`, `postcard.json`, `disc.json`, `comic.json` and `bingo.json` are the inputs used above. The article text, the recipe, the postcard, the disc's track list, the comic's dialogue and the bingo words were written for these samples (the track titles are made up).
+`story.json`, `article.json`, `recipe.json`, `postcard.json`, `disc.json`, `comic.json`, `bingo.json` and `crossword.json` are the inputs used above. The article text, the recipe, the postcard, the disc's track list, the comic's dialogue, the bingo words and the crossword clues were written for these samples (the track titles are made up).
 
 ## Photo credits
 

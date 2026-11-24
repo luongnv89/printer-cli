@@ -102,7 +102,10 @@ skills_app = typer.Typer(help="List the agent skills that come with prt, or inst
 app.add_typer(printers_app, name="printers")
 app.add_typer(maintain_app, name="maintain")
 app.add_typer(jobs_app, name="jobs")
+puzzle_app = typer.Typer(help="Puzzle pages to print: a sudoku, a word search, a crossword or a maze, one per A4 "
+                              "page, with the solution kept for checking.", no_args_is_help=True)
 app.add_typer(skills_app, name="skills")
+app.add_typer(puzzle_app, name="puzzle")
 
 
 def _version(value: bool) -> None:
@@ -1290,6 +1293,149 @@ def bingo_cmd(
         STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
 
 
+class Difficulty(str, Enum):
+    easy = "easy"
+    medium = "medium"
+    hard = "hard"
+
+
+PUZZLE_PREVIEW_HELP = ("Save the page here instead of printing; the extension picks the file type: .pdf, .png, .jpg "
+                       "or .jpeg.")
+PUZZLE_SAVE_HELP = "Also save a copy of the page here (.pdf, .png, .jpg or .jpeg) before printing it; repeat for more."
+PUZZLE_ANSWERS_HELP = ("Also save the solution here as JSON, the same object as the -f json line's kind, title, "
+                       "seed, difficulty and solution, written before anything is printed (also with --preview). "
+                       "The name must end in .json.")
+PUZZLE_SEED_HELP = "Make the same puzzle again: the seed a run reports (with -f json) and prints at the foot of the page."
+PUZZLE_TITLE_HELP = "Title at the top of the page, up to 60 characters."
+
+
+def _puzzle_outputs(preview: Optional[Path], save: Optional[list[Path]], answers: Optional[Path],
+                    inputs: list[Path]) -> list[tuple[Path, str]]:
+    """Check every file a puzzle run would write before any is written: page formats, an answers name ending in
+    .json, and no output on top of an input file. Returns the --save copies with their formats."""
+    from prt import booth, vintage
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    if preview:
+        booth.format_for(preview)
+    if answers and answers.suffix.lower() != ".json":
+        raise PrinterError(f"cannot save the answers to {answers}: the name must end in .json",
+                           hint="e.g. --answers answers.json", exit_code=2)
+    outputs = [path for path in [preview, answers] + [p for p, _ in copies] if path]
+    vintage.check_outputs(outputs, [path for path in inputs if str(path) != booth.STDIN])
+    return copies
+
+
+def _print_puzzle(puzzle: Any, preview: Optional[Path], copies: list[tuple[Path, str]], answers: Optional[Path],
+                  yes: bool) -> None:
+    """Save the answers, then preview or print the puzzle's page like any one-page sheet (``_print_sheet``); the
+    -f json line carries the puzzle's kind, title, seed, difficulty and solution."""
+    from prt import puzzle as puzzles
+    name = puzzles.NAMES[puzzle.kind]
+    rendered = render.puzzle_page(puzzle)
+    info: dict[str, Any] = puzzle.answers()
+    if answers:
+        data = (json.dumps(puzzle.answers(), indent=2, ensure_ascii=False) + "\n").encode()
+        _save_booth_page(data, answers)
+        STATE.note("ok", f"saved {answers}", f"{name} solution · JSON")
+        info["answers"] = str(answers)
+    done = f"seed {puzzle.seed}: --seed {puzzle.seed} makes the same puzzle again" if puzzle.seed is not None else None
+    _print_sheet("puzzle", rendered, name, preview, copies, f"Print the {name} '{puzzle.title}'",
+                 f"prt puzzle {puzzle.kind} {puzzle.title[:60]}", yes, info, done=done)
+
+
+@puzzle_app.command("sudoku")
+def puzzle_sudoku(
+    difficulty: Difficulty = typer.Option(Difficulty.medium, "--difficulty", "-d",
+                                          help="easy (38 digits given), medium (31) or hard (26)."),
+    seed: Optional[int] = typer.Option(None, "--seed", min=0, help=PUZZLE_SEED_HELP),
+    title: Optional[str] = typer.Option(None, "--title", help=PUZZLE_TITLE_HELP),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o", help=PUZZLE_PREVIEW_HELP),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>", help=PUZZLE_SAVE_HELP),
+    answers: Optional[Path] = typer.Option(None, "--answers", metavar="FILE.json", help=PUZZLE_ANSWERS_HELP),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Sudoku: a 9×9 grid with exactly one solution, rows A to I and columns 1 to 9 labelled (A4)."""
+    from prt import puzzle
+    copies = _puzzle_outputs(preview, save, answers, [])
+    title = puzzle.check_title(title, "sudoku")
+    seed = puzzle.new_seed() if seed is None else seed
+    _print_puzzle(puzzle.sudoku(seed, difficulty.value, title), preview, copies, answers, yes)
+
+
+@puzzle_app.command("wordsearch")
+def puzzle_wordsearch(
+    theme: Optional[str] = typer.Option(None, "--theme", "-t",
+                                        help="Bundled word list: road trip (the default), beach, zoo, birthday or "
+                                             "space. With --words-file it is any text and only names the puzzle."),
+    words_file: Optional[Path] = typer.Option(None, "--words-file",
+                                              help="JSON words file: words (3 to 20) required, title optional; every "
+                                                   "word is hidden. Use - to read it from stdin. `prt schema "
+                                                   "wordsearch` gives its JSON Schema."),
+    difficulty: Difficulty = typer.Option(Difficulty.medium, "--difficulty", "-d",
+                                          help="easy (10×10, forwards and down), medium (13×13, also diagonally) "
+                                               "or hard (15×15, any of the eight ways, backwards too)."),
+    seed: Optional[int] = typer.Option(None, "--seed", min=0, help=PUZZLE_SEED_HELP),
+    title: Optional[str] = typer.Option(None, "--title", help=PUZZLE_TITLE_HELP),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o", help=PUZZLE_PREVIEW_HELP),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>", help=PUZZLE_SAVE_HELP),
+    answers: Optional[Path] = typer.Option(None, "--answers", metavar="FILE.json", help=PUZZLE_ANSWERS_HELP),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Word search: words hidden in a square of letters, listed under it (A4).
+
+    The words come from a bundled theme (a random choice of them) or a words file (all of them).
+    """
+    from prt import puzzle
+    copies = _puzzle_outputs(preview, save, answers, [words_file] if words_file else [])
+    title = puzzle.check_title(title, "wordsearch") if title is not None else None
+    words = puzzle.load_words(words_file) if words_file else None
+    seed = puzzle.new_seed() if seed is None else seed
+    _print_puzzle(puzzle.wordsearch(seed, difficulty.value, words, theme, title), preview, copies, answers, yes)
+
+
+@puzzle_app.command("crossword")
+def puzzle_crossword(
+    crossword_file: Optional[Path] = typer.Option(None, "--crossword-file",
+                                                  help="JSON crossword: entries (2 to 20, each an answer and its "
+                                                       "clue) required, title optional; prt lays out the grid. Use - "
+                                                       "to read it from stdin. `prt schema crossword` gives its JSON "
+                                                       "Schema. Without one a built-in space crossword is printed."),
+    title: Optional[str] = typer.Option(None, "--title", help=PUZZLE_TITLE_HELP),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o", help=PUZZLE_PREVIEW_HELP),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>", help=PUZZLE_SAVE_HELP),
+    answers: Optional[Path] = typer.Option(None, "--answers", metavar="FILE.json", help=PUZZLE_ANSWERS_HELP),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Crossword: the answers of a crossword file laid out to cross, numbered, with the clues under the grid (A4).
+
+    The layout depends on the entries alone, so the same file always gives the same crossword.
+    """
+    from prt import puzzle
+    copies = _puzzle_outputs(preview, save, answers, [crossword_file] if crossword_file else [])
+    title = puzzle.check_title(title, "crossword") if title is not None else None
+    file = puzzle.load_crossword(crossword_file) if crossword_file else puzzle.DEFAULT_CROSSWORD
+    _print_puzzle(puzzle.crossword(file, title), preview, copies, answers, yes)
+
+
+@puzzle_app.command("maze")
+def puzzle_maze(
+    difficulty: Difficulty = typer.Option(Difficulty.medium, "--difficulty", "-d",
+                                          help="easy (10×13 squares), medium (16×21) or hard (24×32)."),
+    seed: Optional[int] = typer.Option(None, "--seed", min=0, help=PUZZLE_SEED_HELP),
+    title: Optional[str] = typer.Option(None, "--title", help=PUZZLE_TITLE_HELP),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o", help=PUZZLE_PREVIEW_HELP),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>", help=PUZZLE_SAVE_HELP),
+    answers: Optional[Path] = typer.Option(None, "--answers", metavar="FILE.json", help=PUZZLE_ANSWERS_HELP),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Maze: one way through from Start at the top left to Finish at the bottom right (A4)."""
+    from prt import puzzle
+    copies = _puzzle_outputs(preview, save, answers, [])
+    title = puzzle.check_title(title, "maze")
+    seed = puzzle.new_seed() if seed is None else seed
+    _print_puzzle(puzzle.maze(seed, difficulty.value, title), preview, copies, answers, yes)
+
+
 def _require_disc_tray(d: Driver) -> None:
     """Refuse a disc label on a printer that lists its trays and has no disc tray among them (exit code 1); a
     printer that lists no trays is left to decide for itself."""
@@ -1716,7 +1862,7 @@ def compose_cmd(
 @app.command("styles")
 def styles_cmd() -> None:
     """List every page style of booth, card, comic, strip, instant, colour-in, postcard, disc, article,
-    recipe, bingo and gazette: what it prints and the options that pick it.
+    recipe, bingo, puzzle and gazette: what it prints and the options that pick it.
 
     With -f json each style also lists its fields, their character limits, how many photos it takes and a
     link to a sample page. `prt schema NAME` prints the JSON Schema of a style's input file.
@@ -1746,11 +1892,12 @@ def _schema_names(incomplete: str) -> list[str]:
 @app.command("schema")
 def schema_cmd(name: str = typer.Argument(..., metavar="NAME", autocompletion=_schema_names,
                                           help="story, article, gazette, page, card, comic, recipe, postcard, "
-                                               "disc or bingo.")) -> None:
+                                               "disc, bingo, wordsearch or crossword.")) -> None:
     """Print the JSON Schema of an input file: story (prt booth --story-file), article (an article JSON file for
     prt article), gazette (prt gazette --story-file), page (a page file for prt compose), card (prt card
     --card-file), comic (prt comic --comic-file), recipe (a recipe JSON file for prt recipe), postcard (prt postcard
-    --postcard-file), disc (prt disc --disc-file) or bingo (prt bingo --words-file).
+    --postcard-file), disc (prt disc --disc-file), bingo (prt bingo --words-file), wordsearch (prt puzzle wordsearch
+    --words-file) or crossword (prt puzzle crossword --crossword-file).
 
     A file that passes the schema is accepted by the command. The schema is JSON whatever -f says.
     """

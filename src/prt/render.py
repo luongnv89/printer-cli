@@ -1,4 +1,4 @@
-"""Booth, card, comic, article, compose, strip, instant, colouring, recipe, postcard, disc and bingo pages as callable steps, shared by the CLI commands and the MCP server.
+"""Booth, card, comic, article, compose, strip, instant, colouring, recipe, postcard, disc, bingo and puzzle pages as callable steps, shared by the CLI commands and the MCP server.
 
 Each front end reads its own input (files and flags, or MCP tool arguments) and decides how to show the result;
 what happens in between is here: lay the pages out, say what did not fit and what printing them would cost, and
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from prt.drivers.base import Driver
     from prt.layout import Cut
     from prt.postcard import Postcard
+    from prt.puzzle import Puzzle
     from prt.recipe import Recipe
 
 
@@ -154,6 +155,14 @@ def bingo_cards(game: Bingo, cards: Sequence[tuple[int, ...]]) -> Rendered:
 
 def bingo_job_names(title: str, count: int) -> list[str]:
     return [f"prt bingo {number}/{count} {title[:60]}" for number in range(1, count + 1)]
+
+
+def puzzle_page(puzzle: Puzzle) -> Rendered:
+    """The A4 page of a sudoku, word search, crossword or maze (see ``puzzle.compose``); only a title too long for
+    its line is cut, and named in ``cut``. The solution stays with ``puzzle`` (``puzzle.answers()``)."""
+    from prt import puzzle as puzzles
+    page, cut = puzzles.compose(puzzle)
+    return Rendered([page], cut)
 
 
 def postcard_sides(photo: Image.Image, card: Postcard) -> Rendered:

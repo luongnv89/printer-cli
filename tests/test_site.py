@@ -55,6 +55,7 @@ EXCLUDED = {
     "prt disc beach.jpg": "disc label " + USAGE,
     "prt recipe https://example.com/lemon-cake": "recipe card " + USAGE,
     "prt bingo --theme": "bingo " + USAGE,
+    "prt puzzle sudoku --difficulty hard": "puzzle " + USAGE,
     "prt article https://example.com/blog/post": "article " + USAGE,
     "prt gazette me.jpg": "gazette " + USAGE,
     "prt compose party.json --preview": "compose usage variants; the compose slide shows the page file and its command",
@@ -136,7 +137,7 @@ def test_slides_are_json_with_unique_ids_and_known_kinds():
 
 def test_every_readme_sample_has_one_image_slide_in_readme_order():
     samples = readme_samples()
-    assert len(samples) == 22
+    assert len(samples) == 26
     assert [s["image"] for s in IMAGE_SLIDES] == [f"samples/{name}" for name, _ in samples]
     assert {s["image"]: s["alt"] for s in IMAGE_SLIDES} == {f"samples/{name}": alt for name, alt in samples}
 
@@ -776,6 +777,10 @@ def test_selection_shows_on_the_command_box_and_the_sheet():
 # --- prompts ------------------------------------------------------------------------------------------
 
 
+# Samples prt makes from nothing but a seed (and a bundled theme): their prompt names the seed instead of a file.
+MADE_FROM_A_SEED = {"puzzle-sudoku", "puzzle-wordsearch", "puzzle-maze"}
+
+
 def test_image_slide_prompts_ask_for_the_sample_shown():
     for s in IMAGE_SLIDES:
         command, prompt = s["command"], s["prompt"]
@@ -783,7 +788,7 @@ def test_image_slide_prompts_ask_for_the_sample_shown():
         if output:
             assert output.group(1) in prompt, (s["id"], output.group(1))
             inputs = re.findall(r"(?<![\w-])([\w-]+\.(?:jpg|json))\b", command.replace(output.group(0), ""))
-            assert inputs, s["id"]
+            assert inputs or s["id"] in MADE_FROM_A_SEED, s["id"]
             for name in inputs:
                 assert name in prompt, (s["id"], name)
         for caption in re.findall(r'--caption "([^"]+)"', command):
@@ -794,6 +799,9 @@ def test_image_slide_prompts_ask_for_the_sample_shown():
             assert title in prompt, (s["id"], name, title)
     prompts = {s["id"]: s["prompt"] for s in SLIDES}
     assert "Space Camp" in prompts["bingo"] and "1969" in prompts["bingo"]
+    for sid in MADE_FROM_A_SEED:
+        assert "seed 1969" in prompts[sid], sid
+    assert "Apollo Crossword" in prompts["puzzle-crossword"]
     assert "Earthrise" in prompts["instant"] and "Summer" not in prompts["instant"]
     assert "Blue Marble Mix" in prompts["disc"] and "road-trip" not in prompts["disc"]
     assert "Whiskers" in prompts["booth-missing"] and "built-in text" in prompts["booth-wizard"]
