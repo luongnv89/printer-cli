@@ -152,12 +152,21 @@ def test_image_slide_commands_are_the_commands_that_made_the_samples():
             assert s["command"] == first_prt(rows[name]), name
 
 
-def test_image_slides_carry_their_real_size():
-    from PIL import Image
+def jpeg_size(data: bytes) -> tuple[int, int]:
+    """(width, height) from a JPEG's start-of-frame segment."""
+    i = 2
+    while i < len(data):
+        marker, length = data[i + 1], int.from_bytes(data[i + 2:i + 4], "big")
+        if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+            return int.from_bytes(data[i + 7:i + 9], "big"), int.from_bytes(data[i + 5:i + 7], "big")
+        i += 2 + length
+    raise ValueError("no start-of-frame segment")
 
+
+def test_image_slides_carry_their_real_size():
+    assert jpeg_size((SITE / "samples" / "recipe.jpg").read_bytes()) == (1200, 800)
     for s in IMAGE_SLIDES:
-        with Image.open(SITE / s["image"]) as im:
-            assert (s["width"], s["height"]) == im.size, s["id"]
+        assert (s["width"], s["height"]) == jpeg_size((SITE / s["image"]).read_bytes()), s["id"]
 
 
 def test_terminal_slides_are_the_expected_ones():
