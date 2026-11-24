@@ -550,9 +550,9 @@ def test_text_reaches_the_page_as_text_never_as_markup():
 
 def test_the_heading_a_slide_change_focuses_does_not_pause_the_show():
     # After an arrow key the new slide's heading has focus; Space must then really start the show again.
-    assert re.findall(r"^  const focusPaused = .*$", JS, re.M) == [
+    assert re.findall(r"^  const focusPaused = [^;]*;$", JS, re.M) == [
         "  const focusPaused = () => stage.contains(document.activeElement) && "
-        'document.activeElement.tabIndex >= 0 && document.activeElement.matches(":focus-visible");']
+        'document.activeElement.tabIndex >= 0\n    && document.activeElement.matches(":focus-visible");']
     render = "\n".join(js_function("render"))
     assert "heading.tabIndex = -1;\nheading.focus({ preventScroll: true });" in render
     assert js_function("toggleAutoplay") == ["userPaused = !userPaused;", "sync();"]
@@ -680,8 +680,9 @@ def test_open_credits_pause_the_show_and_close_on_escape_or_a_click_outside():
                      r'credits\.querySelector\("summary"\)\.focus\(\);', keydown)
     assert js_listener("document", "click") == [
         "if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;"]
-    # Space on the summary opens the credits; it must not also toggle Autoplay.
-    assert "summary" in re.search(r'target\.closest\("(button, a, [^"]*)"\)', JS).group(1).split(", ")
+    # Space on the summary opens the credits and in the panel scrolls them; it must not also toggle Autoplay.
+    keeps_space = re.search(r'target\.closest\("(button, a, [^"]*)"\)', JS).group(1).split(", ")
+    assert {"summary", ".credits-panel", ".sheet", "button", "a"} <= set(keeps_space)
 
 
 SVG = "{http://www.w3.org/2000/svg}"

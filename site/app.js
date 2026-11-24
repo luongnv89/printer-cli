@@ -198,7 +198,8 @@
 
   // Only keyboard focus pauses: a mouse click on Copy also focuses the button, and must not freeze the show.
   // Nor does the heading render() moves focus to (tabindex -1), or Autoplay could be on with the show stopped.
-  const focusPaused = () => stage.contains(document.activeElement) && document.activeElement.tabIndex >= 0 && document.activeElement.matches(":focus-visible");
+  const focusPaused = () => stage.contains(document.activeElement) && document.activeElement.tabIndex >= 0
+    && document.activeElement.matches(":focus-visible");
   const playing = (now) => !(userPaused || hoverPaused || focusPaused() || credits.open || now < touchUntil || hidden);
 
   function tick(now) {
@@ -240,8 +241,9 @@
       go(key === "Home" ? 0 : slides.length - 1, true);
       dots.children[index].focus();
     } else if (key === " ") {
-      // On a control, Space keeps its own meaning (press the button, scroll the sheet) and toggles nothing.
-      if (target.closest("button, a, input, select, textarea, summary, [contenteditable], .sheet")) return;
+      // On a control, Space keeps its own meaning (press the button, scroll the sheet or the credits) and
+      // toggles nothing.
+      if (target.closest("button, a, input, select, textarea, summary, [contenteditable], .sheet, .credits-panel")) return;
       event.preventDefault();
       toggleAutoplay();
     } else if (key === "ArrowLeft" || key === "ArrowRight") {
