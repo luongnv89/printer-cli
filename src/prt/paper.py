@@ -1,8 +1,9 @@
 """The sheets prt lays pages out on, and how each one is sent to the printer.
 
 A :class:`Paper` ties a page's pixel size to what the printer is asked for: the media size, the input tray and the
-media type. A4 from the main tray is what booth, card, article, gazette and compose print on; the 4×6 photo paper
-from the photo tray is what ``prt strip``, ``prt instant``, ``prt recipe`` and ``prt postcard`` print on, and a
+media type. A4 from the main tray is what booth, card, comic, colour-in, article, gazette and compose print on; the
+4×6 photo paper from the photo tray is what ``prt strip``, ``prt instant``, ``prt recipe`` and ``prt postcard`` print
+on, and a
 printable CD/DVD in the disc tray is what ``prt disc`` prints on. Another size (an A6 card) is one more
 :class:`Paper`: the layout draws on ``paper.size``, :func:`prt.render.send_pages` sends with ``paper.options()`` and
 :func:`prt.guard.estimate` scales the ink by ``paper.ink_scale``. ``paper.duplex`` says whether a two-sided page

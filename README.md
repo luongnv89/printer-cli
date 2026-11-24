@@ -36,7 +36,7 @@ prt -p demo status
 ╰─┘4 alerts · checked 17:42└───────────────────────────────────────────────╯
 ```
 
-Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Photo booth](#photo-booth) · [Greeting card](#greeting-card) · [4×6 photo prints](#46-photo-prints) · [Postcards](#postcards) · [Disc labels](#disc-labels) · [Recipe cards](#recipe-cards) · [Bingo cards](#bingo-cards) · [Article printing](#article-printing) · [Vintage gazette](#vintage-gazette) · [Safety](#safety)
+Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Photo booth](#photo-booth) · [Greeting card](#greeting-card) · [4×6 photo prints](#46-photo-prints) · [Colouring pages](#colouring-pages) · [Postcards](#postcards) · [Disc labels](#disc-labels) · [Recipe cards](#recipe-cards) · [Bingo cards](#bingo-cards) · [Article printing](#article-printing) · [Vintage gazette](#vintage-gazette) · [Safety](#safety)
 
 ## Why printer-cli
 
@@ -101,6 +101,7 @@ prt list
 | `prt comic PHOTO… [--comic-file comic.json] [--title TEXT] [--preview comic.png] [--save comic.pdf]` | Print 3 to 6 photos as the panels of an A4 comic page, with speech bubbles, thought bubbles and captions from a JSON comic file (see [Comic strips](#comic-strips)) |
 | `prt strip PHOTO PHOTO PHOTO PHOTO [--caption TEXT] [--mono] [--preview strip.jpg] [--save strip.pdf]` | Print a four-frame photo-booth strip on 4×6 photo paper from the photo tray, twice side by side to cut into two strips (see [4×6 photo prints](#46-photo-prints)) |
 | `prt instant PHOTO [--caption TEXT] [--preview photo.jpg] [--save photo.pdf]` | Print a photo as a Polaroid-style instant photo with a handwritten caption on 4×6 photo paper (see [4×6 photo prints](#46-photo-prints)) |
+| `prt colour-in PHOTO [--preview page.png] [--save page.pdf]` | Print a photo as a colouring page: black line art on white, on A4 (see [Colouring pages](#colouring-pages)) |
 | `prt postcard PHOTO [--postcard-file postcard.json] [--message TEXT] [--address LINE]… [--side front\|back] [--duplex] [--preview card.pdf] [--save card.pdf]` | Print a two-sided postcard on 4×6 photo paper: the photo on the front, the message, address lines and a stamp box on the back (see [Postcards](#postcards)) |
 | `prt disc PHOTO [--disc-file disc.json] [--title TEXT] [--track TEXT]… [--preview disc.png] [--save disc.pdf]` | Print a circular label on a printable CD/DVD through the disc tray: the photo, a title and a track list (see [Disc labels](#disc-labels)) |
 | `prt recipe URL\|FILE [--preview card.pdf] [--save card.pdf]` | Print a recipe as 4×6 index cards from the photo tray (see [Recipe cards](#recipe-cards)) |
@@ -108,7 +109,7 @@ prt list
 | `prt article URL\|FILE [--style magazine\|classic-magazine] [--preview page.pdf] [--save page.pdf]` | Print a blog post, news article or X post as A4 magazine pages (see [Article printing](#article-printing)) |
 | `prt gazette PHOTO… [--landscape] [--story-file story.json] [--preview page.pdf] [--save page.pdf]` | Print one or more photos as a vintage newspaper, over as many A4 pages as the photos need (see [Vintage gazette](#vintage-gazette)) |
 | `prt compose PAGE.json [--preview page.pdf] [--save page.pdf]` | Print a page you describe as blocks: headings, text, images, QR codes, columns and rules (see [Compose a page](#compose-a-page)) |
-| `prt styles` | Every booth, card, comic, strip, instant, postcard, disc, article, recipe, bingo and gazette style and the options that pick it; with `-f json`, also each style's fields, character limits, photo count and a sample image (see [Styles and schemas](#styles-and-schemas)) |
+| `prt styles` | Every booth, card, comic, strip, instant, colour-in, postcard, disc, article, recipe, bingo and gazette style and the options that pick it; with `-f json`, also each style's fields, character limits, photo count and a sample image (see [Styles and schemas](#styles-and-schemas)) |
 | `prt schema story\|article\|gazette\|page\|card\|comic\|recipe\|postcard\|disc\|bingo` | The JSON Schema of a booth story file, an article JSON file, a gazette story file, a `prt compose` page file, a `prt card` card file, a `prt comic` comic file, a `prt recipe` recipe file, a `prt postcard` postcard file, a `prt disc` label file or a `prt bingo` words file |
 | `prt jobs [--all]` / `prt jobs wait ID` / `prt jobs cancel ID` | List jobs, wait for one to finish, or cancel one |
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
@@ -271,7 +272,7 @@ Without `-f json` error output is unchanged.
 
 ### Styles and schemas
 
-An agent or script can find out what can be printed without reading this README. `prt styles -f json` lists every style as a JSON array; each entry has the command and the `args` that pick it, what it prints, its `fields` (with `required` and `max_length` in characters), how many `photos` it takes, `max_pages`, the `paper` it prints on (`size`, `media` and `tray`: A4, 4×6 from the photo tray, or a disc from the disc tray), the name of its input `schema` (`null` for `strip` and `instant`, whose only text is `--caption`; `postcard` has a `max_pages` of 2, its two sides, and `bingo` of 30, its cards per run) and a link to a `sample` page:
+An agent or script can find out what can be printed without reading this README. `prt styles -f json` lists every style as a JSON array; each entry has the command and the `args` that pick it, what it prints, its `fields` (with `required` and `max_length` in characters), how many `photos` it takes, `max_pages`, the `paper` it prints on (`size`, `media` and `tray`: A4, 4×6 from the photo tray, or a disc from the disc tray), the name of its input `schema` (`null` for `strip` and `instant`, whose only text is `--caption`, and for `colour-in`, which prints no text and has no `fields`; `postcard` has a `max_pages` of 2, its two sides, and `bingo` of 30, its cards per run) and a link to a `sample` page:
 
 ```bash
 $ prt styles -f json | jq -c '.[] | {name, command, args, schema}'
@@ -413,6 +414,22 @@ prt instant me.jpg --caption "" -o instant.pdf                                  
 - `--caption` sets the caption (up to 60 characters on the strip, 80 on the instant photo); without it, today's date is written, and `--caption ""` leaves the space blank. It is set in Caveat, a handwriting font that ships with prt: accents print, emoji and scripts the font lacks are refused with exit code 2. A caption too long for its space is cut with `…`, and the `-f json` line carries the same fit report as `prt booth` (`fits`, `cut`).
 - `--preview`/`-o` saves the print without printing (`.pdf` is a 4×6 in page), and `--save` keeps a copy and prints, as in `prt booth`. A file name that would overwrite a photo is refused with exit code 2.
 - Each print is one page for the page caps. With `-f json` the line carries the `paper` (`{"size": "4x6", "media": "4x6", "tray": "photo"}`) and an `estimate` whose ink counts the 4×6 sheet's area, not a full A4 page (`"summary": "~1 page (4×6), colour, est. ink 1%"`).
+
+## Colouring pages
+
+`prt colour-in` turns a photo into black line art on white: a colouring page for kids (or anyone) to fill in with crayons. It prints on A4 with black ink only.
+
+```bash
+prt colour-in dog.jpg -o page.png       # look at it first: nothing printed
+prt colour-in dog.jpg --yes             # print it
+```
+
+<p align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/colour-in.jpg" width="300" alt="colouring page sample: a photo of an astronaut on the Moon drawn as black outlines on white in a frame"></p>
+
+- The photo is smoothed and cut into a few flat tones, and the outlines between the tones are drawn as black lines, so the shapes come out mostly closed and each can be coloured in. Texture such as grass, fabric or skin is smoothed away first.
+- The whole photo is printed, never cropped, centred in a black frame that closes the shapes its edges cut through. The page is upright for a portrait or square photo and on its side for a landscape one.
+- Every pixel is pure black or white, so the `-f json` `estimate` reports `"colour": false` and only black ink. Photos with clear shapes and contrast (a pet, a toy, a face close up, a building) give the cleanest pages; a busy or low-contrast photo gives many small shapes.
+- `--preview`/`-o` saves the page without printing, and `--save` keeps a copy and prints, as in `prt booth`. A file name that would overwrite the photo is refused with exit code 2, and a photo that cannot be read with exit code 3. The page counts as one page for the page caps, and with `-f json` the line carries the `paper`, the fit report (always `"fits": true`: there is no text) and the `estimate`.
 
 ## Postcards
 
@@ -617,11 +634,11 @@ prt schema page                              # the page file's JSON Schema
 
 Before you let an AI agent print unattended, set `PRT_AGENT=1` in its environment and, if you like, page caps in the config file:
 
-- **Agent mode** (`PRT_AGENT=1`, also `true`, `yes` or `on`): every command that prints or uses ink — `print`, `booth`, `card`, `comic`, `strip`, `instant`, `postcard`, `disc`, `article`, `recipe`, `bingo`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean` — refuses to run without `--yes`, even at a terminal, so an agent never sits waiting on a prompt and never prints without deciding to. The refusal exits `2` with kind `agent_confirmation_required`. `--preview` needs no `--yes`: it prints nothing.
+- **Agent mode** (`PRT_AGENT=1`, also `true`, `yes` or `on`): every command that prints or uses ink — `print`, `booth`, `card`, `comic`, `strip`, `instant`, `colour-in`, `postcard`, `disc`, `article`, `recipe`, `bingo`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean` — refuses to run without `--yes`, even at a terminal, so an agent never sits waiting on a prompt and never prints without deciding to. The refusal exits `2` with kind `agent_confirmation_required`. `--preview` needs no `--yes`: it prints nothing.
 - **Per-run cap**: `max_pages_per_run` in the config limits the pages one command may print (copies count). In agent mode it defaults to 10 when not set.
 - **Daily cap**: `max_pages_per_day` in the config limits the pages printed per calendar day, counted across every command in `~/.cache/prt/pages.json`. A page counts once its job has been sent, even if sending failed, because the printer may have taken it.
 - A print over a cap is refused whole, before the prompt and before anything is sent (exit `1`, kind `page_cap_exceeded` or `daily_page_cap_exceeded`). Configured caps apply outside agent mode too, and in the TUI. While a cap is in force, a file whose pages cannot be counted (plain text, PWG raster, office files) is refused with `page_count_unknown`; images count as one page and PDF pages are counted from the file.
-- **Cost estimate**: with `-f json`, `prt booth`, `prt card`, `prt strip`, `prt instant`, `prt postcard`, `prt disc`, `prt article`, `prt recipe`, `prt bingo`, `prt gazette` and `prt compose` (preview or print) add an `estimate` of the rendered pages: the page count, whether they use colour, and for each ink the share of a standard cartridge they would use, e.g. `"estimate": {"pages": 3, "colour": true, "ink": {"cyan": 1.2, "magenta": 1.0, "yellow": 1.1, "black": 3.8}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`. `ink_percent` is the cartridge that would run out first. The ink figures are rough: they assume a cartridge prints about 300 A4 pages at 5% coverage, and a smaller sheet (4×6, a disc) counts by its area, its summary naming the size (`"~1 page (4×6), …"`); on a disc the white hub and corners use no ink, so only the printed ring counts.
+- **Cost estimate**: with `-f json`, `prt booth`, `prt card`, `prt strip`, `prt instant`, `prt colour-in`, `prt postcard`, `prt disc`, `prt article`, `prt recipe`, `prt bingo`, `prt gazette` and `prt compose` (preview or print) add an `estimate` of the rendered pages: the page count, whether they use colour, and for each ink the share of a standard cartridge they would use, e.g. `"estimate": {"pages": 3, "colour": true, "ink": {"cyan": 1.2, "magenta": 1.0, "yellow": 1.1, "black": 3.8}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`. `ink_percent` is the cartridge that would run out first. The ink figures are rough: they assume a cartridge prints about 300 A4 pages at 5% coverage, and a smaller sheet (4×6, a disc) counts by its area, its summary naming the size (`"~1 page (4×6), …"`); on a disc the white hub and corners use no ink, so only the printed ring counts.
 
 These guardrails stop a cooperating agent from using up a cartridge by mistake. They are not a security boundary: a process that can change its own environment or config can get around them.
 
@@ -654,7 +671,7 @@ Without it, `prt mcp` exits with code 2 (kind `missing_dependency`) and says how
 |---|---|
 | `status` | State, alerts, ink, paper and waste pad, as `prt status -f json` |
 | `ink` | Ink levels, as `prt ink -f json` |
-| `list_styles` | Every booth, card, strip, instant, postcard, disc, article, recipe and gazette style with its fields and character limits, as `prt styles -f json` |
+| `list_styles` | Every booth, card, strip, instant, colour-in, postcard, disc, article, recipe and gazette style with its fields and character limits, as `prt styles -f json` |
 | `preview_booth` | Render a photo (a file path) as a booth page in `metro`, `daily`, `wizard`, `wanted`, `certificate`, `sports`, `missing` or `movie` style, with an optional `story` object (`headline`, `story`, `kicker`, `caption`, `byline`). Prints nothing |
 | `preview_article` | Render an article as magazine pages from a `source` (link or file) or from `content` (the article JSON object, HTML or text). Prints nothing |
 | `print_file` | Print what a preview rendered (`token`), or a file (`path`) with `confirm: true` |

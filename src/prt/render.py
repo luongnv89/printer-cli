@@ -1,4 +1,4 @@
-"""Booth, card, comic, article, compose, strip, instant, recipe, postcard, disc and bingo pages as callable steps, shared by the CLI commands and the MCP server.
+"""Booth, card, comic, article, compose, strip, instant, colouring, recipe, postcard, disc and bingo pages as callable steps, shared by the CLI commands and the MCP server.
 
 Each front end reads its own input (files and flags, or MCP tool arguments) and decides how to show the result;
 what happens in between is here: lay the pages out, say what did not fit and what printing them would cost, and
@@ -122,6 +122,14 @@ def instant_page(photo: Image.Image, caption: str) -> Rendered:
     from prt import photocard
     page, cut = photocard.instant(photo, caption)
     return Rendered([page], cut, PHOTO_4X6)
+
+
+def colour_in_page(photo: Image.Image) -> Rendered:
+    """The colouring page of ``photo`` (see ``colourin.compose``): its line art, black on white, on A4 (on its
+    side for a landscape photo). Nothing is ever cut."""
+    from prt import colourin
+    page, cut = colourin.compose(photo)
+    return Rendered([page], cut)
 
 
 def recipe_cards(recipe: Recipe) -> Rendered:

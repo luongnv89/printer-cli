@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
-from prt import article, bingo, booth, card, comic, compose, disc, photocard, postcard, recipe, vintage
+from prt import article, bingo, booth, card, colourin, comic, compose, disc, photocard, postcard, recipe, vintage
 from prt.drivers.base import PrinterError
 from prt.paper import PAPERS
 
@@ -254,6 +254,9 @@ STRIP_DESCRIPTION = ("Photo-booth strip on 4×6 photo paper: four photos in a co
                      "printed twice side by side; cut along the dashed line for two 2×6 in strips")
 INSTANT_DESCRIPTION = ("Instant photo on 4×6 photo paper, Polaroid-style: the photo cropped square in a wide white "
                        "frame, with a handwritten caption under it")
+COLOUR_IN_DESCRIPTION = ("Colouring page on A4: the photo turned into black outlines on white, its shapes mostly "
+                         "closed so each can be coloured in, fitted whole in a frame; upright for a portrait photo, on "
+                         "its side for a landscape one, and printed with black ink only")
 POSTCARD_DESCRIPTION = ("Two-sided postcard on 4×6 photo paper, read on its side: the photo on the front with an "
                         "optional handwritten greeting, and on the back the message and signature, a stamp box and "
                         "four address lines; printed in one two-sided job, or front then back with the card turned "
@@ -284,6 +287,8 @@ def _build() -> tuple[Style, ...]:
     out.append(Style("instant", "instant", (), photocard.INSTANT_KIND, INSTANT_DESCRIPTION, None,
                      (Field("caption", INSTANT_ROLES["caption"], False, photocard.INSTANT_CAPTION_LIMIT),),
                      (1, 1), 1, "instant.jpg", paper="4x6"))
+    out.append(Style("colour-in", "colour-in", (), colourin.KIND, COLOUR_IN_DESCRIPTION, None, (), (1, 1), 1,
+                     "colour-in.jpg"))
     out.append(Style("postcard", "postcard", (), postcard.KIND, POSTCARD_DESCRIPTION, "postcard", postcard_fields(),
                      (1, 1), len(postcard.SIDES), "postcard.jpg", paper="4x6"))
     out.append(Style("disc", "disc", (), disc.KIND, DISC_DESCRIPTION, "disc", disc_fields(), (1, 1), 1, "disc.jpg",

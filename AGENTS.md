@@ -1,6 +1,6 @@
 # AGENTS.md
 
-printer-cli (`prt`) is a CLI and TUI for network printers: status, ink, maintenance, printing and scanning over IPP, eSCL, SNMP and Epson ESC/P2. It can also print a photo as a newspaper front page, a wizard or sports card, a certificate, or a wanted, missing-pet or movie poster (`prt booth`), a photo and a verse as a greeting card that folds from one A4 sheet (`prt card`), 3 to 6 photos as a comic page with speech bubbles (`prt comic`), four photos as a photo-booth strip or a photo as a Polaroid-style instant photo on 4×6 photo paper (`prt strip`, `prt instant`), a photo and a message as a two-sided postcard (`prt postcard`), a photo and a track list as a circular label on a printable CD/DVD through the disc tray (`prt disc`), a recipe as 4×6 index cards (`prt recipe`), a different bingo card for each player (`prt bingo`), a web article as magazine pages (`prt article`), photos as a vintage newspaper (`prt gazette`) and any page described as blocks of headings, text, images, QR codes, columns and rules (`prt compose`). This file is for AI agents. The first part covers using `prt`, the second covers working on this repository. The [README](README.md) is the full user guide.
+printer-cli (`prt`) is a CLI and TUI for network printers: status, ink, maintenance, printing and scanning over IPP, eSCL, SNMP and Epson ESC/P2. It can also print a photo as a newspaper front page, a wizard or sports card, a certificate, or a wanted, missing-pet or movie poster (`prt booth`), a photo and a verse as a greeting card that folds from one A4 sheet (`prt card`), 3 to 6 photos as a comic page with speech bubbles (`prt comic`), four photos as a photo-booth strip or a photo as a Polaroid-style instant photo on 4×6 photo paper (`prt strip`, `prt instant`), a photo as black line art on white for a colouring page (`prt colour-in`), a photo and a message as a two-sided postcard (`prt postcard`), a photo and a track list as a circular label on a printable CD/DVD through the disc tray (`prt disc`), a recipe as 4×6 index cards (`prt recipe`), a different bingo card for each player (`prt bingo`), a web article as magazine pages (`prt article`), photos as a vintage newspaper (`prt gazette`) and any page described as blocks of headings, text, images, QR codes, columns and rules (`prt compose`). This file is for AI agents. The first part covers using `prt`, the second covers working on this repository. The [README](README.md) is the full user guide.
 
 ## Using prt
 
@@ -21,7 +21,7 @@ Add `-p demo` to any command to use the built-in demo printer, which needs no ha
 
 ### Find out what can be printed
 
-- `prt styles -f json` lists every booth, card, comic, strip, instant, postcard, disc, article, recipe, bingo and gazette style: the command and `args` that pick it, its fields with `required` and `max_length`, how many photos it takes, `max_pages`, its input `schema`, the `paper` it prints on (A4, 4×6 from the photo tray, or a disc from the disc tray) and a `sample` image.
+- `prt styles -f json` lists every booth, card, comic, strip, instant, colour-in, postcard, disc, article, recipe, bingo and gazette style: the command and `args` that pick it, its fields with `required` and `max_length`, how many photos it takes, `max_pages`, its input `schema`, the `paper` it prints on (A4, 4×6 from the photo tray, or a disc from the disc tray) and a `sample` image.
 - `prt schema story`, `prt schema article`, `prt schema gazette`, `prt schema page`, `prt schema card`, `prt schema comic`, `prt schema recipe`, `prt schema postcard`, `prt schema disc` and `prt schema bingo` print the JSON Schema (draft 2020-12) of the booth story file, the article JSON file, the gazette story file, the `prt compose` page file, the `prt card` card file, the `prt comic` comic file, the `prt recipe` recipe file, the `prt postcard` postcard file, the `prt disc` label file and the `prt bingo` words file. A file that passes the schema is accepted, except for text in a script the page font cannot print, such as emoji or Chinese (and, for a bingo words file, a word that repeats another in different case or spacing; for a page file, image files that cannot be read or a page longer than 10 pages).
 
 ### Make a page no other command makes
@@ -53,7 +53,7 @@ Add `-p demo` to any command to use the built-in demo printer, which needs no ha
 
 1. Render without printing: `prt booth photo.jpg --story-file story.json --preview page.jpg -f json` (or `prt compose page.json --preview page.pdf -f json`). `--preview` (also `-o`) writes `.pdf`, `.png`, `.jpg` or `.jpeg` and sends nothing to the printer.
 2. Check the fit. For `booth`, `card`, `comic`, `postcard`, `disc`, `bingo` and `gazette`, the JSON line has `"fits"` and `"cut"`. When text was cut with `…`, `cut` gives each field's `max_fit` (characters printed) and `given`; `comic` names each bubble and caption by where it is in the file, e.g. `panels[1].bubbles[0]`. Shorten each field to `max_fit` and preview again. `"fits": true, "cut": {}` means everything fitted. Article text is never cut, because it runs on over more pages.
-3. Check the cost. With `-f json`, `booth`, `card`, `strip`, `instant`, `postcard`, `disc`, `article`, `recipe`, `bingo`, `gazette` and `compose` add an `estimate` (the ink of a 4×6 sheet or a disc counts by its area), e.g. `{"pages": 3, "colour": true, "ink": {…}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`.
+3. Check the cost. With `-f json`, `booth`, `card`, `strip`, `instant`, `colour-in`, `postcard`, `disc`, `article`, `recipe`, `bingo`, `gazette` and `compose` add an `estimate` (the ink of a 4×6 sheet or a disc counts by its area), e.g. `{"pages": 3, "colour": true, "ink": {…}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`.
 4. Print with `--yes`. Without a terminal, a command that would ask for confirmation fails with kind `confirmation_required` instead.
 
 ### Print a two-sided postcard
@@ -76,7 +76,7 @@ Add `-p demo` to any command to use the built-in demo printer, which needs no ha
 
 ### Guardrails
 
-- Run agents with `PRT_AGENT=1`. Every command that prints or uses ink (`print`, `booth`, `card`, `comic`, `strip`, `instant`, `postcard`, `disc`, `article`, `recipe`, `bingo`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean`) then refuses to run without `--yes`, even at a terminal (exit `2`, kind `agent_confirmation_required`). `--preview` never needs `--yes`.
+- Run agents with `PRT_AGENT=1`. Every command that prints or uses ink (`print`, `booth`, `card`, `comic`, `strip`, `instant`, `colour-in`, `postcard`, `disc`, `article`, `recipe`, `bingo`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean`) then refuses to run without `--yes`, even at a terminal (exit `2`, kind `agent_confirmation_required`). `--preview` never needs `--yes`.
 - Page caps: `max_pages_per_run` and `max_pages_per_day` at the top of `~/.config/prt/config.toml`. In agent mode the per-run cap defaults to 10. A print over a cap is refused whole before anything is sent (exit `1`, kind `page_cap_exceeded` or `daily_page_cap_exceeded`). Tell the user instead of retrying, and never raise a cap yourself.
 - Head cleaning is refused while ink is low or the waste pad is nearly full. Do not pass `--force` unless the user asks for it.
 
@@ -144,6 +144,7 @@ The tests use the demo printer (`FakeDriver` replaying `src/prt/fixtures/epson-x
 | `src/prt/paper.py` | The sheets pages are laid out on (A4, 4×6 photo paper from the photo tray): pixel size, media, tray and media type for the send path, and the area for the ink estimate |
 | `src/prt/bingo.py` | `prt bingo`: the bundled themes, the words file checks, the deal of different cards and the card layout |
 | `src/prt/photocard.py`, `recipe.py` | `prt strip` and `prt instant` (4×6 photo prints), and `prt recipe` (reading a recipe and laying out its 4×6 cards) |
+| `src/prt/colourin.py` | `prt colour-in`: the line-art filter that turns a photo into black outlines on white, and the A4 colouring page |
 | `src/prt/compose.py` | `prt compose`: the page file's schema, the checker that validates page files against that same schema, image loading and the block layout |
 | `src/prt/catalog.py` | The styles and JSON Schemas behind `prt styles` and `prt schema` |
 | `src/prt/guard.py` | Agent mode, the page caps, the daily page ledger and the ink estimate |
