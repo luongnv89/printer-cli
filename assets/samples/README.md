@@ -16,6 +16,7 @@ These images are the sample pages shown in the main README. They were rendered w
 | `comic.jpg` | `prt comic astronaut.jpg launch.jpg earthrise.jpg bluemarble.jpg --comic-file comic.json -o comic.png` |
 | `strip.jpg` | `prt strip astronaut.jpg launch.jpg earthrise.jpg bluemarble.jpg --caption "Apollo 11 · July 1969" -o strip.png` |
 | `instant.jpg` | `prt instant earthrise.jpg --caption "Earthrise, Christmas Eve 1968" -o instant.png` |
+| `colour-in.jpg` | `prt colour-in astronaut.jpg -o colour-in.png` |
 | `postcard.jpg` | `prt postcard earthrise.jpg --postcard-file postcard.json -o postcard.png`: `postcard-front.png` above `postcard-back.png` |
 | `disc.jpg` | `prt disc bluemarble.jpg --disc-file disc.json -o disc.png` |
 | `recipe.jpg` | `prt recipe recipe.json -o recipe.png` |

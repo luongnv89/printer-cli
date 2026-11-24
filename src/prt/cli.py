@@ -966,8 +966,8 @@ def _print_sheet(action: str, rendered: render.Rendered, label: str, preview: Op
                  info: dict[str, Any], done: str | None = None,
                  precheck: Callable[[Driver], None] | None = None) -> None:
     """Save, preview or print one rendered sheet on its own paper (``prt comic``, ``prt strip``, ``prt instant``,
-    ``prt disc``): the preview and the copies are written before a driver exists, then the sheet is sent under the
-    print guard.
+    ``prt colour-in``, ``prt disc``): the preview and the copies are written before a driver exists, then the sheet
+    is sent under the print guard.
 
     ``precheck`` asks the printer whether it can take the sheet at all (``prt disc``: a disc tray); it runs after
     the agent-mode check, so an agent without ``--yes`` hears that first, and before the page caps and the prompt.
@@ -1115,6 +1115,35 @@ def instant_cmd(
     rendered = render.instant_page(image, text)
     _print_sheet("instant", rendered, photocard.INSTANT_KIND, preview, copies,
                  f"Print {photo.name} as an {photocard.INSTANT_KIND}", f"prt instant {photo.name}", yes, {})
+
+
+@app.command("colour-in")
+def colour_in_cmd(
+    photo: Path = typer.Argument(..., help="Photo: JPEG, PNG, WebP, GIF, BMP or TIFF; it is printed whole, never "
+                                           "cropped."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save the page here instead of printing; the extension picks the "
+                                                "file type: .pdf, .png, .jpg or .jpeg."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of the page here (.pdf, .png, .jpg or .jpeg) "
+                                                   "before printing it; repeat for more files."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Colouring page: the photo turned into black line art on white, to colour in (A4, black ink only).
+
+    The page is upright for a portrait photo and on its side for a landscape one.
+    """
+    from prt import booth, colourin, photocard, vintage
+    # Check every input before a file is written or a driver exists, so a bad file name or an unreadable photo
+    # never leaves a partial result or reaches the printer.
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    if preview:
+        booth.format_for(preview)
+    vintage.check_outputs([path for path in [preview] + [p for p, _ in copies] if path], [photo])
+    image, = photocard.load_photos([photo])
+    rendered = render.colour_in_page(image)
+    _print_sheet("colour-in", rendered, colourin.KIND, preview, copies, f"Print {photo.name} as a {colourin.KIND}",
+                 f"prt colour-in {photo.name}", yes, {})
 
 
 @app.command("recipe")
@@ -1686,8 +1715,8 @@ def compose_cmd(
 
 @app.command("styles")
 def styles_cmd() -> None:
-    """List every page style of booth, card, comic, strip, instant, postcard, disc, article, recipe, bingo and
-    gazette: what it prints and the options that pick it.
+    """List every page style of booth, card, comic, strip, instant, colour-in, postcard, disc, article,
+    recipe, bingo and gazette: what it prints and the options that pick it.
 
     With -f json each style also lists its fields, their character limits, how many photos it takes and a
     link to a sample page. `prt schema NAME` prints the JSON Schema of a style's input file.

@@ -54,8 +54,8 @@ def test_styles_json_lists_every_style_with_fields_limits_and_sample(capsys):
     assert code == 0 and err == ""
     styles = {s["name"]: s for s in json.loads(out)}
     assert list(styles) == ["metro", "daily", "wizard", "wanted", "certificate", "sports", "missing", "movie",
-                            "card", "comic", "strip", "instant", "postcard", "disc", "magazine", "classic-magazine",
-                            "recipe", "bingo", "gazette", "gazette-landscape"]
+                            "card", "comic", "strip", "instant", "colour-in", "postcard", "disc", "magazine",
+                            "classic-magazine", "recipe", "bingo", "gazette", "gazette-landscape"]
     metro = styles["metro"]
     assert metro["command"] == "booth" and metro["args"] == [] and metro["default"] is True
     assert metro["kind"] == "metro newspaper page" and metro["schema"] == "story"
@@ -81,8 +81,11 @@ def test_styles_json_lists_every_style_with_fields_limits_and_sample(capsys):
     assert styles["magazine"]["photos"] == {"min": 0, "max": 0} and styles["magazine"]["max_pages"] == 30
     assert styles["gazette-landscape"]["args"] == ["--landscape"] and styles["gazette"]["args"] == []
     assert styles["gazette"]["photos"] == {"min": 1, "max": vintage.MAX_PHOTOS}
+    # colour-in prints no text, so it is the one style with no fields
+    assert styles["colour-in"]["fields"] == [] and styles["colour-in"]["schema"] is None
     for s in styles.values():
-        assert s["description"] and s["fields"] and all(f["description"] for f in s["fields"])
+        assert s["description"] and (s["fields"] or s["name"] == "colour-in")
+        assert all(f["description"] for f in s["fields"])
 
 
 def test_styles_needs_no_printer(capsys):
@@ -117,6 +120,7 @@ def test_catalog_follows_the_commands():
     assert by_command["card"] == ["card"]
     assert by_command["comic"] == ["comic"]
     assert by_command["strip"] == ["strip"] and by_command["instant"] == ["instant"]
+    assert by_command["colour-in"] == ["colour-in"]
     assert by_command["recipe"] == ["recipe"]
     assert by_command["postcard"] == ["postcard"]
     assert by_command["disc"] == ["disc"]
@@ -124,12 +128,13 @@ def test_catalog_follows_the_commands():
     assert len({s.name for s in catalog.STYLES}) == len(catalog.STYLES)
     fields = {"article": article.FIELDS, "card": card.FIELDS, "recipe": recipe.FIELDS, "strip": ("caption",),
               "instant": ("caption",), "postcard": postcard.FIELDS, "disc": disc.FIELDS,
-              "comic": tuple(catalog.COMIC_ROLES), "bingo": bingo.FIELDS}
+              "comic": tuple(catalog.COMIC_ROLES), "bingo": bingo.FIELDS, "colour-in": ()}
     for s in catalog.STYLES:
         names = [f.name for f in s.fields]
         assert names == list(fields.get(s.command, booth.FIELDS))
-        # strip and instant take their only text from --caption, so they have no input file
-        assert s.schema in catalog.schema_names() if s.command not in ("strip", "instant") else s.schema is None
+        # strip and instant take their only text from --caption, and colour-in has none, so they have no input file
+        assert s.schema in catalog.schema_names() if s.command not in ("strip", "instant", "colour-in") \
+            else s.schema is None
 
 
 # --- prt schema ---------------------------------------------------------------------------------
