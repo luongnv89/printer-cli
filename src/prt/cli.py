@@ -1260,6 +1260,9 @@ def postcard_cmd(
             elif method == "flip":
                 jobs["back"] = None
                 STATE.note("warn", "the back was not printed", "print it later with --side back")
+                summary["pages"] = 1  # the line reports what was printed: the front alone
+                if STATE.json:
+                    summary["estimate"] = guard.estimate([sides["front"]], paper)
     if method == "front":
         STATE.note("info", f"{postcard.FLIP} Then print the back with --side back.")
     if STATE.json:

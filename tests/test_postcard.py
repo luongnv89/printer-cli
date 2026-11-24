@@ -428,6 +428,8 @@ def test_declining_the_back_keeps_the_front_and_gives_the_page_back(capsys, tmp_
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "postcard", str(_photo(tmp_path)))
     assert code == 0, err
     assert "the back was not printed" in err and json.loads(out)["jobs"]["back"] is None
+    data = without_estimate(out)  # also checks that the estimate counts the same pages as the line
+    assert data["pages"] == 1
     assert len(printer.jobs()) == 1 and guard.used_today() == 1
 
 
