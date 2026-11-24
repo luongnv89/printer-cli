@@ -65,6 +65,12 @@ def _page_file(tmp_path):
     return path
 
 
+def _recipe_file(tmp_path):
+    path = tmp_path / "recipe.json"
+    path.write_text(json.dumps({"title": "Toast", "ingredients": ["Bread"], "steps": ["Toast the bread."]}))
+    return path
+
+
 def _config(**keys):
     cfg = Config.load()
     for k, v in keys.items():
@@ -82,13 +88,17 @@ def _commands(tmp_path):
         "article": ["article", str(_article(tmp_path))],
         "gazette": ["gazette", str(photo)],
         "compose": ["compose", str(_page_file(tmp_path))],
+        "strip": ["strip", str(photo), str(photo), str(photo), str(photo)],
+        "instant": ["instant", str(photo)],
+        "recipe": ["recipe", str(_recipe_file(tmp_path))],
         "test-page": ["maintain", "test-page"],
         "nozzle-check": ["maintain", "nozzle-check"],
         "clean": ["maintain", "clean", "--force"],
     }
 
 
-COMMANDS = ["print", "booth", "card", "article", "gazette", "compose", "test-page", "nozzle-check", "clean"]
+COMMANDS = ["print", "booth", "card", "article", "gazette", "compose", "strip", "instant", "recipe", "test-page",
+            "nozzle-check", "clean"]
 
 
 # --- agent mode ------------------------------------------------------------------------------------------

@@ -9,7 +9,7 @@ metadata:
 
 # Article print
 
-Print an article as A4 magazine pages with `prt article`. The command fetches a link itself; when it cannot get the text (the page needs a login or JavaScript, or the X post is private, long or part of a thread), you read the article and hand it over as a JSON file. The command needs printer-cli installed (`prt` on the PATH). Add `-p NAME` to pick a saved printer, or `-p demo` to try everything without a printer.
+Print an article as A4 magazine pages with `prt article`. The command fetches a link itself; when it cannot get the text (the page needs a login or JavaScript, or the X post is private, long or part of a thread), you read the article and hand it over as a JSON file. For a recipe page, use `prt recipe URL` instead: it prints the ingredients and steps as 4×6 index cards from the photo tray (when it finds no recipe, write the recipe JSON that `prt schema recipe` describes and print that file). The command needs printer-cli installed (`prt` on the PATH). Add `-p NAME` to pick a saved printer, or `-p demo` to try everything without a printer.
 
 ## Workflow
 

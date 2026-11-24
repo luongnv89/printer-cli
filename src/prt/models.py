@@ -168,6 +168,7 @@ class PrintOptions:
     quality: str | None = None  # draft | normal | high
     duplex: bool = False
     tray: str | None = None
+    media_type: str | None = None  # e.g. photographic, stationery
     direct: bool = False
     job_name: str | None = None
 

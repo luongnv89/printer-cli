@@ -297,7 +297,7 @@ class IPPDriver(Driver):
     def submit(self, data: bytes, mime: str, options: PrintOptions) -> int:
         """Send document bytes straight to the printer with IPP Print-Job."""
         job_attrs = [Attr("copies", ipp.INTEGER, max(1, options.copies))]
-        if options.media or options.tray:
+        if options.media or options.tray or options.media_type:
             col: dict[str, tuple[int, Any]] = {}
             if options.media:
                 kw = media.resolve_alias(options.media)
@@ -307,6 +307,8 @@ class IPPDriver(Driver):
                                                               "y-dimension": (ipp.INTEGER, size[1])})
             if options.tray:
                 col["media-source"] = (ipp.KEYWORD, options.tray)
+            if options.media_type:
+                col["media-type"] = (ipp.KEYWORD, options.media_type)
             if col:
                 job_attrs.append(Attr("media-col", ipp.BEG_COLLECTION, col))
         if options.mono:

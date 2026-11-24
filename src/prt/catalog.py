@@ -3,7 +3,7 @@ the input files the print commands read.
 
 ``styles()`` lists the styles (``prt styles -f json``) and ``schema(name)`` returns one JSON Schema (``prt schema
 NAME``). Both are built from the constants the commands check their input against (``booth.FIELDS``,
-``booth.LIMITS``, ``card.LIMITS``, ``article.FIELDS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
+``booth.LIMITS``, ``card.LIMITS``, ``article.FIELDS``, ``recipe.LIMITS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
 schema is built by :mod:`prt.compose`, which checks page files against it. Other front
 ends (an MCP server, page validation) import this module instead of listing the styles again; a new input schema
 is added with ``@register_schema``.
@@ -14,8 +14,9 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
-from prt import article, booth, card, compose, vintage
+from prt import article, booth, card, compose, photocard, recipe, vintage
 from prt.drivers.base import PrinterError
+from prt.paper import PAPERS
 
 # The sample pages shown in the README; assets/ is not in the package, so they are linked, not bundled.
 SAMPLES = "https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/"
@@ -40,18 +41,19 @@ class Style:
     args: tuple[str, ...]  # what to add to the command to pick this style; () for its default
     kind: str  # what it prints, e.g. "wizard card"
     description: str
-    schema: str  # the input file's JSON Schema: `prt schema <schema>`
-    fields: tuple[Field, ...]
+    schema: str | None  # the input file's JSON Schema: `prt schema <schema>`; None when the text comes from flags
+    fields: tuple[Field, ...]  # with no input file: the text flags, e.g. --caption
     photos: tuple[int, int]  # how many photos the command takes: (fewest, most)
     max_pages: int
     sample: str  # file name under SAMPLES
+    paper: str = "a4"  # the sheet it prints on (see prt.paper.PAPERS)
 
     def to_dict(self) -> dict[str, Any]:
         return {"name": self.name, "command": self.command, "args": list(self.args), "default": not self.args,
                 "kind": self.kind, "description": self.description, "schema": self.schema,
                 "fields": [asdict(f) for f in self.fields],
                 "photos": {"min": self.photos[0], "max": self.photos[1]}, "max_pages": self.max_pages,
-                "sample": SAMPLES + self.sample}
+                "paper": PAPERS[self.paper].to_dict(), "sample": SAMPLES + self.sample}
 
 
 # --- what each field is on each style -------------------------------------------------------------
@@ -134,6 +136,19 @@ ARTICLE_ROLES = {
     "url": "Link to the original, printed in the page footer on magazine",
 }
 ARTICLE_REQUIRED = ("title", "body")  # as article.parse refuses a file without them
+STRIP_ROLES = {"caption": "Handwritten line under the four frames (--caption); today's date when not given"}
+INSTANT_ROLES = {"caption": "Handwritten caption under the photo (--caption); today's date when not given, empty "
+                            "to leave the space blank to write on"}
+RECIPE_ROLES = {
+    "title": "The recipe's name, in handwriting at the top of the card",
+    "ingredients": "The ingredients, one per item: a list of texts, or one text with a newline between items",
+    "steps": "The method, one step per item, numbered on the card: a list of texts, or one text with a newline "
+             "between items",
+    "servings": "Yield, e.g. 'Serves 4', under the title",
+    "time": "Times, e.g. 'Prep 15 min · Cook 30 min', under the title",
+    "source": "Site or book, in the card's footer",
+    "url": "Link to the original, in the card's footer (instead of the source)",
+}
 
 
 def story_fields(roles: dict[str, str]) -> tuple[Field, ...]:
@@ -143,6 +158,11 @@ def story_fields(roles: dict[str, str]) -> tuple[Field, ...]:
 
 def card_fields() -> tuple[Field, ...]:
     return tuple(Field(name, CARD_ROLES[name], name in card.REQUIRED, card.LIMITS[name]) for name in card.FIELDS)
+
+
+def recipe_fields() -> tuple[Field, ...]:
+    return tuple(Field(name, RECIPE_ROLES[name], name in recipe.REQUIRED, recipe.LIMITS.get(name))
+                 for name in recipe.FIELDS)
 
 
 def article_fields() -> tuple[Field, ...]:
@@ -175,6 +195,12 @@ ARTICLE = {  # style: (description, sample)
     "magazine": ("Bold headline, three columns, colour accents", "article-magazine.jpg"),
     "classic-magazine": ("Ivory page, centred single column, drop cap, ornaments", "article-classic.jpg"),
 }
+STRIP_DESCRIPTION = ("Photo-booth strip on 4×6 photo paper: four photos in a column with a handwritten caption, "
+                     "printed twice side by side; cut along the dashed line for two 2×6 in strips")
+INSTANT_DESCRIPTION = ("Instant photo on 4×6 photo paper, Polaroid-style: the photo cropped square in a wide white "
+                       "frame, with a handwritten caption under it")
+RECIPE_DESCRIPTION = ("6×4 in index card on 4×6 photo paper: the title in handwriting over a red rule, the "
+                      "ingredients and numbered steps on blue lines in two columns; runs on to more cards when needed")
 GAZETTE_KIND = "vintage newspaper"
 GAZETTE_DESCRIPTION = "Cream paper and one ink, a blackletter masthead and ruled columns; every photo is printed"
 
@@ -184,9 +210,17 @@ def _build() -> tuple[Style, ...]:
     out = [Style(name, "booth", () if name == "metro" else ("--style", name), booth.KINDS[name], BOOTH[name][0],
                  "story", story_fields(BOOTH[name][1]), (1, 1), 1, BOOTH[name][2]) for name in booth.STYLES]
     out.append(Style("card", "card", (), card.KIND, CARD_DESCRIPTION, "card", card_fields(), (1, 1), 1, "card.jpg"))
+    out.append(Style("strip", "strip", (), photocard.STRIP_KIND, STRIP_DESCRIPTION, None,
+                     (Field("caption", STRIP_ROLES["caption"], False, photocard.STRIP_CAPTION_LIMIT),),
+                     (photocard.FRAMES, photocard.FRAMES), 1, "strip.jpg", paper="4x6"))
+    out.append(Style("instant", "instant", (), photocard.INSTANT_KIND, INSTANT_DESCRIPTION, None,
+                     (Field("caption", INSTANT_ROLES["caption"], False, photocard.INSTANT_CAPTION_LIMIT),),
+                     (1, 1), 1, "instant.jpg", paper="4x6"))
     out += [Style(name, "article", () if name == "magazine" else ("--style", name),
                   article.ARTICLE_STYLES[name].kind, ARTICLE[name][0], "article", article_fields(), (0, 0),
                   article.MAX_PAGES, ARTICLE[name][1]) for name in article.ARTICLE_STYLES]
+    out.append(Style("recipe", "recipe", (), recipe.KIND, RECIPE_DESCRIPTION, "recipe", recipe_fields(), (0, 0),
+                     recipe.MAX_CARDS, "recipe.jpg", paper="4x6"))
     gazette: dict[str, Any] = {"command": "gazette", "kind": GAZETTE_KIND, "schema": "gazette",
                                "fields": story_fields(GAZETTE_ROLES), "photos": (1, vintage.MAX_PHOTOS),
                                "max_pages": vintage.MAX_PAGES}
@@ -308,3 +342,29 @@ def card_schema() -> dict[str, Any]:
             "type": "object", "properties": {f.name: _text(f) for f in fields},
             "required": [f.name for f in fields if f.required], "additionalProperties": False,
             "examples": [asdict(card.DEFAULT_CARD)]}
+
+
+@register_schema("recipe", "recipe JSON file: prt recipe recipe.json (or JSON piped to prt recipe -)")
+def recipe_schema() -> dict[str, Any]:
+    props: dict[str, Any] = {f.name: _text(f) for f in recipe_fields() if f.name not in ("ingredients", "steps")}
+    item = {"type": "string", "maxLength": recipe.MAX_ITEM, "pattern": r"[^\s?-]"}  # an item of only dashes or "?" is dropped
+    for name in ("ingredients", "steps"):
+        props[name] = {"description": RECIPE_ROLES[name], "anyOf": [
+            {"type": "string", "pattern": r"[^\s?-]"},
+            {"type": "array", "items": {"type": "string", "maxLength": recipe.MAX_ITEM},
+             "maxItems": recipe.MAX_ITEMS, "contains": item}]}
+    return {"$schema": JSON_SCHEMA, "title": "prt recipe",
+            "description": "A recipe for `prt recipe`, saved as a .json file or piped to `prt recipe -`; at most "
+                           f"{recipe.MAX_BYTES // (1024 * 1024)} MiB, at most {recipe.MAX_ITEMS} ingredients and "
+                           f"{recipe.MAX_ITEMS} steps of up to {recipe.MAX_ITEM} characters each, and at most "
+                           f"{recipe.MAX_CARDS} cards once laid out (the same limits hold for items given as one "
+                           "text, one item per line). Text is printed in Latin letters: a recipe mostly in another "
+                           "script is refused, and emoji are left out.",
+            "type": "object", "properties": props, "required": list(recipe.REQUIRED), "additionalProperties": False,
+            "examples": [{"title": "Lemon Drizzle Cake", "servings": "Serves 8", "time": "Prep 15 min · Cook 45 min",
+                          "ingredients": ["225 g butter, softened", "225 g caster sugar", "4 eggs",
+                                          "225 g self-raising flour", "1 lemon, zest and juice"],
+                          "steps": ["Heat the oven to 180°C and line a loaf tin.",
+                                    "Beat the butter and sugar, then the eggs, one at a time.",
+                                    "Fold in the flour and zest, and bake for 45 minutes.",
+                                    "Pour the lemon juice mixed with sugar over the warm cake."]}]}

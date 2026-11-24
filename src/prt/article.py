@@ -24,10 +24,11 @@ import httpx
 from PIL import Image, ImageDraw
 
 from prt import __version__
-from prt.booth import INK, RUST, SEPIA, SEPIA_DARK, STDIN, _centred, read_stdin, to_bytes
+from prt.booth import INK, RUST, SEPIA, SEPIA_DARK, STDIN, _centred, read_stdin
 from prt.drivers.base import PrinterError
 from prt.layout import (BOTTOM, CONTENT_W, _clean, _col_width, _ellipsize, _fit, _glyphs, _lead, _text_block,
                         _wrapped, draw_columns, paginate)
+from prt.paper import A4, Paper
 from prt.testpage import H, MARGIN, W, _font
 
 # --- the article -----------------------------------------------------------------------------
@@ -726,14 +727,15 @@ def compose_pages(article: Article, style: str = "magazine") -> list[Image.Image
 # --- saving ----------------------------------------------------------------------------------
 
 
-def page_files(pages: list[Image.Image], path: Path, fmt: str) -> list[tuple[Path, bytes]]:
+def page_files(pages: list[Image.Image], path: Path, fmt: str, paper: Paper = A4) -> list[tuple[Path, bytes]]:
     """The files that hold ``pages`` as ``fmt`` (see ``booth.SAVE_FORMATS``): one PDF with every page, or one
-    image per page, numbered ``name-1.png``, ``name-2.png``… when there is more than one."""
+    image per page, numbered ``name-1.png``, ``name-2.png``… when there is more than one. ``paper`` gives the
+    resolution, so each page comes out at its size (A4 by default)."""
     if fmt == "pdf":
         buf = io.BytesIO()
-        pages[0].save(buf, "PDF", resolution=150, quality=92, save_all=True, append_images=pages[1:])
+        pages[0].save(buf, "PDF", resolution=paper.dpi, quality=92, save_all=True, append_images=pages[1:])
         return [(path, buf.getvalue())]
     if len(pages) == 1:
-        return [(path, to_bytes(pages[0], fmt))]
-    return [(path.with_name(f"{path.stem}-{n}{path.suffix}"), to_bytes(page, fmt))
+        return [(path, paper.to_bytes(pages[0], fmt))]
+    return [(path.with_name(f"{path.stem}-{n}{path.suffix}"), paper.to_bytes(page, fmt))
             for n, page in enumerate(pages, start=1)]

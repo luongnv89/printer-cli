@@ -36,7 +36,7 @@ prt -p demo status
 ╰─┘4 alerts · checked 17:42└───────────────────────────────────────────────╯
 ```
 
-Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Photo booth](#photo-booth) · [Greeting card](#greeting-card) · [Article printing](#article-printing) · [Vintage gazette](#vintage-gazette) · [Safety](#safety)
+Next: [Use your own printer](#use-your-own-printer) · [Commands](#commands) · [The TUI](#the-tui) · [Photo booth](#photo-booth) · [Greeting card](#greeting-card) · [4×6 photo prints](#46-photo-prints) · [Recipe cards](#recipe-cards) · [Article printing](#article-printing) · [Vintage gazette](#vintage-gazette) · [Safety](#safety)
 
 ## Why printer-cli
 
@@ -98,11 +98,14 @@ prt list
 | `prt print FILE… [-n 2] [--media 4x6] [--tray photo] [--quality high] [--mono] [--duplex] [--direct] [--wait] [--yes]` | Print; `--wait` returns once each job has finished and reports how it ended; `--yes` is needed in agent mode |
 | `prt booth PHOTO [--style metro\|daily\|wizard\|wanted\|certificate\|sports\|missing\|movie] [--story-file story.json] [--preview page.jpg] [--save page.pdf]` | Photo booth: print the photo as an A4 newspaper front page, wizard or sports card, certificate, or wanted, missing-pet or movie poster (see [Photo booth](#photo-booth)) |
 | `prt card PHOTO [--card-file card.json] [--greeting TEXT] [--verse TEXT] [--preview card.pdf] [--save card.pdf]` | Print a greeting card: the photo and a verse on one A4 sheet that folds into an A6 card (see [Greeting card](#greeting-card)) |
+| `prt strip PHOTO PHOTO PHOTO PHOTO [--caption TEXT] [--mono] [--preview strip.jpg] [--save strip.pdf]` | Print a four-frame photo-booth strip on 4×6 photo paper from the photo tray, twice side by side to cut into two strips (see [4×6 photo prints](#46-photo-prints)) |
+| `prt instant PHOTO [--caption TEXT] [--preview photo.jpg] [--save photo.pdf]` | Print a photo as a Polaroid-style instant photo with a handwritten caption on 4×6 photo paper (see [4×6 photo prints](#46-photo-prints)) |
+| `prt recipe URL\|FILE [--preview card.pdf] [--save card.pdf]` | Print a recipe as 4×6 index cards from the photo tray (see [Recipe cards](#recipe-cards)) |
 | `prt article URL\|FILE [--style magazine\|classic-magazine] [--preview page.pdf] [--save page.pdf]` | Print a blog post, news article or X post as A4 magazine pages (see [Article printing](#article-printing)) |
 | `prt gazette PHOTO… [--landscape] [--story-file story.json] [--preview page.pdf] [--save page.pdf]` | Print one or more photos as a vintage newspaper, over as many A4 pages as the photos need (see [Vintage gazette](#vintage-gazette)) |
 | `prt compose PAGE.json [--preview page.pdf] [--save page.pdf]` | Print a page you describe as blocks: headings, text, images, QR codes, columns and rules (see [Compose a page](#compose-a-page)) |
-| `prt styles` | Every booth, card, article and gazette style and the options that pick it; with `-f json`, also each style's fields, character limits, photo count and a sample image (see [Styles and schemas](#styles-and-schemas)) |
-| `prt schema story\|article\|gazette\|page\|card` | The JSON Schema of a booth story file, an article JSON file, a gazette story file, a `prt compose` page file or a `prt card` card file |
+| `prt styles` | Every booth, card, strip, instant, article, recipe and gazette style and the options that pick it; with `-f json`, also each style's fields, character limits, photo count and a sample image (see [Styles and schemas](#styles-and-schemas)) |
+| `prt schema story\|article\|gazette\|page\|card\|recipe` | The JSON Schema of a booth story file, an article JSON file, a gazette story file, a `prt compose` page file, a `prt card` card file or a `prt recipe` recipe file |
 | `prt jobs [--all]` / `prt jobs wait ID` / `prt jobs cancel ID` | List jobs, wait for one to finish, or cancel one |
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
 | `prt tui` | Full-screen dashboard |
@@ -251,7 +254,8 @@ $ prt -f json article https://example.com/gone
 | `missing_dependency` | 2 | `prt mcp` was run without the MCP SDK: install `printer-cli[mcp]` |
 | `skill_exists` | 1 | `prt skills install` found an installed skill file that differs from the bundled one: nothing was installed, `--force` replaces it |
 | `skills_missing` | 1 | this prt install has no bundled skills: reinstall printer-cli |
-| `fetch_failed` | 3 | an article link could not be fetched |
+| `fetch_failed` | 3 | an article or recipe link could not be fetched |
+| `no_recipe` | 3 | `prt recipe` found no recipe on the page or in the file (no schema.org Recipe data, no Ingredients and Instructions headings) |
 | `invalid_input` | 3 | a bad input file or link |
 | `interrupted` | 130 | Ctrl-C |
 
@@ -259,7 +263,7 @@ Without `-f json` error output is unchanged.
 
 ### Styles and schemas
 
-An agent or script can find out what can be printed without reading this README. `prt styles -f json` lists every style as a JSON array; each entry has the command and the `args` that pick it, what it prints, its `fields` (with `required` and `max_length` in characters), how many `photos` it takes, `max_pages`, the name of its input `schema` and a link to a `sample` page:
+An agent or script can find out what can be printed without reading this README. `prt styles -f json` lists every style as a JSON array; each entry has the command and the `args` that pick it, what it prints, its `fields` (with `required` and `max_length` in characters), how many `photos` it takes, `max_pages`, the `paper` it prints on (`size`, `media` and `tray`: A4, or 4×6 from the photo tray), the name of its input `schema` (`null` for `strip` and `instant`, whose only text is `--caption`) and a link to a `sample` page:
 
 ```bash
 $ prt styles -f json | jq -c '.[] | {name, command, args, schema}'
@@ -269,7 +273,7 @@ $ prt styles -f json | jq -c '.[] | {name, command, args, schema}'
 {"name":"gazette-landscape","command":"gazette","args":["--landscape"],"schema":"gazette"}
 ```
 
-`prt schema story`, `prt schema article`, `prt schema gazette`, `prt schema page` and `prt schema card` print the JSON Schema (draft 2020-12) of the file `prt booth --story-file`, `prt article FILE.json`, `prt gazette --story-file`, `prt compose` and `prt card --card-file` read. A file that passes the schema is accepted by the command; the one thing the schema cannot check is the character set, so text in a script the page font cannot print (emoji, Chinese) is still refused. For a page file, the image files must also exist and be readable, and the page must fit in 10 pages. In Python the same data is in `prt.catalog` (`styles()`, `schema(name)`, and `register_schema` to add one).
+`prt schema story`, `prt schema article`, `prt schema gazette`, `prt schema page`, `prt schema card` and `prt schema recipe` print the JSON Schema (draft 2020-12) of the file `prt booth --story-file`, `prt article FILE.json`, `prt gazette --story-file`, `prt compose`, `prt card --card-file` and `prt recipe FILE.json` read. A file that passes the schema is accepted by the command; the one thing the schema cannot check is the character set, so text in a script the page font cannot print (emoji, Chinese) is still refused. For a page file, the image files must also exist and be readable, and the page must fit in 10 pages. In Python the same data is in `prt.catalog` (`styles()`, `schema(name)`, and `register_schema` to add one).
 
 ## The TUI
 
@@ -344,6 +348,44 @@ printf '%s' '{"greeting": "Thank You", "verse": "..."}' | prt card me.jpg --card
 - The photo and the card are checked before anything is sent: an unreadable photo or a bad card file exits with code 3 and prints nothing. The text font covers Latin letters, as in the photo booth.
 
 The [greeting-card skill](https://github.com/luongnv89/printer-cli/blob/main/skills/greeting-card/SKILL.md) has an AI agent look at the photo, write a verse for it and the occasion, preview the card and print it (`prt skills install` installs it).
+
+## 4×6 photo prints
+
+`prt strip` and `prt instant` print on 4×6 in (10×15 cm) photo paper from the printer's photo tray, at 300 dpi. Load the paper first: the confirmation prompt names the tray.
+
+```bash
+prt strip a.jpg b.jpg c.jpg d.jpg --caption "Anna & Ben · 24.11.2026" -o strip.png   # nothing printed
+prt strip a.jpg b.jpg c.jpg d.jpg --mono --yes                                       # classic black and white
+prt instant me.jpg --caption "Summer at the lake" --yes                              # print it
+prt instant me.jpg --caption "" -o instant.pdf                                       # blank, to write on by hand
+```
+
+<table><tr><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/strip.jpg" width="240" alt="photo-booth strip sample: four photos in a column with a handwritten caption, printed twice side by side"><br><code>strip</code></td><td align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/instant.jpg" width="240" alt="instant photo sample: a square photo in a white frame with a handwritten caption"><br><code>instant</code></td></tr></table>
+
+- **`prt strip`** takes four photos, in the order of the frames from the top, and lays them out in a column the way a photo booth does, with a handwritten caption at the foot. The column is printed twice side by side: cut the sheet along the dashed line for two 2×6 in strips. `--mono` prints the photos in black and white. Another number of photos is a usage error (exit code 2); repeat a photo to use it twice.
+- **`prt instant`** prints one photo, cropped square, in a wide white frame with a handwritten caption under it, like an instant-camera print (Polaroid-style).
+- `--caption` sets the caption (up to 60 characters on the strip, 80 on the instant photo); without it, today's date is written, and `--caption ""` leaves the space blank. It is set in Caveat, a handwriting font that ships with prt: accents print, emoji and scripts the font lacks are refused with exit code 2. A caption too long for its space is cut with `…`, and the `-f json` line carries the same fit report as `prt booth` (`fits`, `cut`).
+- `--preview`/`-o` saves the print without printing (`.pdf` is a 4×6 in page), and `--save` keeps a copy and prints, as in `prt booth`. A file name that would overwrite a photo is refused with exit code 2.
+- Each print is one page for the page caps. With `-f json` the line carries the `paper` (`{"size": "4x6", "media": "4x6", "tray": "photo"}`) and an `estimate` whose ink counts the 4×6 sheet's area, not a full A4 page (`"summary": "~1 page (4×6), colour, est. ink 1%"`).
+
+## Recipe cards
+
+`prt recipe https://example.com/lemon-cake` prints a recipe as 6×4 in index cards on 4×6 photo paper from the photo tray: the title in handwriting over a red rule, then the ingredients and the numbered steps on blue lines in two columns.
+
+```bash
+prt recipe https://example.com/lemon-cake -o cake.png   # one PNG per card, nothing printed
+prt recipe https://example.com/lemon-cake --yes          # print it
+prt recipe recipe.json --save cake.pdf --yes             # a recipe file, with a PDF copy
+prt recipe - --yes < recipe.json                         # the recipe on stdin
+```
+
+<p align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/recipe.jpg" width="420" alt="recipe card sample: the title in handwriting, the ingredients and numbered steps on ruled lines in two columns"></p>
+
+- From a web page the recipe is read from its schema.org `Recipe` data, the JSON-LD most recipe sites publish for search engines: the name, the ingredients, the steps, the yield and the preparation and cooking times. A page without it is read like `prt article` reads one, taking the list under an "Ingredients" heading and the steps under an "Instructions", "Method", "Directions" or "Steps" heading. A page with neither exits with code 3, kind `no_recipe`, and nothing is printed.
+- Links are fetched as `prt article` fetches them (`http://` and `https://` only, certificate checks, at most 5 redirects and 5 MiB). For a page the command cannot read, pass a saved file: a recipe JSON file (`{"title": "...", "ingredients": ["..."], "steps": ["..."], "servings": "...", "time": "...", "source": "...", "url": "..."}`; `prt schema recipe` prints its JSON Schema), a saved `.html` page, or a text file with the title on the first line, then an "Ingredients" line and a "Method" line, each followed by one item per line. `prt recipe -` reads the same from stdin.
+- The type is set as large as lets the recipe fit on one card. A longer recipe runs on to more cards, numbered `1/2`, `2/2`, up to 6; nothing is cut, and a recipe that needs more is refused with exit code 3. Each card is printed as its own job, upright, after one confirmation prompt.
+- `--preview card.pdf` saves the cards without printing (`.pdf` holds every card, `.png`, `.jpg` and `.jpeg` one image per card, laid out on its side), and `--save` keeps the same copies and prints. With `-f json` the line carries the title, the number of cards (`pages`), the `paper` and the `estimate`.
+- The card font covers Latin letters: accents print without their marks, fractions such as `½` print as `1/2`, emoji are left out, and a recipe mostly in another script is refused.
 
 ## Article printing
 
@@ -454,11 +496,11 @@ prt schema page                              # the page file's JSON Schema
 
 Before you let an AI agent print unattended, set `PRT_AGENT=1` in its environment and, if you like, page caps in the config file:
 
-- **Agent mode** (`PRT_AGENT=1`, also `true`, `yes` or `on`): every command that prints or uses ink — `print`, `booth`, `card`, `article`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean` — refuses to run without `--yes`, even at a terminal, so an agent never sits waiting on a prompt and never prints without deciding to. The refusal exits `2` with kind `agent_confirmation_required`. `--preview` needs no `--yes`: it prints nothing.
+- **Agent mode** (`PRT_AGENT=1`, also `true`, `yes` or `on`): every command that prints or uses ink — `print`, `booth`, `card`, `strip`, `instant`, `article`, `recipe`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean` — refuses to run without `--yes`, even at a terminal, so an agent never sits waiting on a prompt and never prints without deciding to. The refusal exits `2` with kind `agent_confirmation_required`. `--preview` needs no `--yes`: it prints nothing.
 - **Per-run cap**: `max_pages_per_run` in the config limits the pages one command may print (copies count). In agent mode it defaults to 10 when not set.
 - **Daily cap**: `max_pages_per_day` in the config limits the pages printed per calendar day, counted across every command in `~/.cache/prt/pages.json`. A page counts once its job has been sent, even if sending failed, because the printer may have taken it.
 - A print over a cap is refused whole, before the prompt and before anything is sent (exit `1`, kind `page_cap_exceeded` or `daily_page_cap_exceeded`). Configured caps apply outside agent mode too, and in the TUI. While a cap is in force, a file whose pages cannot be counted (plain text, PWG raster, office files) is refused with `page_count_unknown`; images count as one page and PDF pages are counted from the file.
-- **Cost estimate**: with `-f json`, `prt booth`, `prt card`, `prt article`, `prt gazette` and `prt compose` (preview or print) add an `estimate` of the rendered pages: the page count, whether they use colour, and for each ink the share of a standard cartridge they would use, e.g. `"estimate": {"pages": 3, "colour": true, "ink": {"cyan": 1.2, "magenta": 1.0, "yellow": 1.1, "black": 3.8}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`. `ink_percent` is the cartridge that would run out first. The ink figures are rough: they assume a cartridge prints about 300 pages at 5% coverage.
+- **Cost estimate**: with `-f json`, `prt booth`, `prt card`, `prt strip`, `prt instant`, `prt article`, `prt recipe`, `prt gazette` and `prt compose` (preview or print) add an `estimate` of the rendered pages: the page count, whether they use colour, and for each ink the share of a standard cartridge they would use, e.g. `"estimate": {"pages": 3, "colour": true, "ink": {"cyan": 1.2, "magenta": 1.0, "yellow": 1.1, "black": 3.8}, "ink_percent": 3.8, "summary": "~3 pages, colour, est. ink 4%"}`. `ink_percent` is the cartridge that would run out first. The ink figures are rough: they assume a cartridge prints about 300 A4 pages at 5% coverage, and a smaller sheet (4×6) counts by its area, its summary naming the size (`"~1 page (4×6), …"`).
 
 These guardrails stop a cooperating agent from using up a cartridge by mistake. They are not a security boundary: a process that can change its own environment or config can get around them.
 
@@ -491,7 +533,7 @@ Without it, `prt mcp` exits with code 2 (kind `missing_dependency`) and says how
 |---|---|
 | `status` | State, alerts, ink, paper and waste pad, as `prt status -f json` |
 | `ink` | Ink levels, as `prt ink -f json` |
-| `list_styles` | Every booth, card, article and gazette style with its fields and character limits, as `prt styles -f json` |
+| `list_styles` | Every booth, card, strip, instant, article, recipe and gazette style with its fields and character limits, as `prt styles -f json` |
 | `preview_booth` | Render a photo (a file path) as a booth page in `metro`, `daily`, `wizard`, `wanted`, `certificate`, `sports`, `missing` or `movie` style, with an optional `story` object (`headline`, `story`, `kicker`, `caption`, `byline`). Prints nothing |
 | `preview_article` | Render an article as magazine pages from a `source` (link or file) or from `content` (the article JSON object, HTML or text). Prints nothing |
 | `print_file` | Print what a preview rendered (`token`), or a file (`path`) with `confirm: true` |
@@ -601,6 +643,6 @@ uv run prt -p demo tui
 
 [MIT](https://github.com/luongnv89/printer-cli/blob/main/LICENSE) © Luong NGUYEN
 
-The fonts used by `prt gazette`, [UnifrakturMaguntia](https://github.com/google/fonts/tree/main/ofl/unifrakturmaguntia), [Playfair Display](https://github.com/google/fonts/tree/main/ofl/playfairdisplay) and [Old Standard TT](https://github.com/google/fonts/tree/main/ofl/oldstandardtt), are under the SIL Open Font License 1.1. Their licence texts ship with them in [`src/prt/fonts`](https://github.com/luongnv89/printer-cli/tree/main/src/prt/fonts) as `OFL-*.txt`.
+The fonts used by `prt gazette`, [UnifrakturMaguntia](https://github.com/google/fonts/tree/main/ofl/unifrakturmaguntia), [Playfair Display](https://github.com/google/fonts/tree/main/ofl/playfairdisplay) and [Old Standard TT](https://github.com/google/fonts/tree/main/ofl/oldstandardtt), and the handwriting font used by `prt strip`, `prt instant` and `prt recipe`, [Caveat](https://github.com/google/fonts/tree/main/ofl/caveat), are under the SIL Open Font License 1.1. Their licence texts ship with them in [`src/prt/fonts`](https://github.com/luongnv89/printer-cli/tree/main/src/prt/fonts) as `OFL-*.txt`.
 
-The photos in the sample pages ([`assets/samples`](https://github.com/luongnv89/printer-cli/tree/main/assets/samples)) are public-domain NASA images from Apollo 8 and Apollo 11, via Wikimedia Commons.
+The photos in the sample pages ([`assets/samples`](https://github.com/luongnv89/printer-cli/tree/main/assets/samples)) are public-domain NASA images from Apollo 8, Apollo 11 and Apollo 17, via Wikimedia Commons.

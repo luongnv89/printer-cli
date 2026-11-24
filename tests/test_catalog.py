@@ -6,7 +6,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from PIL import Image
 
-from prt import article, booth, card, catalog, vintage
+from prt import article, booth, card, catalog, photocard, recipe, vintage
 from prt.cli import ArticleStyle, BoothStyle, main
 from prt.drivers.base import PrinterError
 
@@ -54,7 +54,8 @@ def test_styles_json_lists_every_style_with_fields_limits_and_sample(capsys):
     assert code == 0 and err == ""
     styles = {s["name"]: s for s in json.loads(out)}
     assert list(styles) == ["metro", "daily", "wizard", "wanted", "certificate", "sports", "missing", "movie",
-                            "card", "magazine", "classic-magazine", "gazette", "gazette-landscape"]
+                            "card", "strip", "instant", "magazine", "classic-magazine", "recipe", "gazette",
+                            "gazette-landscape"]
     metro = styles["metro"]
     assert metro["command"] == "booth" and metro["args"] == [] and metro["default"] is True
     assert metro["kind"] == "metro newspaper page" and metro["schema"] == "story"
@@ -114,12 +115,16 @@ def test_catalog_follows_the_commands():
     assert by_command["booth"] == list(booth.STYLES) == [s.value for s in BoothStyle]
     assert by_command["article"] == list(article.ARTICLE_STYLES) == [s.value for s in ArticleStyle]
     assert by_command["card"] == ["card"]
+    assert by_command["strip"] == ["strip"] and by_command["instant"] == ["instant"]
+    assert by_command["recipe"] == ["recipe"]
     assert len({s.name for s in catalog.STYLES}) == len(catalog.STYLES)
-    fields = {"article": article.FIELDS, "card": card.FIELDS}
+    fields = {"article": article.FIELDS, "card": card.FIELDS, "recipe": recipe.FIELDS, "strip": ("caption",),
+              "instant": ("caption",)}
     for s in catalog.STYLES:
         names = [f.name for f in s.fields]
         assert names == list(fields.get(s.command, booth.FIELDS))
-        assert s.schema in catalog.schema_names()
+        # strip and instant take their only text from --caption, so they have no input file
+        assert s.schema in catalog.schema_names() if s.command not in ("strip", "instant") else s.schema is None
 
 
 # --- prt schema ---------------------------------------------------------------------------------
