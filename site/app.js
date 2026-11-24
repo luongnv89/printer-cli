@@ -242,6 +242,7 @@
       credits.open = false;
       if (inside) credits.querySelector("summary").focus();
     } else if (onDots && (key === "Home" || key === "End")) {
+      if (credits.open) return; // as for the arrows below: no slide change behind the panel
       event.preventDefault();
       go(key === "Home" ? 0 : slides.length - 1, true);
       dots.children[index].focus();
@@ -259,10 +260,15 @@
       if (onDots) dots.children[index].focus(); // focus follows the current tick, the row's one tab stop
     }
   });
-  // The credits close on Escape (above), on a click or tap anywhere outside them, and when keyboard focus moves
-  // out of them, so the panel never covers the control that has focus.
+  // The credits close on Escape (above), on a click or tap anywhere outside them, and when focus moves out of
+  // them or arrives anywhere else on the page (Tab can leave the page from the last link and come back round to
+  // the first control, with no focusout to tell), so the panel never covers the control that has focus. Focus
+  // leaving the page altogether (a window blur) closes nothing.
   credits.addEventListener("focusout", (event) => {
     if (event.relatedTarget instanceof Node && !credits.contains(event.relatedTarget)) credits.open = false;
+  });
+  document.addEventListener("focusin", (event) => {
+    if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;
   });
   document.addEventListener("click", (event) => {
     if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;

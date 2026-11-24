@@ -633,6 +633,10 @@ def test_arrow_keys_leave_the_slide_alone_behind_the_credits_and_with_a_modifier
     arrows = keydown.split('} else if (key === "ArrowLeft" || key === "ArrowRight") {')[1]
     guard = 'if (credits.open || target.closest(".sheet, input, textarea, select, .credits")) return;'
     assert guard in arrows and arrows.index(guard) < arrows.index("go(")
+    ends = keydown.split('} else if (onDots && (key === "Home" || key === "End")) {')[1].split("} else if")[0]
+    assert [line.split("//")[0].strip() for line in ends.strip().split("\n")] == [
+        "if (credits.open) return;", "event.preventDefault();", 'go(key === "Home" ? 0 : slides.length - 1, true);',
+        "dots.children[index].focus();"]
     assert '<details id="credits" class="credits">' in INDEX  # .credits holds the summary and the panel
 
 
@@ -729,6 +733,11 @@ def test_open_credits_pause_the_show_and_close_on_escape_or_a_click_outside():
     # The panel never stays open over a control the keyboard has moved to.
     assert js_listener("credits", "focusout") == [
         "if (event.relatedTarget instanceof Node && !credits.contains(event.relatedTarget)) credits.open = false;"]
+    # Nor over one that focus reaches without leaving the credits first: Tab from the last link goes out of the
+    # page and comes back round to the first control.
+    assert js_listener("document", "focusin") == [
+        "if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;"]
+    assert 'addEventListener("blur"' not in JS  # a window blur closes nothing
     assert js_listener("document", "click") == [
         "if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;"]
     # Space on the summary opens the credits and in the panel scrolls them; it must not also toggle Autoplay.
