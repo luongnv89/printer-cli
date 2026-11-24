@@ -236,7 +236,7 @@ a:hover { text-decoration-thickness: 2px; }
   top: 50%;
   left: 50%;
   width: auto;
-  height: 80%;
+  height: min(80%, 72cqw); /* in a tall, narrow mat the fan is held to its width */
   box-shadow: var(--shadow);
   background-color: var(--paper);
 }
@@ -439,6 +439,7 @@ a:hover { text-decoration-thickness: 2px; }
     grid-template-rows: minmax(0, 1fr);
     gap: 12px;
   }
+  .box-head { flex-wrap: wrap; } /* in a panel this narrow, Copy drops under its label rather than out of the box */
 }
 
 @media (prefers-reduced-motion: reduce) {
