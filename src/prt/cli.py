@@ -1183,6 +1183,84 @@ def recipe_cmd(
         STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
 
 
+@app.command("bingo")
+def bingo_cmd(
+    theme: Optional[str] = typer.Option(None, "--theme", "-t",
+                                        help="Bundled word list: road trip (the default), beach, zoo, birthday or "
+                                             "space. With --words-file it is any text and only names the game."),
+    count: int = typer.Option(1, "--cards", "-n", min=1, max=30, metavar="N",
+                              help="How many cards, one per player and per A4 page, each with different words "
+                                   "(1 to 30)."),
+    words_file: Optional[Path] = typer.Option(None, "--words-file",
+                                              help="JSON words file: words (a list of at least 25) required; title "
+                                                   "and free (the centre square) optional. Use - to read it from "
+                                                   "stdin."),
+    seed: Optional[int] = typer.Option(None, "--seed", min=0,
+                                       help="Deal the same cards again: the seed a run reports (with -f json)."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save the cards here instead of printing; the extension picks the "
+                                                "file type: .pdf (every card in one file), or .png, .jpg, .jpeg (one "
+                                                "file per card, numbered when there are several)."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of the cards here (.pdf, .png, .jpg or .jpeg) "
+                                                   "before printing them; repeat for more files."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Bingo cards: a different 5×5 card for each player, one per A4 page, with a free centre square.
+
+    The words come from a bundled theme or a words file; no two cards in a run hold the same set of words. The
+    deal is random, and --seed deals the same cards again.
+    """
+    from prt import article, bingo, booth, vintage
+    # Check every input, deal and lay out every card before a file is written or a driver exists, so a bad theme or
+    # words file never leaves a partial result or reaches the printer.
+    preview_format = booth.format_for(preview) if preview else None
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    inputs = [words_file] if words_file and str(words_file) != booth.STDIN else []
+    outputs = [(preview, preview_format)] if preview else []
+    vintage.check_outputs([file for path, fmt in outputs + copies
+                           for file in vintage.page_paths(path, fmt, count)], inputs)
+    game, bundled = bingo.game(theme, bingo.load_bingo(words_file) if words_file else None)
+    seed = bingo.new_seed() if seed is None else seed
+    rendered = render.bingo_cards(game, bingo.deal(len(game.words), count, seed))
+    pages, paper = rendered.pages, rendered.paper
+    if rendered.cut:
+        STATE.note("warn", f"{', '.join(rendered.cut)} cut to fit the card",
+                   "shorten it, or check the cards with --preview")
+    what = f"{count} bingo card{'s' if count != 1 else ''}"
+
+    def write(path: Path, fmt: str) -> list[dict[str, Any]]:
+        written = []
+        for file, data in article.page_files(pages, path, fmt, paper):
+            size = _save_booth_page(data, file)
+            STATE.note("ok", f"saved {file}", f"bingo · {fmt.upper()} · {size / 1024:,.0f} KiB")
+            written.append({"file": str(file), "format": fmt, "bytes": size})
+        return written
+
+    files = write(preview, preview_format) if preview else []
+    # Copies are written before connecting, so they exist even when the printer is unreachable.
+    saved = [entry for path, fmt in copies for entry in write(path, fmt)]
+    summary = {"action": "bingo", "title": game.title, "theme": bundled, "pages": len(pages), "seed": seed,
+               "words": len(game.words), "paper": paper.to_dict(), **rendered.fit(),
+               **(rendered.estimate() if STATE.json else {})}
+    extra = {"saved": saved} if save else {}
+    if preview:
+        STATE.note("ok", f"{what} of '{game.title}' rendered", f"seed {seed} · not printed")
+        if STATE.json:
+            STATE.write(json.dumps({**summary, "files": files, **extra}) + "\n")
+        return
+    d = STATE.driver()
+    d.require(Capability.PRINT)
+    jobs: list[int] = []
+    with _authorize(len(pages), yes, f"Print {what} of '{game.title}' on {d.display_name}?") as ticket:
+        jobs.extend(render.send_pages(d, rendered.jpegs(), render.bingo_job_names(game.title, len(pages)), ticket,
+                                      paper))
+    STATE.note("ok", f"{what} queued as job{'s' if len(jobs) != 1 else ''} {', '.join(map(str, jobs))}",
+               f"{d.display_name} · seed {seed}")
+    if STATE.json:
+        STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
+
+
 def _require_disc_tray(d: Driver) -> None:
     """Refuse a disc label on a printer that lists its trays and has no disc tray among them (exit code 1); a
     printer that lists no trays is left to decide for itself."""
@@ -1608,8 +1686,8 @@ def compose_cmd(
 
 @app.command("styles")
 def styles_cmd() -> None:
-    """List every page style of booth, card, comic, strip, instant, postcard, disc, article, recipe and gazette: what
-    it prints and the options that pick it.
+    """List every page style of booth, card, comic, strip, instant, postcard, disc, article, recipe, bingo and
+    gazette: what it prints and the options that pick it.
 
     With -f json each style also lists its fields, their character limits, how many photos it takes and a
     link to a sample page. `prt schema NAME` prints the JSON Schema of a style's input file.
@@ -1638,12 +1716,12 @@ def _schema_names(incomplete: str) -> list[str]:
 
 @app.command("schema")
 def schema_cmd(name: str = typer.Argument(..., metavar="NAME", autocompletion=_schema_names,
-                                          help="story, article, gazette, page, card, comic, recipe, postcard "
-                                               "or disc.")) -> None:
+                                          help="story, article, gazette, page, card, comic, recipe, postcard, "
+                                               "disc or bingo.")) -> None:
     """Print the JSON Schema of an input file: story (prt booth --story-file), article (an article JSON file for
     prt article), gazette (prt gazette --story-file), page (a page file for prt compose), card (prt card
     --card-file), comic (prt comic --comic-file), recipe (a recipe JSON file for prt recipe), postcard (prt postcard
-    --postcard-file) or disc (prt disc --disc-file).
+    --postcard-file), disc (prt disc --disc-file) or bingo (prt bingo --words-file).
 
     A file that passes the schema is accepted by the command. The schema is JSON whatever -f says.
     """

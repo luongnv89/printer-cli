@@ -19,13 +19,14 @@ These images are the sample pages shown in the main README. They were rendered w
 | `postcard.jpg` | `prt postcard earthrise.jpg --postcard-file postcard.json -o postcard.png`: `postcard-front.png` above `postcard-back.png` |
 | `disc.jpg` | `prt disc bluemarble.jpg --disc-file disc.json -o disc.png` |
 | `recipe.jpg` | `prt recipe recipe.json -o recipe.png` |
+| `bingo.jpg` | `prt bingo --words-file bingo.json --seed 1969 -o bingo.png` |
 | `article-magazine.jpg` | `prt article article.json -o article-magazine.png` |
 | `article-classic.jpg` | `prt article article.json --style classic-magazine -o article-classic.png` (page 1) |
 | `gazette.jpg` | `prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file story.json -o gazette.png` |
 | `gazette-landscape.jpg` | the same with `--landscape` |
 | `tui.jpg` | `prt -p demo tui`, saved as a Textual screenshot at 120×36 |
 
-`story.json`, `article.json`, `recipe.json`, `postcard.json`, `disc.json` and `comic.json` are the inputs used above. The article text, the recipe, the postcard, the disc's track list and the comic's dialogue were written for these samples (the track titles are made up).
+`story.json`, `article.json`, `recipe.json`, `postcard.json`, `disc.json`, `comic.json` and `bingo.json` are the inputs used above. The article text, the recipe, the postcard, the disc's track list, the comic's dialogue and the bingo words were written for these samples (the track titles are made up).
 
 ## Photo credits
 

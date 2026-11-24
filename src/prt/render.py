@@ -1,4 +1,4 @@
-"""Booth, card, comic, article, compose, strip, instant, recipe, postcard and disc pages as callable steps, shared by the CLI commands and the MCP server.
+"""Booth, card, comic, article, compose, strip, instant, recipe, postcard, disc and bingo pages as callable steps, shared by the CLI commands and the MCP server.
 
 Each front end reads its own input (files and flags, or MCP tool arguments) and decides how to show the result;
 what happens in between is here: lay the pages out, say what did not fit and what printing them would cost, and
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from PIL import Image
 
     from prt.article import Article
+    from prt.bingo import Bingo
     from prt.booth import Story
     from prt.card import Card
     from prt.comic import Comic
@@ -133,6 +134,18 @@ def recipe_cards(recipe: Recipe) -> Rendered:
 
 def recipe_job_names(title: str, count: int) -> list[str]:
     return [f"prt recipe {number}/{count} {title[:60]}" for number in range(1, count + 1)]
+
+
+def bingo_cards(game: Bingo, cards: Sequence[tuple[int, ...]]) -> Rendered:
+    """One A4 page per bingo card (see ``bingo.compose_card``), ``cards`` being the word indices ``bingo.deal``
+    gave; a title or word cut with "…" to fit is named in ``cut`` (``title``, ``words[i]``)."""
+    from prt import bingo
+    pages, cut = bingo.compose_cards(game, list(cards))
+    return Rendered(pages, cut)
+
+
+def bingo_job_names(title: str, count: int) -> list[str]:
+    return [f"prt bingo {number}/{count} {title[:60]}" for number in range(1, count + 1)]
 
 
 def postcard_sides(photo: Image.Image, card: Postcard) -> Rendered:
