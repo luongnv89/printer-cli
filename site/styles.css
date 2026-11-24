@@ -1,0 +1,512 @@
+/* printer-cli examples: a light table. Each sample sits on a grey mat as a paper proof, the command and the
+   agent prompt beside it. Every colour is a neutral grey (r = g = b), black or white; alpha is used only for
+   shadows, hairlines and tints, so no hue ever appears. */
+
+/* Playfair Display for titles and Old Standard TT for text: the two serifs prt's own gazette is set in, bundled
+   with the package under the SIL OFL (see fonts/). */
+@font-face {
+  font-family: "Playfair Display";
+  src: url("fonts/PlayfairDisplay-Variable.ttf") format("truetype");
+  font-weight: 400 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Old Standard TT";
+  src: url("fonts/OldStandard-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Old Standard TT";
+  src: url("fonts/OldStandard-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --mat: #d6d6d6;
+  --mat-glow: #e6e6e6;
+  --ink: #0a0a0a;
+  --text: #262626;
+  --muted: #474747;
+  --hairline: #0a0a0a29;
+  --control: #5c5c5c;
+  --tint: #0a0a0a12;
+  --paper: #ffffff;
+  --paper-ink: #0a0a0a;
+  --term: #0a0a0a;
+  --term-text: #e0e0e0;
+  --term-dim: #949494;
+  --card: #ffffff;
+  --card-text: #1a1a1a;
+  --card-muted: #4d4d4d;
+  --dot: #666666;
+  --focus: #0a0a0a;
+  --shadow: 0 1px 1px #00000026, 0 8px 16px -6px #00000040, 0 28px 56px -18px #00000066;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --serif: "Old Standard TT", Georgia, serif;
+  --display: "Playfair Display", Georgia, serif;
+  --gutter: clamp(16px, 3vw, 40px);
+  color-scheme: light dark;
+  accent-color: #0a0a0a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mat: #262626;
+    --mat-glow: #303030;
+    --ink: #f2f2f2;
+    --text: #e0e0e0;
+    --muted: #b3b3b3;
+    --hairline: #ffffff2e;
+    --control: #8c8c8c;
+    --tint: #ffffff14;
+    --term: #0a0a0a;
+    --card: #171717;
+    --card-text: #ededed;
+    --card-muted: #b3b3b3;
+    --dot: #8c8c8c;
+    --focus: #f2f2f2;
+    --shadow: 0 1px 1px #00000066, 0 8px 16px -6px #00000080, 0 28px 56px -18px #000000b3;
+    accent-color: #f2f2f2;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background-color: var(--mat);
+  /* The light table: a soft glow from under the mat, brightest behind the proof. */
+  background-image: radial-gradient(110% 85% at 32% 45%, var(--mat-glow), var(--mat) 72%);
+  color: var(--text);
+  font: 400 17px/1.5 var(--serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--ink); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:visited { color: var(--ink); }
+a:hover { text-decoration-thickness: 2px; }
+
+:focus-visible {
+  outline: 2px solid;
+  outline-color: var(--focus);
+  outline-offset: 2px;
+}
+
+::selection { background-color: var(--ink); color: var(--mat); }
+/* The command box and the sheet have their own ground, where the page's selection colour would vanish. */
+.cmd ::selection { background-color: var(--term-text); color: var(--term); }
+.sheet ::selection { background-color: var(--paper-ink); color: var(--paper); }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.shell {
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+}
+
+/* --- header ------------------------------------------------------------------------------------ */
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px var(--gutter) 6px;
+}
+
+.brand img { display: block; width: auto; height: 36px; }
+
+.top-controls { display: flex; align-items: center; gap: 14px; }
+
+.counter {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: 0.06em;
+}
+.counter #current { color: var(--ink); font-weight: 700; }
+
+.ctl {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--control);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.ctl:hover { background-color: var(--tint); }
+.ctl:active { transform: translateY(1px); }
+.icon { width: 20px; height: 20px; display: block; }
+
+/* The toggle keeps one name, "Autoplay"; only the icon follows aria-pressed. */
+#autoplay[aria-pressed="true"] .icon-play,
+#autoplay[aria-pressed="false"] .icon-pause { display: none; }
+
+/* --- the slide ----------------------------------------------------------------------------------- */
+
+.stage { position: relative; min-height: 0; display: grid; }
+
+.noscript { margin: auto; padding: var(--gutter); max-width: 36em; text-align: center; }
+
+.slide {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(300px, 1fr);
+  gap: clamp(24px, 4vw, 64px);
+  min-height: 0;
+  padding: 6px var(--gutter) 12px;
+}
+
+.mat {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  container-type: size;
+}
+
+/* A proof is centred in the mat at the largest size that fits, at its own aspect ratio. */
+.proof {
+  position: absolute;
+  inset: 3%;
+  margin: auto;
+  width: auto;
+  height: auto;
+  max-width: 94%;
+  max-height: 94%;
+  display: block;
+  background-color: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+/* Terminal output printed on a sheet, the type scaled so the widest line fits the mat (--cols is set per slide),
+   but never below 10px: wider output scrolls sideways inside the sheet instead. */
+.sheet {
+  position: absolute;
+  inset: 3%;
+  margin: auto;
+  width: fit-content;
+  height: fit-content;
+  max-width: 94%;
+  max-height: 94%;
+  overflow: auto;
+  padding: clamp(10px, 3cqw, 28px);
+  background-color: var(--paper);
+  color: var(--paper-ink);
+  box-shadow: var(--shadow);
+  --focus: #0a0a0a;
+}
+.sheet:focus-visible { outline-offset: -4px; } /* inside the white paper, where black reads in both themes */
+.sheet pre {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: clamp(10px, calc(84cqw / var(--cols, 80) / 0.61), 15px);
+  line-height: 1.3;
+  white-space: pre;
+}
+
+/* The intro: three proofs fanned out on the mat. */
+.stack { position: absolute; inset: 4%; }
+.stack img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: auto;
+  height: min(80%, 72cqw); /* in a tall, narrow mat the fan is held to its width */
+  box-shadow: var(--shadow);
+  background-color: var(--paper);
+}
+.stack img:nth-child(1) { transform: translate(-50%, -50%) translateX(-34%) rotate(-7deg); }
+.stack img:nth-child(2) { transform: translate(-50%, -52%); z-index: 1; }
+.stack img:nth-child(3) { transform: translate(-50%, -50%) translateX(34%) rotate(6deg); }
+
+.panel {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 2px;
+}
+/* Auto margins centre the text when it fits and fall back to the top when the panel has to scroll. */
+.panel-inner { margin-block: auto; display: flex; flex-direction: column; gap: 14px; max-width: 34em; }
+
+.group {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: clamp(30px, 3.3vw, 48px);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+
+.blurb { margin: 0 0 4px; font-size: 18px; line-height: 1.45; }
+
+.box { border-radius: 6px; }
+.box-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 8px 0 16px;
+}
+.label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.copy {
+  min-width: 72px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid;
+  border-radius: 4px;
+  background-color: transparent;
+  color: inherit;
+  font: 700 12px/1 var(--serif);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.cmd {
+  background-color: var(--term);
+  color: var(--term-text);
+  box-shadow: var(--shadow);
+  --focus: #ffffff;
+}
+.cmd .label { color: var(--term-dim); }
+.cmd .copy { border-color: #ffffff73; }
+.cmd .copy:hover { background-color: #ffffff1f; }
+.cmd pre {
+  margin: 0;
+  padding: 8px 16px 14px;
+  font: 14px/1.6 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cmd .line { display: block; padding-left: 2ch; text-indent: -2ch; }
+.ps { color: var(--term-dim); user-select: none; }
+
+.ask {
+  background-color: var(--card);
+  color: var(--card-text);
+  border: 1px solid var(--hairline);
+}
+.ask .label { color: var(--card-muted); }
+.ask .copy { border-color: var(--control); }
+.ask .copy:hover { background-color: var(--tint); }
+.ask p { margin: 0; padding: 6px 16px 14px; font-size: 17px; line-height: 1.45; }
+
+/* Entering slide: the proof settles onto the mat, then the text follows. */
+.slide .mat > *, .slide .panel-inner > * { animation: settle 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.slide .panel-inner > *:nth-child(2) { animation-delay: 0.05s; }
+.slide .panel-inner > *:nth-child(3) { animation-delay: 0.1s; }
+.slide .panel-inner > *:nth-child(4) { animation-delay: 0.15s; }
+.slide .panel-inner > *:nth-child(5) { animation-delay: 0.2s; }
+.slide .mat > .stack { animation-name: fade; }
+@keyframes settle { from { opacity: 0; translate: 0 8px; } }
+@keyframes fade { from { opacity: 0; } }
+
+/* --- progress, dots, footer ----------------------------------------------------------------------- */
+
+.bar { padding: 0 var(--gutter); }
+
+.progress { height: 2px; background-color: var(--hairline); overflow: hidden; }
+.progress span {
+  display: block;
+  height: 100%;
+  background-color: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.nav-row { display: flex; align-items: center; gap: 8px; padding: 6px 0 2px; }
+
+/* One tick per slide, like frame marks on a contact sheet; a gap separates each section. */
+.dots {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: safe center;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dots::-webkit-scrollbar { display: none; }
+.dot {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  cursor: pointer;
+}
+.dot::before {
+  content: "";
+  width: 3px;
+  height: 12px;
+  background-color: var(--dot);
+  transition: height 0.2s ease, background-color 0.2s ease;
+}
+.dot:hover::before { background-color: var(--ink); }
+.dot[aria-current="true"]::before { height: 24px; width: 4px; background-color: var(--ink); }
+.dot.section { margin-left: 10px; }
+.dots :focus-visible { outline-offset: -2px; }
+
+/* One short line: the licence, two links and the credits. The long credit lines open in a panel over the page,
+   so they take no height from the slide and never need sideways scrolling. */
+.foot {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 16px;
+  padding: 2px var(--gutter) 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.foot p { margin: 0; }
+.credits { margin-left: auto; }
+/* The footer's own links and the Credits button are targets of a set size; the links in the credits' sentences
+   stay inline text. */
+.foot > a, .credits summary { display: flex; align-items: center; min-width: 24px; min-height: 24px; }
+.credits summary { justify-content: flex-end; }
+.credits summary {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  list-style: none;
+}
+.credits summary::-webkit-details-marker { display: none; }
+.credits summary:hover { text-decoration-thickness: 2px; }
+/* The panel opens upwards from the footer, inside the page: it is as wide as the page allows and scrolls within
+   itself when the page is too short for it, so nothing is pushed off screen. */
+.credits-panel {
+  position: absolute;
+  z-index: 2;
+  right: var(--gutter);
+  bottom: 100%;
+  width: min(34em, 100% - 2 * var(--gutter));
+  max-height: calc(100vh - 100% - 8px);
+  max-height: calc(100dvh - 100% - 8px);
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--control);
+  border-radius: 6px;
+  background-color: var(--card);
+  color: var(--card-text);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.credits-panel p + p { margin-top: 8px; }
+.credits-panel:focus-visible { outline-offset: -4px; }
+
+/* --- narrow screens: the proof above, the text below; only the text panel may scroll ------------- */
+
+@media (max-width: 767px) {
+  .slide {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(160px, 40%) minmax(0, 1fr);
+    gap: 10px;
+  }
+  .panel-inner { margin-block: 0; gap: 10px; }
+  .title { font-size: 26px; }
+  .blurb { font-size: 16px; }
+  .ask p { font-size: 16px; }
+  .cmd pre { font-size: 13px; }
+  .brand img { height: 30px; }
+  .top-controls { gap: 10px; }
+  .foot { font-size: 11.5px; padding-block: 0 4px; gap: 0 8px; } /* the 44px targets keep the links apart */
+  /* Touch targets: 44px controls, copy buttons and footer links; the ticks are 44px tall and 24px wide. */
+  .ctl { width: 44px; height: 44px; }
+  .copy { min-height: 44px; }
+  .dot { height: 44px; }
+  .foot > a, .credits summary { min-width: 44px; min-height: 44px; }
+}
+
+/* The same touch targets on any device that has a touch screen, whatever its width and even when a mouse is its
+   main pointer (a tablet, a touch laptop). */
+@media (any-pointer: coarse) {
+  .ctl { width: 44px; height: 44px; }
+  .copy { min-height: 44px; }
+  .dot { height: 44px; }
+  .foot > a, .credits summary { min-width: 44px; min-height: 44px; }
+  .foot { padding-block: 0 4px; }
+}
+
+/* --- short screens (a phone on its side): every row of chrome tightened, so the slide keeps most of the
+   height; the footer wraps like any other text and never scrolls sideways ---------------------------- */
+
+@media (max-height: 500px) {
+  .top { padding-block: 4px 2px; }
+  .brand img { height: 24px; }
+  .nav-row { padding-block: 2px 0; }
+  .foot { padding-block: 0 4px; }
+  /* The footer's links stay 32px tall here, not 44px: on a screen this short the slide needs the height more. */
+  .foot > a, .credits summary { min-width: 32px; min-height: 32px; }
+  .slide { padding-block: 4px 6px; }
+  .panel-inner { gap: 8px; }
+  .title { font-size: 22px; }
+  .blurb { font-size: 15px; }
+}
+
+/* Narrow and short: the proof and the text side by side again, so the text panel has the full height to scroll. */
+@media (max-width: 767px) and (max-height: 500px) {
+  .slide {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .box-head { flex-wrap: wrap; } /* in a panel this narrow, Copy drops under its label rather than out of the box */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

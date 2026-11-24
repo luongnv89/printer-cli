@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>printer-cli: what prt prints</title>
+<meta name="description" content="A slideshow of every printer-cli example: the photo booth, cards, comics, postcards, disc labels, recipe and bingo cards, magazine articles, the vintage gazette and the terminal commands, each with the prt command and a prompt for your AI agent.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#d6d6d6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#262626" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <picture class="brand">
+      <source media="(prefers-color-scheme: dark)" srcset="logo-white.svg">
+      <img src="logo-black.svg" alt="printer-cli" width="178" height="40">
+    </picture>
+    <h1 class="sr-only">printer-cli examples: what prt prints, with the command and an AI-agent prompt for each</h1>
+    <div class="top-controls">
+      <p class="counter"><span id="current">01</span> / <span id="total">01</span></p>
+      <button id="autoplay" class="ctl" type="button" aria-label="Autoplay" aria-pressed="true" title="Autoplay (Space)">
+        <svg class="icon icon-pause" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+        <svg class="icon icon-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="stage" class="stage" aria-roledescription="carousel" aria-label="printer-cli examples">
+    <noscript><p class="noscript">This slideshow needs JavaScript. Every example is also in the <a href="https://github.com/luongnv89/printer-cli#readme">printer-cli README</a>.</p></noscript>
+  </main>
+
+  <nav class="bar" aria-label="Slides">
+    <div class="progress" aria-hidden="true"><span id="progress"></span></div>
+    <div class="nav-row">
+      <button id="prev" class="ctl" type="button" aria-label="Previous slide">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <div id="dots" class="dots"></div>
+      <button id="next" class="ctl" type="button" aria-label="Next slide">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <footer class="foot">
+    <a href="LICENSE">MIT © Luong NGUYEN</a>
+    <a href="https://github.com/luongnv89/printer-cli">GitHub</a>
+    <a href="https://pypi.org/project/printer-cli/">PyPI</a>
+    <details id="credits" class="credits">
+      <summary>Credits</summary>
+      <div class="credits-panel" role="group" aria-label="Credits" tabindex="0">
+        <p>printer-cli and this site are under the <a href="LICENSE">MIT licence</a>, © Luong NGUYEN.</p>
+        <p>The photos in the <a href="https://github.com/luongnv89/printer-cli/tree/main/assets/samples">sample pages</a> are public-domain NASA images from Apollo 8, Apollo 11 and Apollo 17, via Wikimedia Commons.</p>
+        <p>The fonts are under the SIL OFL 1.1: <a href="fonts/OFL-PlayfairDisplay.txt">Playfair Display</a> and <a href="fonts/OFL-OldStandardTT.txt">Old Standard TT</a>.</p>
+      </div>
+    </details>
+  </footer>
+
+  <p id="announce" class="sr-only" aria-live="polite"></p>
+  <p id="copy-status" class="sr-only" role="status"></p>
+</div>
+<script type="application/json" id="slides">
+[
+ {
+  "id": "intro",
+  "kind": "intro",
+  "title": "Your printer, from the terminal",
+  "group": "printer-cli",
+  "blurb": "Check ink, print and scan, and turn photos into pages worth printing. Each slide shows a sample, the command that made it and a prompt for your AI agent.",
+  "command": "uv tool install printer-cli\nprt skills install",
+  "prompt": "Install printer-cli with uv, then install its agent skills with prt.",
+  "stack": [
+   "samples/booth-wanted.jpg",
+   "samples/gazette.jpg",
+   "samples/booth-movie.jpg"
+  ]
+ },
+ {
+  "id": "quick-start",
+  "kind": "terminal",
+  "title": "Printer status",
+  "group": "Quick start",
+  "blurb": "Ink, paper and alerts in one box. The built-in demo printer replays a real Epson XP-6000.",
+  "command": "prt -p demo status",
+  "prompt": "Use prt's built-in demo printer to show me a printer's status: ink, paper and alerts.",
+  "output": "╭─┐EPSON XP-6000 Series · office┌──────────────────────────────────────────╮\n│ ● idle    firmware 20.50.NU30Q6 · up 4h02m                               │\n├──────────────────────────────────────────────────────────────────────────┤\n│ ink                                                                      │\n│ Photo Black  ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■····  92%               │\n│ Cyan         ········································   1%  ✗ replace    │\n│ Magenta      ········································   1%  ✗ replace    │\n│ Yellow       ■■■■····································  12%  ▲ low        │\n│ Black        ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■·····  89%               │\n├──────────────────────────────────────────────────────────────────────────┤\n│ paper   main A4 ✓   photo 4×6 ✓   disc Disc ✓   (levels not reported)    │\n│ waste   ▲ almost full — service soon                                     │\n╰─┘4 alerts · checked 17:42└───────────────────────────────────────────────╯"
+ },
+ {
+  "id": "tui",
+  "kind": "image",
+  "title": "The TUI",
+  "group": "Dashboard",
+  "blurb": "A keyboard-driven dashboard: ink tanks in their cartridge colours, system info, paper trays and alerts.",
+  "command": "prt -p demo tui",
+  "prompt": "Open prt's full-screen dashboard for the built-in demo printer.",
+  "image": "samples/tui.jpg",
+  "alt": "prt tui dashboard showing ink tanks, system info, paper trays and alerts for the demo printer",
+  "width": 1000,
+  "height": 627
+ },
+ {
+  "id": "booth-metro",
+  "kind": "image",
+  "title": "Metro front page",
+  "group": "Photo booth",
+  "blurb": "Your photo as a colour tabloid front page with a two-column news story.",
+  "command": "prt booth astronaut.jpg --story-file story.json -o booth-metro.png",
+  "prompt": "Use prt to make astronaut.jpg into a colour metro front page with the story in story.json (\"Man Walks on the Moon\"), saved as booth-metro.png.",
+  "image": "samples/booth-metro.jpg",
+  "alt": "metro sample page: a black 'METRO' masthead with a red rule, the headline 'MAN WALKS ON THE MOON' over a colour photo of an astronaut on the Moon with its caption, and the story in two columns",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "booth-daily",
+  "kind": "image",
+  "title": "Daily broadsheet",
+  "group": "Photo booth",
+  "blurb": "A black-and-white broadsheet front page with three columns.",
+  "command": "prt booth astronaut.jpg --style daily --story-file story.json -o booth-daily.png",
+  "prompt": "Use prt to make astronaut.jpg into a black-and-white daily broadsheet front page with the story in story.json (\"Man Walks on the Moon\"), saved as booth-daily.png.",
+  "image": "samples/booth-daily.jpg",
+  "alt": "daily sample page: 'The Daily Chronicle' masthead between rules, the headline 'Man Walks on the Moon' over a black-and-white photo of an astronaut on the Moon, and the story in three columns",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "booth-wizard",
+  "kind": "image",
+  "title": "Wizard card",
+  "group": "Photo booth",
+  "blurb": "An ornate trading card with an arched gold frame, a name ribbon and a lore box.",
+  "command": "prt booth astronaut.jpg --style wizard -o booth-wizard.png",
+  "prompt": "Use prt to make astronaut.jpg into a wizard trading card with its built-in text, \"The Spellbound Guest\", saved as booth-wizard.png.",
+  "image": "samples/booth-wizard.jpg",
+  "alt": "wizard sample page: a purple and gold trading card, the photo in an arched frame over a gold banner reading 'The Spellbound Guest' and a cream text box",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "booth-wanted",
+  "kind": "image",
+  "title": "Wanted poster",
+  "group": "Photo booth",
+  "blurb": "A weathered parchment poster with the name and a reward line.",
+  "command": "prt booth astronaut.jpg --style wanted -o booth-wanted.png",
+  "prompt": "Use prt to make astronaut.jpg into a wanted poster with its built-in text, \"The Grinning Captain\" with a reward of 1,000,000 gold, saved as booth-wanted.png.",
+  "image": "samples/booth-wanted.jpg",
+  "alt": "wanted sample page: a torn parchment poster with 'WANTED' over the framed photo, then 'DEAD OR ALIVE', the name 'THE GRINNING CAPTAIN' and a reward of 1,000,000 gold",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "booth-certificate",
+  "kind": "image",
+  "title": "Award certificate",
+  "group": "Photo booth",
+  "blurb": "An ivory certificate in a gold border, with the name, the award, today's date and a seal.",
+  "command": "prt booth astronaut.jpg --style certificate -o booth-certificate.png",
+  "prompt": "Use prt to make astronaut.jpg into an award certificate with its built-in text, presented to The Photo Booth Guest \"For the Brightest Smile of the Day\", saved as booth-certificate.png.",
+  "image": "samples/booth-certificate.jpg",
+  "alt": "certificate sample page: a 'Certificate of Achievement' in a green and gold border, the photo in an oval frame, presented to 'The Photo Booth Guest', with a date, a signature and a gold seal at the foot",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "booth-sports",
+  "kind": "image",
+  "title": "Sports card",
+  "group": "Photo booth",
+  "blurb": "A royal-blue trading card with the team, the position and a stats box.",
+  "command": "prt booth astronaut.jpg --style sports -o booth-sports.png",
+  "prompt": "Use prt to make astronaut.jpg into a sports trading card with its built-in text, \"The Shutter Star\" of the Booth City Flashes, saved as booth-sports.png.",
+  "image": "samples/booth-sports.jpg",
+  "alt": "sports card sample page: a blue trading card for the 'Booth City Flashes', the photo over a red banner reading 'THE SHUTTER STAR', the position and number, and a white box of stats",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "booth-missing",
+  "kind": "image",
+  "title": "Missing-pet poster",
+  "group": "Photo booth",
+  "blurb": "A poster with a reward line and tear-off tabs that each carry the contact.",
+  "command": "prt booth astronaut.jpg --style missing -o booth-missing.png",
+  "prompt": "Use prt to make astronaut.jpg into a missing-pet poster with its built-in text, Whiskers the cat with \"Call 555-0134\" on the tear-off tabs, saved as booth-missing.png.",
+  "image": "samples/booth-missing.jpg",
+  "alt": "missing-pet poster sample page: 'MISSING' in red over 'HAVE YOU SEEN THIS CAT?', the photo, the name 'WHISKERS', a reward line, a description and a row of tear-off phone tabs",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "booth-movie",
+  "kind": "image",
+  "title": "Movie poster",
+  "group": "Photo booth",
+  "blurb": "A dark poster with the title in gold capitals, five stars and a credits block.",
+  "command": "prt booth astronaut.jpg --style movie -o booth-movie.png",
+  "prompt": "Use prt to make astronaut.jpg into a movie poster with its built-in text, \"The Photo Booth\", saved as booth-movie.png.",
+  "image": "samples/booth-movie.jpg",
+  "alt": "movie poster sample page: the photo filling a dark poster under a tagline, the title 'THE PHOTO BOOTH' in gold over five stars, 'COMING SOON TO A PRINTER NEAR YOU' and a credits block",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "card",
+  "kind": "image",
+  "title": "Greeting card",
+  "group": "Greeting card",
+  "blurb": "A photo and a verse on one A4 sheet that folds into an A6 card.",
+  "command": "prt card astronaut.jpg -o card.png",
+  "prompt": "Use prt to make astronaut.jpg into a folding greeting card with its built-in \"Best Wishes\" greeting and verse, saved as card.png.",
+  "image": "samples/card.jpg",
+  "alt": "greeting card sample sheet: the photo and greeting on the bottom right, the back on the bottom left, the verse and an empty inside left upside down on the top half",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "comic",
+  "kind": "image",
+  "title": "Comic page",
+  "group": "Comic strips",
+  "blurb": "Three to six photos as comic panels, with speech bubbles, thought bubbles and captions.",
+  "command": "prt comic astronaut.jpg launch.jpg earthrise.jpg bluemarble.jpg --comic-file comic.json -o comic.png",
+  "prompt": "Use prt to make a comic page, \"One Small Step\", from astronaut.jpg, launch.jpg, earthrise.jpg and bluemarble.jpg with the captions and bubbles in comic.json, saved as comic.png.",
+  "image": "samples/comic.jpg",
+  "alt": "comic strip sample page: a handwritten title over four photo panels in black borders, with speech bubbles, a thought bubble and yellow narration captions",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "strip",
+  "kind": "image",
+  "title": "Photo-booth strip",
+  "group": "4×6 photo prints",
+  "blurb": "Four photos in a column, printed twice side by side to cut into two strips.",
+  "command": "prt strip astronaut.jpg launch.jpg earthrise.jpg bluemarble.jpg --caption \"Apollo 11 · July 1969\" -o strip.png",
+  "prompt": "Use prt to make a photo-booth strip of astronaut.jpg, launch.jpg, earthrise.jpg and bluemarble.jpg captioned \"Apollo 11 · July 1969\", saved as strip.png.",
+  "image": "samples/strip.jpg",
+  "alt": "photo-booth strip sample: four photos in a column with a handwritten caption, printed twice side by side",
+  "width": 800,
+  "height": 1200
+ },
+ {
+  "id": "instant",
+  "kind": "image",
+  "title": "Instant photo",
+  "group": "4×6 photo prints",
+  "blurb": "One photo, cropped square, in a wide white frame with a handwritten caption.",
+  "command": "prt instant earthrise.jpg --caption \"Earthrise, Christmas Eve 1968\" -o instant.png",
+  "prompt": "Use prt to make earthrise.jpg into a Polaroid-style instant photo captioned \"Earthrise, Christmas Eve 1968\", saved as instant.png.",
+  "image": "samples/instant.jpg",
+  "alt": "instant photo sample: a square photo in a white frame with a handwritten caption",
+  "width": 800,
+  "height": 1200
+ },
+ {
+  "id": "colour-in",
+  "kind": "image",
+  "title": "Colouring page",
+  "group": "Colouring pages",
+  "blurb": "A photo turned into black line art on white, ready for crayons.",
+  "command": "prt colour-in astronaut.jpg -o colour-in.png",
+  "prompt": "Use prt to turn astronaut.jpg into a colouring page, saved as colour-in.png.",
+  "image": "samples/colour-in.jpg",
+  "alt": "colouring page sample: a photo of an astronaut on the Moon drawn as black outlines on white in a frame",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "postcard",
+  "kind": "image",
+  "title": "Postcard",
+  "group": "Postcards",
+  "blurb": "The photo on the front; the message, a stamp box and address lines on the back.",
+  "command": "prt postcard earthrise.jpg --postcard-file postcard.json -o postcard.png",
+  "prompt": "Use prt to make a postcard of earthrise.jpg with the greeting, message and address in postcard.json (\"Greetings from lunar orbit\"), saved as postcard.png.",
+  "image": "samples/postcard.jpg",
+  "alt": "postcard sample: the Earthrise photo with a handwritten greeting on the front; on the back a handwritten message and signature, a stamp box and four address lines",
+  "width": 900,
+  "height": 1224
+ },
+ {
+  "id": "disc",
+  "kind": "image",
+  "title": "Disc label",
+  "group": "Disc labels",
+  "blurb": "A circular label printed straight onto a CD or DVD through the disc tray.",
+  "command": "prt disc bluemarble.jpg --disc-file disc.json -o disc.png",
+  "prompt": "Use prt to make a disc label from bluemarble.jpg with the title and track list in disc.json (\"Blue Marble Mix\"), saved as disc.png.",
+  "image": "samples/disc.jpg",
+  "alt": "disc label sample: the Blue Marble photo filling a ring round a white hub, the title 'Blue Marble Mix' and a subtitle above the hub, ten tracks in two columns either side of it and a footer line at the foot",
+  "width": 800,
+  "height": 800
+ },
+ {
+  "id": "recipe",
+  "kind": "image",
+  "title": "Recipe cards",
+  "group": "Recipe cards",
+  "blurb": "A recipe as 6×4 index cards, the ingredients and steps on ruled lines.",
+  "command": "prt recipe recipe.json -o recipe.png",
+  "prompt": "Use prt to make recipe cards from recipe.json (\"Moon Landing Lemon Drizzle Cake\"), saved as recipe.png.",
+  "image": "samples/recipe.jpg",
+  "alt": "recipe card sample: the title in handwriting, the ingredients and numbered steps on ruled lines in two columns",
+  "width": 1200,
+  "height": 800
+ },
+ {
+  "id": "bingo",
+  "kind": "image",
+  "title": "Bingo cards",
+  "group": "Bingo cards",
+  "blurb": "A different bingo card for each player, from a bundled theme or your own words.",
+  "command": "prt bingo --words-file bingo.json --seed 1969 -o bingo.png",
+  "prompt": "Use prt to deal bingo cards from the words in bingo.json (\"Space Camp Bingo\") with seed 1969, saved as bingo.png.",
+  "image": "samples/bingo.jpg",
+  "alt": "bingo card sample: the title 'Space Camp Bingo' in handwriting over coloured B-I-N-G-O letters and a 5×5 grid of space words with a yellow 'LIFT OFF' square in the centre",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "article-magazine",
+  "kind": "image",
+  "title": "Magazine article",
+  "group": "Article printing",
+  "blurb": "A web article as A4 magazine pages with three ruled columns.",
+  "command": "prt article article.json -o article-magazine.png",
+  "prompt": "Use the article-print skill to lay out the article in article.json (\"Why the Apollo Guidance Computer Still Matters\") as magazine pages, saved as article-magazine.png.",
+  "image": "samples/article-magazine.jpg",
+  "alt": "magazine sample page: a blue rule and the site name over the title 'Why the Apollo Guidance Computer Still Matters' in bold type, the byline, the text in three columns, and the address and page number at the foot",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "article-classic",
+  "kind": "image",
+  "title": "Classic magazine",
+  "group": "Article printing",
+  "blurb": "An ivory page in a double-rule frame, one centred column and a drop cap.",
+  "command": "prt article article.json --style classic-magazine -o article-classic.png",
+  "prompt": "Use prt to lay out the article in article.json (\"Why the Apollo Guidance Computer Still Matters\") in the classic-magazine style, saved as article-classic.png.",
+  "image": "samples/article-classic.jpg",
+  "alt": "classic-magazine sample page: a cream page in a double border, the site name, title and byline centred between ornaments, the text in one column opening with a red drop cap, and the page number at the foot",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "gazette",
+  "kind": "image",
+  "title": "Vintage gazette",
+  "group": "Vintage gazette",
+  "blurb": "Photos as the front page of an old newspaper, under a blackletter masthead.",
+  "command": "prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file story.json -o gazette.png",
+  "prompt": "Use prt to make a vintage gazette front page from astronaut.jpg, launch.jpg and earthrise.jpg with the story in story.json (\"Man Walks on the Moon\"), saved as gazette.png.",
+  "image": "samples/gazette.jpg",
+  "alt": "portrait gazette sample page: 'The Photo Gazette' in blackletter on cream paper, the headline 'MAN WALKS ON THE MOON' over a sepia photo of an astronaut on the Moon, two smaller photos of a rocket launch and the Earth over the Moon, and the story in two columns",
+  "width": 800,
+  "height": 1132
+ },
+ {
+  "id": "gazette-landscape",
+  "kind": "image",
+  "title": "Gazette, landscape",
+  "group": "Vintage gazette",
+  "blurb": "The same edition laid out on A4 turned on its side.",
+  "command": "prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file story.json --landscape -o gazette-landscape.png",
+  "prompt": "Use prt to make a vintage gazette front page on landscape A4 from astronaut.jpg, launch.jpg and earthrise.jpg with the story in story.json (\"Man Walks on the Moon\"), saved as gazette-landscape.png.",
+  "image": "samples/gazette-landscape.jpg",
+  "alt": "--landscape gazette sample page: 'The Photo Gazette' on a sheet turned on its side, the headline 'MAN WALKS ON THE MOON' over a large sepia photo of an astronaut on the left, the story in three columns beside it and two smaller photos under the story",
+  "width": 1000,
+  "height": 707
+ },
+ {
+  "id": "letter-gazette",
+  "kind": "terminal",
+  "title": "A letter as a gazette",
+  "group": "Vintage gazette",
+  "blurb": "Scan a handwritten letter, type it out as the story, and print the scan as the lead picture.",
+  "command": "prt -p demo scan --format jpeg -o letter.jpg                                          # scan the letter as a JPEG\nprt -p demo gazette letter.jpg --story-file story.json --preview edition.pdf -f json   # the transcription as the story\nprt -p demo gazette letter.jpg --story-file story.json --yes                           # print it",
+  "prompt": "Use the letter-gazette skill with prt's demo printer: scan my handwritten letter, type it out as the story, preview it as a vintage gazette, then print it.",
+  "output": ""
+ },
+ {
+  "id": "compose",
+  "kind": "terminal",
+  "title": "Compose a page",
+  "group": "Compose a page",
+  "blurb": "Describe a page as blocks: headings, text, images, QR codes, columns and rules.",
+  "command": "prt compose page.json",
+  "prompt": "Use prt compose to print page.json, the \"Garden party\" page with a heading, a photo, the menu and a QR code for replies.",
+  "output": "{\n  \"title\": \"Garden party\",\n  \"blocks\": [\n    {\"type\": \"heading\", \"text\": \"Garden Party\", \"align\": \"center\"},\n    {\"type\": \"image\", \"path\": \"garden.jpg\", \"height\": 80, \"caption\": \"Last year\"},\n    {\"type\": \"text\", \"text\": \"Saturday from 3 pm, at number 12.\\nBring something to share.\", \"size\": \"large\"},\n    {\"type\": \"rule\"},\n    {\"type\": \"columns\", \"columns\": [\n      [{\"type\": \"heading\", \"text\": \"Menu\", \"level\": 2}, {\"type\": \"text\", \"text\": \"Lemonade\\nStrawberry cake\"}],\n      [{\"type\": \"qr\", \"data\": \"https://example.com/rsvp\", \"size\": 35, \"caption\": \"Reply here\"}]\n    ]}\n  ]\n}"
+ },
+ {
+  "id": "ink",
+  "kind": "terminal",
+  "title": "Ink levels",
+  "group": "Commands",
+  "blurb": "Ink levels only, with a mark on each cartridge that is low or needs replacing.",
+  "command": "prt ink",
+  "prompt": "Use prt to show my printer's ink levels and which cartridges are low or need replacing.",
+  "output": "╭─┐ink · demo┌─────────────────────────────────────────────────────────────────╮\n│ Photo Black  ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■····  92%                   │\n│ Cyan         ········································   1%  ✗ replace        │\n│ Magenta      ········································   1%  ✗ replace        │\n│ Yellow       ■■■■····································  12%  ▲ low            │\n│ Black        ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■·····  89%                   │\n╰─┘15:39└──────────────────────────────────────────────────────────────────────╯"
+ },
+ {
+  "id": "status-watch",
+  "kind": "terminal",
+  "title": "Watch status",
+  "group": "Commands",
+  "blurb": "One line per sample, every 2 seconds, until Ctrl-C.",
+  "command": "prt status --watch 2",
+  "prompt": "Use prt to watch my printer's status, one line every 2 seconds.",
+  "output": "15:39:31  ● idle       PB  92 C   1 M   1 Y  12 BK  89   4 alerts\n15:39:33  ● idle       PB  92 C   1 M   1 Y  12 BK  89   4 alerts\n15:39:35  ● idle       PB  92 C   1 M   1 Y  12 BK  89   4 alerts"
+ },
+ {
+  "id": "overview",
+  "kind": "terminal",
+  "title": "Printer overview",
+  "group": "Commands",
+  "blurb": "Model, serial, firmware, uptime, page count, formats, media, scanner and capabilities.",
+  "command": "prt overview",
+  "prompt": "Use prt to show my printer's overview: model, serial, firmware, uptime, page count, media and capabilities.",
+  "output": "╭─┐EPSON XP-6000 Series · demo┌────────────────────────────────────────────────╮\n│ system                                                                       │\n│   model          EPSON XP-6000 Series                                        │\n│   vendor         Epson                                                       │\n│   serial         X00000000                                                   │\n│   uuid           00000000-0000-4000-8000-000000000000                        │\n│   driver         fake                                                        │\n├──────────────────────────────────────────────────────────────────────────────┤\n│ software                                                                     │\n│   firmware       20.50.NU30Q6                                                │\n│   ipp            1.0, 1.1, 2.0                                               │\n│   formats        octet-stream, pwg-raster, urf, jpeg                         │\n│   admin page     http://printer.local:80/PRESENTATION/BONJOUR                │\n├──────────────────────────────────────────────────────────────────────────────┤\n│ hardware                                                                     │\n│   uptime         4h02m                                                       │\n│   pages printed  1,538                                                       │\n│   colour         yes                                                         │\n│   duplex         yes                                                         │\n│   speed          9 ppm                                                       │\n│   resolutions    360dpi, 720dpi, 5760x1440dpi                                │\n│   trays          main, photo, disc                                           │\n│   media          A4, 4×6, 5×7, 8×10, A5, A6, Letter, Legal, L (3.5×5), B5 …  │\n…"
+ },
+ {
+  "id": "maintenance",
+  "kind": "terminal",
+  "title": "Maintenance",
+  "group": "Commands",
+  "blurb": "Nozzle check, head cleaning with a safety check first, a colour test page, or flash the panel.",
+  "command": "prt maintain nozzle-check     # print the pattern; a gap in a line means clogged nozzles\nprt maintain clean            # head cleaning, refused while ink is low or the waste pad is near full\nprt maintain test-page --yes  # colour test page, no prompt\nprt maintain identify         # flash the panel to find the printer",
+  "prompt": "Use prt to print a nozzle check, clean the print head if it is safe to, print a colour test page without asking, and flash my printer's panel so I can find it.",
+  "output": ""
+ },
+ {
+  "id": "printing",
+  "kind": "terminal",
+  "title": "Printing",
+  "group": "Commands",
+  "blurb": "PDFs through CUPS, photos from the photo tray, copies, two-sided and black and white.",
+  "command": "prt print boarding-pass.pdf                                    # PDF goes through the local CUPS queue\nprt print holiday.jpg --media 4x6 --tray photo --quality high  # photo paper from the photo tray\nprt print notes.pdf -n 2 --duplex --mono                       # two double-sided black-and-white copies\nprt print poster.png --direct                                  # straight to the printer, never via CUPS",
+  "prompt": "Use prt to print boarding-pass.pdf, print holiday.jpg on 4×6 photo paper from the photo tray in high quality, print two double-sided black-and-white copies of notes.pdf, and send poster.png straight to the printer.",
+  "output": ""
+ },
+ {
+  "id": "jobs",
+  "kind": "terminal",
+  "title": "Print jobs",
+  "group": "Commands",
+  "blurb": "List the jobs, finished ones too, and cancel one by its id.",
+  "command": "prt jobs --all\nprt jobs cancel 42",
+  "prompt": "Use prt to list all my printer's jobs, finished ones too, and cancel job 42.",
+  "output": "╭─┐jobs · demo┌────────────────────────────────────────────────────────────────╮\n│ id  name               state        user  pages                              │\n│ 41  boarding-pass.pdf  ● completed  alex      1                              │\n│ 42  nozzle-check       ● completed  prt       1                              │\n╰─┘2 jobs└─────────────────────────────────────────────────────────────────────╯"
+ },
+ {
+  "id": "scanning",
+  "kind": "terminal",
+  "title": "Scanning",
+  "group": "Commands",
+  "blurb": "Scan the flatbed to PDF or JPEG, in colour or greyscale.",
+  "command": "prt scan -o receipt.pdf                                  # A4, colour, 300 dpi PDF\nprt scan -o photo.jpg --type jpeg --dpi 600 --area full  # whole glass as a JPEG\nprt scan --mode gray -o letter.pdf                       # greyscale",
+  "prompt": "Use prt to scan to receipt.pdf, scan the whole glass to photo.jpg as a 600 dpi JPEG, and scan letter.pdf in greyscale.",
+  "output": ""
+ }
+]
+</script>
+</body>
+</html>

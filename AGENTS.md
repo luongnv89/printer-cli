@@ -153,6 +153,7 @@ The tests use the demo printer (`FakeDriver` replaying `src/prt/fixtures/epson-x
 | `src/prt/tui/` | The Textual dashboard (`prt tui`) |
 | `skills/` | The agent skills (`photo-booth`, `greeting-card`, `article-print`, `letter-gazette`). The wheel carries a copy as `prt/bundled_skills` (`force-include` in `pyproject.toml`) |
 | `.claude-plugin/` | The Claude Code plugin manifest and the marketplace that lists it |
+| `site/` | The examples site: a static slideshow, no build step, of every README example with its command and an agent prompt. `index.html` holds the slides as JSON; a new README sample or terminal example needs a slide there (`tests/test_site.py` checks). Left out of the sdist |
 
 ### Conventions
 
