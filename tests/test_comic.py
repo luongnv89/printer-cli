@@ -173,6 +173,29 @@ def test_fit_bubble_leaves_a_bubble_with_no_room_empty_and_cut():
     assert fitted.lines == [] and fitted.cut.max_fit == 0 and fitted.cut.given == 5
 
 
+def test_fit_bubble_of_only_combining_marks_is_empty_and_not_cut():
+    fitted = comic.fit_bubble("́", "thought", 300, 300)
+    assert fitted.lines == [] and fitted.cut is None and (fitted.width, fitted.height, fitted.puff) == (0, 0, 0)
+
+
+@pytest.mark.parametrize("field", ["bubble", "caption", "title", "byline"])
+def test_text_of_only_combining_marks_is_drawn_without_crashing(capsys, tmp_path, field):
+    """A text that passes the schema but has nothing to print (a lone combining accent) is left out, not a crash."""
+    mark = "́"
+    first = {"bubbles": [{"text": mark}]} if field == "bubble" else {"caption": mark} if field == "caption" else {}
+    data = {"panels": [first, {"bubbles": [{"text": "Hi!"}]}, {}]}
+    if field in ("title", "byline"):
+        data[field] = mark
+    assert _accepted(data)
+    page, cut = comic.compose(_images(3), comic.parse_comic(json.dumps(data)))
+    assert page.size == (comic.W, comic.H) and cut == {}
+    out_file = tmp_path / "comic.png"
+    code, _, err = run(capsys, "comic", *map(str, _photos(tmp_path, 3)),
+                       "--comic-file", str(_comic_file(tmp_path, data)), "-o", str(out_file))
+    assert code == 0, err
+    assert out_file.read_bytes().startswith(b"\x89PNG")
+
+
 # --- the comic file ----------------------------------------------------------------------------
 
 def test_comic_file_fills_in_default_positions_and_cleans_text():

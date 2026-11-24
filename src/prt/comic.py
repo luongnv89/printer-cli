@@ -389,6 +389,8 @@ def fit_bubble(text: str, kind: str, max_w: float, max_h: float) -> Fitted:
     if fitted is None:
         return Fitted(fonts.face("hand-bold", BUBBLE_MIN), BUBBLE_MIN, [], 0, 0, 0, Cut(0, len(text)))
     font, s, lines, cut = fitted
+    if not lines and cut is None:  # nothing printable (only combining marks): no bubble is drawn
+        return Fitted(font, s, [], 0, 0, 0, None)
     if cut is None and len(lines) > 1:  # balance: the narrowest width that keeps the same number of lines
         printable = _printable_face(text, font)
         lo, hi = min(text_w, max(text_w // 3, _widest(text, font))), text_w  # never split a word to balance
