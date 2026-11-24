@@ -3,7 +3,7 @@ the input files the print commands read.
 
 ``styles()`` lists the styles (``prt styles -f json``) and ``schema(name)`` returns one JSON Schema (``prt schema
 NAME``). Both are built from the constants the commands check their input against (``booth.FIELDS``,
-``booth.LIMITS``, ``card.LIMITS``, ``article.FIELDS``, ``recipe.LIMITS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
+``booth.LIMITS``, ``card.LIMITS``, ``postcard.LIMITS``, ``article.FIELDS``, ``recipe.LIMITS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
 schema is built by :mod:`prt.compose`, which checks page files against it. Other front
 ends (an MCP server, page validation) import this module instead of listing the styles again; a new input schema
 is added with ``@register_schema``.
@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
-from prt import article, booth, card, compose, photocard, recipe, vintage
+from prt import article, booth, card, compose, photocard, postcard, recipe, vintage
 from prt.drivers.base import PrinterError
 from prt.paper import PAPERS
 
@@ -139,6 +139,14 @@ ARTICLE_REQUIRED = ("title", "body")  # as article.parse refuses a file without 
 STRIP_ROLES = {"caption": "Handwritten line under the four frames (--caption); today's date when not given"}
 INSTANT_ROLES = {"caption": "Handwritten caption under the photo (--caption); today's date when not given, empty "
                             "to leave the space blank to write on"}
+POSTCARD_ROLES = {
+    "greeting": "Handwritten line across the foot of the photo on the front, e.g. 'Greetings from Lisbon'; when "
+                "empty the photo is printed alone",
+    "message": "The message, in handwriting on the left of the back; a newline starts a new paragraph",
+    "signature": "Line under the message, e.g. 'Love, Jo'",
+    "address": f"The address, written on the ruled lines on the right of the back: one line of text per line, up to "
+               f"{postcard.ADDRESS_LINES}; when empty the lines are left blank to write on",
+}
 RECIPE_ROLES = {
     "title": "The recipe's name, in handwriting at the top of the card",
     "ingredients": "The ingredients, one per item: a list of texts, or one text with a newline between items",
@@ -158,6 +166,11 @@ def story_fields(roles: dict[str, str]) -> tuple[Field, ...]:
 
 def card_fields() -> tuple[Field, ...]:
     return tuple(Field(name, CARD_ROLES[name], name in card.REQUIRED, card.LIMITS[name]) for name in card.FIELDS)
+
+
+def postcard_fields() -> tuple[Field, ...]:
+    return tuple(Field(name, POSTCARD_ROLES[name], name in postcard.REQUIRED, postcard.LIMITS[name])
+                 for name in postcard.FIELDS)
 
 
 def recipe_fields() -> tuple[Field, ...]:
@@ -199,6 +212,10 @@ STRIP_DESCRIPTION = ("Photo-booth strip on 4×6 photo paper: four photos in a co
                      "printed twice side by side; cut along the dashed line for two 2×6 in strips")
 INSTANT_DESCRIPTION = ("Instant photo on 4×6 photo paper, Polaroid-style: the photo cropped square in a wide white "
                        "frame, with a handwritten caption under it")
+POSTCARD_DESCRIPTION = ("Two-sided postcard on 4×6 photo paper, read on its side: the photo on the front with an "
+                        "optional handwritten greeting, and on the back the message and signature, a stamp box and "
+                        "four address lines; printed in one two-sided job, or front then back with the card turned "
+                        "over by hand")
 RECIPE_DESCRIPTION = ("6×4 in index card on 4×6 photo paper: the title in handwriting over a red rule, the "
                       "ingredients and numbered steps on blue lines in two columns; runs on to more cards when needed")
 GAZETTE_KIND = "vintage newspaper"
@@ -216,6 +233,8 @@ def _build() -> tuple[Style, ...]:
     out.append(Style("instant", "instant", (), photocard.INSTANT_KIND, INSTANT_DESCRIPTION, None,
                      (Field("caption", INSTANT_ROLES["caption"], False, photocard.INSTANT_CAPTION_LIMIT),),
                      (1, 1), 1, "instant.jpg", paper="4x6"))
+    out.append(Style("postcard", "postcard", (), postcard.KIND, POSTCARD_DESCRIPTION, "postcard", postcard_fields(),
+                     (1, 1), len(postcard.SIDES), "postcard.jpg", paper="4x6"))
     out += [Style(name, "article", () if name == "magazine" else ("--style", name),
                   article.ARTICLE_STYLES[name].kind, ARTICLE[name][0], "article", article_fields(), (0, 0),
                   article.MAX_PAGES, ARTICLE[name][1]) for name in article.ARTICLE_STYLES]
@@ -368,3 +387,22 @@ def recipe_schema() -> dict[str, Any]:
                                     "Beat the butter and sugar, then the eggs, one at a time.",
                                     "Fold in the flour and zest, and bake for 45 minutes.",
                                     "Pour the lemon juice mixed with sugar over the warm cake."]}]}
+
+
+@register_schema("postcard", "postcard file: prt postcard PHOTO --postcard-file postcard.json")
+def postcard_schema() -> dict[str, Any]:
+    props = {f.name: _text(f) for f in postcard_fields()}
+    # At most ADDRESS_LINES lines: the address may not hold more newlines than that.
+    props["address"]["pattern"] = rf"^[^\n]*(\n[^\n]*){{0,{postcard.ADDRESS_LINES - 1}}}$"
+    return {"$schema": JSON_SCHEMA, "title": "prt postcard",
+            "description": "The postcard file of `prt postcard --postcard-file` (a file, or - for stdin); at most "
+                           f"{postcard.MAX_POSTCARD_FILE // 1024} KiB. The photo is given on the command line. The "
+                           "text is written in a handwriting font that has Latin, Greek and Cyrillic letters: accents "
+                           "are printed, and characters it cannot print, such as emoji or Chinese, are refused. "
+                           "Lengths count characters, with each run of spaces as one; in the message and the address "
+                           "each newline counts as a character, and blank lines are dropped.",
+            "type": "object", "properties": props,
+            "required": [f.name for f in postcard_fields() if f.required], "additionalProperties": False,
+            "examples": [asdict(postcard.DEFAULT_POSTCARD),
+                         {"message": "Made it to the coast!\nThe sea is cold but the chips are perfect.",
+                          "signature": "Love, Jo", "address": "Sam Lee\n4 Elm Road\nLeeds LS6 1AB"}]}

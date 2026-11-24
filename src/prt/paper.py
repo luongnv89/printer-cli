@@ -2,9 +2,11 @@
 
 A :class:`Paper` ties a page's pixel size to what the printer is asked for: the media size, the input tray and the
 media type. A4 from the main tray is what booth, card, article, gazette and compose print on; the 4×6 photo paper
-from the photo tray is what ``prt strip``, ``prt instant`` and ``prt recipe`` print on. Another size (A6 postcards,
-a printable disc) is one more :class:`Paper`: the layout draws on ``paper.size``, :func:`prt.render.send_pages`
-sends with ``paper.options()`` and :func:`prt.guard.estimate` scales the ink by ``paper.ink_scale``.
+from the photo tray is what ``prt strip``, ``prt instant``, ``prt recipe`` and ``prt postcard`` print on. Another
+size (A6 postcards, a printable disc) is one more :class:`Paper`: the layout draws on ``paper.size``,
+:func:`prt.render.send_pages` sends with ``paper.options()`` and :func:`prt.guard.estimate` scales the ink by
+``paper.ink_scale``. ``paper.duplex`` says whether a two-sided page (``prt postcard``) may be left to the printer's
+own duplexer.
 """
 
 from __future__ import annotations
@@ -33,6 +35,9 @@ class Paper:
     tray: str | None = None  # media-source; None lets the printer pick, as `prt print` does
     media_type: str | None = None  # e.g. "photographic"; None lets the printer pick
     dpi: int = 150
+    # Whether a printer that reports two-sided printing can turn this sheet over itself. Inkjet duplexers take
+    # plain paper from the main tray, not photo or card stock from the photo tray, which is turned by hand.
+    duplex: bool = False
 
     @property
     def size(self) -> tuple[int, int]:
@@ -91,7 +96,7 @@ class Paper:
         return {"size": self.name, "media": self.media, "tray": self.tray}
 
 
-A4 = Paper("a4", "A4", 210, 297, "a4")
+A4 = Paper("a4", "A4", 210, 297, "a4", duplex=True)
 # 4×6 in photo paper in the photo tray, drawn at 300 dpi: a photo print is looked at from close up.
 PHOTO_4X6 = Paper("4x6", "4×6", 101.6, 152.4, "4x6", tray="photo", media_type="photographic", dpi=300)
 

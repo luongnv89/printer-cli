@@ -1,4 +1,4 @@
-"""Booth, card, article, compose, strip, instant and recipe pages as callable steps, shared by the CLI commands and the MCP server.
+"""Booth, card, article, compose, strip, instant, recipe and postcard pages as callable steps, shared by the CLI commands and the MCP server.
 
 Each front end reads its own input (files and flags, or MCP tool arguments) and decides how to show the result;
 what happens in between is here: lay the pages out, say what did not fit and what printing them would cost, and
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from prt.compose import Page
     from prt.drivers.base import Driver
     from prt.layout import Cut
+    from prt.postcard import Postcard
     from prt.recipe import Recipe
 
 
@@ -121,6 +122,37 @@ def recipe_cards(recipe: Recipe) -> Rendered:
 
 def recipe_job_names(title: str, count: int) -> list[str]:
     return [f"prt recipe {number}/{count} {title[:60]}" for number in range(1, count + 1)]
+
+
+def postcard_sides(photo: Image.Image, card: Postcard) -> Rendered:
+    """The two sides of a postcard, front then back (see ``postcard.compose``), each upright as it is read
+    (landscape) on 4×6 photo paper."""
+    from prt import postcard
+    pages, cut = postcard.compose(photo, card)
+    return Rendered(pages, cut, PHOTO_4X6)
+
+
+def send_two_sided(queue: str, pages: Sequence[Image.Image], name: str, ticket: guard.Ticket,
+                   paper: Paper = A4) -> int:
+    """Submit ``pages`` (front, back) as one two-sided job on ``paper`` through the CUPS queue ``queue``,
+    returning the CUPS job id.
+
+    The printer takes one image per IPP job, so the sides go to CUPS as one PDF of upright pages, flipped on the
+    short edge: a landscape side turned upright for the printer is read turned over like a book page. Both pages
+    are booked on ``ticket`` right before the submit.
+    """
+    import tempfile
+    from dataclasses import replace
+    from pathlib import Path
+
+    from prt import media, printing
+    upright = [paper.for_printer(page) for page in pages]
+    options = replace(paper.options(name), media=media.resolve_alias(paper.media), sides="two-sided-short-edge")
+    with tempfile.TemporaryDirectory(prefix="prt-") as folder:
+        path = Path(folder) / "postcard.pdf"
+        upright[0].save(path, "PDF", resolution=paper.dpi, quality=92, save_all=True, append_images=upright[1:])
+        ticket.attempt(len(pages))
+        return printing.cups_print(queue, path, options)
 
 
 def send_pages(driver: Driver, pages: Sequence[bytes], names: Sequence[str], ticket: guard.Ticket,
