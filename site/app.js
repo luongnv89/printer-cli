@@ -234,12 +234,18 @@
     }
   });
 
-  // Hover pauses for a mouse only: a touch fires an enter with no matching leave.
-  stage.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") hoverPaused = true; });
+  // A mouse over the text panel (reading or copying) pauses; one resting on the proof does not, since the
+  // stage fills most of the screen. Mouse only: a touch fires an enter with no matching leave.
+  stage.addEventListener("pointerover", (event) => {
+    if (event.pointerType === "mouse") hoverPaused = Boolean(event.target.closest(".panel"));
+  });
   stage.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hoverPaused = false; });
   stage.addEventListener("focusin", () => { focusPaused = true; });
   stage.addEventListener("focusout", (event) => { focusPaused = stage.contains(event.relatedTarget); });
-  document.addEventListener("visibilitychange", () => { hidden = document.hidden; });
+  document.addEventListener("visibilitychange", () => {
+    hidden = document.hidden;
+    last = null; // a hidden tab gets no frames, so the time away must not count towards the slide
+  });
   reduceMotion.addEventListener("change", () => {
     if (reduceMotion.matches) userPaused = true;
     sync();
