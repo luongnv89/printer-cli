@@ -2,8 +2,8 @@
 
 The photo is smoothed and cut into a few flat tones, and the outlines between the tones are drawn as black lines:
 the shapes come out mostly closed, so each can be coloured in. The art is fitted whole (never cropped) in a frame on
-an A4 sheet, upright for a portrait photo and on its side for a landscape one; the frame closes the shapes the
-photo's edge cuts through. Every pixel of the page is pure black or pure white, so it prints with black ink only.
+an A4 sheet, upright for a portrait photo and on its side for a landscape one; the frame is drawn flush against the
+art, so the outlines that reach the photo's edge meet it and it closes the shapes the edge cuts through. Every pixel of the page is pure black or pure white, so it prints with black ink only.
 """
 
 from __future__ import annotations
@@ -15,8 +15,7 @@ from prt.paper import A4
 
 KIND = "colouring page"
 MARGIN = A4.mm(12)  # white round the frame
-FRAME = 4  # px: the line round the art
-PAD = A4.mm(3)  # white between the frame and the art
+FRAME = 4  # px: the line round the art, flush against it (no white between) so the outlines meet it
 SMOOTH = 5  # median filter size: wipes out texture (grass, fabric, skin pores) before the tones are cut
 SMOOTH_PASSES = 2
 TONES = 4  # flat tones the photo is cut into: more gives more, smaller shapes
@@ -50,7 +49,8 @@ def line_art(photo: Image.Image, size: tuple[int, int]) -> Image.Image:
     regions = work.resize(size, Image.Resampling.NEAREST)
     edges = regions.filter(ImageFilter.FIND_EDGES)
     # The edge filter leaves the image's outermost pixels as they were, which would read as a line all round the
-    # art; they are cleared (the frame drawn round the art closes the shapes instead).
+    # art; they are cleared (the frame drawn round the art closes the shapes instead). The outlines still reach the
+    # outermost pixels where they meet the edge: the min filter below spreads them one pixel into the cleared ring.
     edges = ImageOps.expand(ImageOps.crop(edges, 1), 1, 0) if min(size) > 2 else Image.new("L", size, 0)
     return edges.point(lambda v: 0 if v else 255).filter(ImageFilter.MinFilter(LINE))
 
@@ -59,13 +59,12 @@ def compose(photo: Image.Image) -> tuple[Image.Image, Cuts]:
     """The colouring page of ``photo``: its line art fitted whole and centred in a frame on A4. Also returns the
     fields cut to fit (never any: the page has no text)."""
     width, height = page_size(photo)
-    inner = (width - 2 * (MARGIN + FRAME + PAD), height - 2 * (MARGIN + FRAME + PAD))
+    inner = (width - 2 * (MARGIN + FRAME), height - 2 * (MARGIN + FRAME))
     art_w, art_h = _fit(photo.size, inner)
     art = line_art(photo, (art_w, art_h))
     page = Image.new("L", (width, height), 255)
     x0, y0 = (width - art_w) // 2, (height - art_h) // 2
     page.paste(art, (x0, y0))
-    edge = PAD + FRAME
-    ImageDraw.Draw(page).rectangle((x0 - edge, y0 - edge, x0 + art_w - 1 + edge, y0 + art_h - 1 + edge),
+    ImageDraw.Draw(page).rectangle((x0 - FRAME, y0 - FRAME, x0 + art_w - 1 + FRAME, y0 + art_h - 1 + FRAME),
                                    outline=0, width=FRAME)
     return page.convert("RGB"), {}

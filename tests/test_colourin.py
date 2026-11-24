@@ -16,7 +16,7 @@ from prt.transport import ipp
 from conftest import without_estimate
 
 BLACK, WHITE = (0, 0, 0), (255, 255, 255)
-INSET = colourin.FRAME + colourin.PAD + 10  # well inside the frame, clear of its line
+INSET = colourin.FRAME + 10  # well inside the frame, clear of its line
 
 
 def run(capsys, *args):
@@ -53,7 +53,7 @@ def _photo(tmp_path, img=None, name="photo.jpg"):
 
 
 def _art_box(page):
-    """The box inside the frame, found from the frame's black line, shrunk by ``INSET`` - frame - pad."""
+    """The box inside the frame, found from the frame's black line, shrunk by ``INSET`` - frame."""
     grey = page.convert("L")
     x0, y0, x1, y1 = Image.eval(grey, lambda v: 255 - v).getbbox()  # the frame is the outermost black
     return x0 + INSET, y0 + INSET, x1 - INSET, y1 - INSET
@@ -96,6 +96,32 @@ def test_the_page_follows_the_photo_and_keeps_it_whole():
     # The art keeps the photo's shape: the frame round a 2:1 photo is about twice as wide as it is tall.
     x0, y0, x1, y1 = Image.eval(landscape.convert("L"), lambda v: 255 - v).getbbox()
     assert (x1 - x0) / (y1 - y0) == pytest.approx(2, rel=0.05)
+
+
+@pytest.mark.parametrize("split", ["across", "down"])
+def test_outlines_that_reach_the_edge_meet_the_frame(split):
+    """A shape cut by the photo's edge is closed by the frame: the outline between two tones runs into the frame with
+    no white between them, so the two sides do not join round the end of the line."""
+    img = Image.new("RGB", (400, 600), WHITE)
+    w, h = img.size
+    ImageDraw.Draw(img).rectangle((0, h // 2, w - 1, h - 1) if split == "across" else (w // 2, 0, w - 1, h - 1),
+                                  fill=BLACK)
+    page, _ = colourin.compose(img)
+    grey = page.convert("L")
+    x0, y0, x1, y1 = Image.eval(grey, lambda v: 255 - v).getbbox()  # the frame's outer edge
+    if split == "across":
+        mid = (x0 + x1) // 2
+        line = next(y for y in range((y0 + y1) // 2 - 50, y1) if grey.getpixel((mid, y)) == 0)  # the outline
+        assert all(grey.getpixel((x, line)) == 0 for x in range(x0, x1))  # one black run, frame to frame
+        one, other = (mid, (y0 + line) // 2), (mid, (line + y1) // 2)
+    else:
+        mid = (y0 + y1) // 2
+        line = next(x for x in range((x0 + x1) // 2 - 50, x1) if grey.getpixel((x, mid)) == 0)
+        assert all(grey.getpixel((line, y)) == 0 for y in range(y0, y1))
+        one, other = ((x0 + line) // 2, mid), ((line + x1) // 2, mid)
+    # Colouring one side in (a flood fill) leaves the other side and the paper round the frame white.
+    ImageDraw.floodfill(grey, one, 128)
+    assert grey.getpixel(one) == 128 and grey.getpixel(other) == 255 and grey.getpixel((0, 0)) == 255
 
 
 @pytest.mark.parametrize("size", [(1200, 1), (1, 1200), (1, 1), (3, 2)])
