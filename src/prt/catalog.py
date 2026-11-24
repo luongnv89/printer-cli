@@ -3,7 +3,7 @@ the input files the print commands read.
 
 ``styles()`` lists the styles (``prt styles -f json``) and ``schema(name)`` returns one JSON Schema (``prt schema
 NAME``). Both are built from the constants the commands check their input against (``booth.FIELDS``,
-``booth.LIMITS``, ``card.LIMITS``, ``postcard.LIMITS``, ``disc.LIMITS``, ``article.FIELDS``, ``recipe.LIMITS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
+``booth.LIMITS``, ``card.LIMITS``, ``comic.LIMITS``, ``postcard.LIMITS``, ``disc.LIMITS``, ``article.FIELDS``, ``recipe.LIMITS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
 schema is built by :mod:`prt.compose`, which checks page files against it. Other front
 ends (an MCP server, page validation) import this module instead of listing the styles again; a new input schema
 is added with ``@register_schema``.
@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
-from prt import article, booth, card, compose, disc, photocard, postcard, recipe, vintage
+from prt import article, booth, card, comic, compose, disc, photocard, postcard, recipe, vintage
 from prt.drivers.base import PrinterError
 from prt.paper import PAPERS
 
@@ -128,6 +128,16 @@ CARD_ROLES = {
     "signature": "Line under the verse, e.g. 'With love, Jo'",
     "back": "Small line on the back of the card",
 }
+# The comic file's texts, named by where they sit in it: (what it is, the key of its limit in comic.LIMITS).
+COMIC_ROLES = {
+    "title": ("Title above the panels, in large handwriting (--title)", "title"),
+    "byline": ("Line under the title, e.g. 'by Jo and Sam' (--byline)", "byline"),
+    "panels[].caption": ("A panel's narration caption, in a yellow box in its top-left corner, e.g. 'Meanwhile...'",
+                         "caption"),
+    "panels[].bubbles[].text": ("The words in one bubble; each panel takes up to "
+                                f"{comic.MAX_BUBBLES} bubbles, placed by their position and tail, as speech or "
+                                "thought", "text"),
+}
 ARTICLE_ROLES = {
     "title": "Headline; when empty the source, else 'Untitled', is printed",
     "body": "The article text: one string with a newline between paragraphs, or a list of paragraphs",
@@ -176,6 +186,11 @@ def card_fields() -> tuple[Field, ...]:
     return tuple(Field(name, CARD_ROLES[name], name in card.REQUIRED, card.LIMITS[name]) for name in card.FIELDS)
 
 
+def comic_fields() -> tuple[Field, ...]:
+    return tuple(Field(name, description, False, comic.LIMITS[limit])
+                 for name, (description, limit) in COMIC_ROLES.items())
+
+
 def postcard_fields() -> tuple[Field, ...]:
     return tuple(Field(name, POSTCARD_ROLES[name], name in postcard.REQUIRED, postcard.LIMITS[name])
                  for name in postcard.FIELDS)
@@ -220,6 +235,9 @@ ARTICLE = {  # style: (description, sample)
     "magazine": ("Bold headline, three columns, colour accents", "article-magazine.jpg"),
     "classic-magazine": ("Ivory page, centred single column, drop cap, ornaments", "article-classic.jpg"),
 }
+COMIC_DESCRIPTION = ("Comic page on A4: an optional handwritten title, then 3 to 6 photos as panels in black "
+                     "borders (rows of one or two), each with up to three speech or thought bubbles whose tails point "
+                     "at the speaker and an optional yellow narration caption")
 STRIP_DESCRIPTION = ("Photo-booth strip on 4×6 photo paper: four photos in a column with a handwritten caption, "
                      "printed twice side by side; cut along the dashed line for two 2×6 in strips")
 INSTANT_DESCRIPTION = ("Instant photo on 4×6 photo paper, Polaroid-style: the photo cropped square in a wide white "
@@ -243,6 +261,8 @@ def _build() -> tuple[Style, ...]:
     out = [Style(name, "booth", () if name == "metro" else ("--style", name), booth.KINDS[name], BOOTH[name][0],
                  "story", story_fields(BOOTH[name][1]), (1, 1), 1, BOOTH[name][2]) for name in booth.STYLES]
     out.append(Style("card", "card", (), card.KIND, CARD_DESCRIPTION, "card", card_fields(), (1, 1), 1, "card.jpg"))
+    out.append(Style("comic", "comic", (), comic.KIND, COMIC_DESCRIPTION, "comic", comic_fields(),
+                     (comic.MIN_PANELS, comic.MAX_PANELS), 1, "comic.jpg"))
     out.append(Style("strip", "strip", (), photocard.STRIP_KIND, STRIP_DESCRIPTION, None,
                      (Field("caption", STRIP_ROLES["caption"], False, photocard.STRIP_CAPTION_LIMIT),),
                      (photocard.FRAMES, photocard.FRAMES), 1, "strip.jpg", paper="4x6"))
@@ -379,6 +399,46 @@ def card_schema() -> dict[str, Any]:
             "type": "object", "properties": {f.name: _text(f) for f in fields},
             "required": [f.name for f in fields if f.required], "additionalProperties": False,
             "examples": [asdict(card.DEFAULT_CARD)]}
+
+
+@register_schema("comic", "comic file: prt comic PHOTO... --comic-file comic.json")
+def comic_schema() -> dict[str, Any]:
+    fields = {f.name: f for f in comic_fields()}
+    bubble = {"type": "object", "description": "One bubble over the panel's photo.",
+              "properties": {
+                  "text": _text(fields["panels[].bubbles[].text"], non_blank=True),
+                  "position": {"enum": list(comic.POSITIONS),
+                               "description": "Where the bubble sits: in the top or bottom band of the panel, at the "
+                                              "left, in the middle (top, bottom) or at the right. Bubbles in one band "
+                                              "share its width, from left to right. When left out, the panel's first "
+                                              "bubble goes top-left, the second top-right and the third "
+                                              "bottom-right"},
+                  "tail": {"enum": list(comic.TAILS), "default": "center",
+                           "description": "Where the tail points, out of the band into the panel (down from a top "
+                                          "bubble, up from a bottom one): towards the left, the middle or the right, "
+                                          "at the speaker; none for no tail"},
+                  "kind": {"enum": list(comic.BUBBLE_KINDS), "default": "speech",
+                           "description": "speech: an oval with a pointed tail; thought: a cloud with a trail of "
+                                          "puffs"}},
+              "required": ["text"], "additionalProperties": False}
+    panel = {"type": "object", "description": "One panel: the photo given in the same place on the command line.",
+             "properties": {"caption": _text(fields["panels[].caption"]),
+                            "bubbles": {"type": "array", "items": bubble, "maxItems": comic.MAX_BUBBLES}},
+             "additionalProperties": False}
+    return {"$schema": JSON_SCHEMA, "title": "prt comic",
+            "description": "The comic file of `prt comic --comic-file` (a file, or - for stdin); at most "
+                           f"{comic.MAX_COMIC_FILE // 1024} KiB. One panel per photo, {comic.MIN_PANELS} to "
+                           f"{comic.MAX_PANELS}, in the order the photos are given on the command line. The text is "
+                           "written in a handwriting font that has Latin and Cyrillic letters: accents are printed, "
+                           "and characters it cannot print, such as emoji or Chinese, are refused. Lengths count "
+                           "characters, with each run of spaces as one; a newline counts as a space. Text too long "
+                           "for its bubble is cut with … and named in the fit report.",
+            "type": "object",
+            "properties": {"title": _text(fields["title"]), "byline": _text(fields["byline"]),
+                           "panels": {"type": "array", "items": panel, "minItems": comic.MIN_PANELS,
+                                      "maxItems": comic.MAX_PANELS}},
+            "required": ["panels"], "additionalProperties": False,
+            "examples": [comic.to_dict(comic.DEFAULT_COMIC)]}
 
 
 @register_schema("recipe", "recipe JSON file: prt recipe recipe.json (or JSON piped to prt recipe -)")

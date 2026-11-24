@@ -13,6 +13,7 @@ These images are the sample pages shown in the main README. They were rendered w
 | `booth-missing.jpg` | `prt booth astronaut.jpg --style missing -o booth-missing.png` |
 | `booth-movie.jpg` | `prt booth astronaut.jpg --style movie -o booth-movie.png` |
 | `card.jpg` | `prt card astronaut.jpg -o card.png` |
+| `comic.jpg` | `prt comic astronaut.jpg launch.jpg earthrise.jpg bluemarble.jpg --comic-file comic.json -o comic.png` |
 | `strip.jpg` | `prt strip astronaut.jpg launch.jpg earthrise.jpg bluemarble.jpg --caption "Apollo 11 · July 1969" -o strip.png` |
 | `instant.jpg` | `prt instant earthrise.jpg --caption "Earthrise, Christmas Eve 1968" -o instant.png` |
 | `postcard.jpg` | `prt postcard earthrise.jpg --postcard-file postcard.json -o postcard.png`: `postcard-front.png` above `postcard-back.png` |
@@ -24,7 +25,7 @@ These images are the sample pages shown in the main README. They were rendered w
 | `gazette-landscape.jpg` | the same with `--landscape` |
 | `tui.jpg` | `prt -p demo tui`, saved as a Textual screenshot at 120×36 |
 
-`story.json`, `article.json`, `recipe.json`, `postcard.json` and `disc.json` are the inputs used above. The article text, the recipe, the postcard and the disc's track list were written for these samples (the track titles are made up).
+`story.json`, `article.json`, `recipe.json`, `postcard.json`, `disc.json` and `comic.json` are the inputs used above. The article text, the recipe, the postcard, the disc's track list and the comic's dialogue were written for these samples (the track titles are made up).
 
 ## Photo credits
 

@@ -98,6 +98,7 @@ prt list
 | `prt print FILE… [-n 2] [--media 4x6] [--tray photo] [--quality high] [--mono] [--duplex] [--direct] [--wait] [--yes]` | Print; `--wait` returns once each job has finished and reports how it ended; `--yes` is needed in agent mode |
 | `prt booth PHOTO [--style metro\|daily\|wizard\|wanted\|certificate\|sports\|missing\|movie] [--story-file story.json] [--preview page.jpg] [--save page.pdf]` | Photo booth: print the photo as an A4 newspaper front page, wizard or sports card, certificate, or wanted, missing-pet or movie poster (see [Photo booth](#photo-booth)) |
 | `prt card PHOTO [--card-file card.json] [--greeting TEXT] [--verse TEXT] [--preview card.pdf] [--save card.pdf]` | Print a greeting card: the photo and a verse on one A4 sheet that folds into an A6 card (see [Greeting card](#greeting-card)) |
+| `prt comic PHOTO… [--comic-file comic.json] [--title TEXT] [--preview comic.png] [--save comic.pdf]` | Print 3 to 6 photos as the panels of an A4 comic page, with speech bubbles, thought bubbles and captions from a JSON comic file (see [Comic strips](#comic-strips)) |
 | `prt strip PHOTO PHOTO PHOTO PHOTO [--caption TEXT] [--mono] [--preview strip.jpg] [--save strip.pdf]` | Print a four-frame photo-booth strip on 4×6 photo paper from the photo tray, twice side by side to cut into two strips (see [4×6 photo prints](#46-photo-prints)) |
 | `prt instant PHOTO [--caption TEXT] [--preview photo.jpg] [--save photo.pdf]` | Print a photo as a Polaroid-style instant photo with a handwritten caption on 4×6 photo paper (see [4×6 photo prints](#46-photo-prints)) |
 | `prt postcard PHOTO [--postcard-file postcard.json] [--message TEXT] [--address LINE]… [--side front\|back] [--duplex] [--preview card.pdf] [--save card.pdf]` | Print a two-sided postcard on 4×6 photo paper: the photo on the front, the message, address lines and a stamp box on the back (see [Postcards](#postcards)) |
@@ -106,8 +107,8 @@ prt list
 | `prt article URL\|FILE [--style magazine\|classic-magazine] [--preview page.pdf] [--save page.pdf]` | Print a blog post, news article or X post as A4 magazine pages (see [Article printing](#article-printing)) |
 | `prt gazette PHOTO… [--landscape] [--story-file story.json] [--preview page.pdf] [--save page.pdf]` | Print one or more photos as a vintage newspaper, over as many A4 pages as the photos need (see [Vintage gazette](#vintage-gazette)) |
 | `prt compose PAGE.json [--preview page.pdf] [--save page.pdf]` | Print a page you describe as blocks: headings, text, images, QR codes, columns and rules (see [Compose a page](#compose-a-page)) |
-| `prt styles` | Every booth, card, strip, instant, postcard, disc, article, recipe and gazette style and the options that pick it; with `-f json`, also each style's fields, character limits, photo count and a sample image (see [Styles and schemas](#styles-and-schemas)) |
-| `prt schema story\|article\|gazette\|page\|card\|recipe\|postcard\|disc` | The JSON Schema of a booth story file, an article JSON file, a gazette story file, a `prt compose` page file, a `prt card` card file, a `prt recipe` recipe file, a `prt postcard` postcard file or a `prt disc` label file |
+| `prt styles` | Every booth, card, comic, strip, instant, postcard, disc, article, recipe and gazette style and the options that pick it; with `-f json`, also each style's fields, character limits, photo count and a sample image (see [Styles and schemas](#styles-and-schemas)) |
+| `prt schema story\|article\|gazette\|page\|card\|comic\|recipe\|postcard\|disc` | The JSON Schema of a booth story file, an article JSON file, a gazette story file, a `prt compose` page file, a `prt card` card file, a `prt comic` comic file, a `prt recipe` recipe file, a `prt postcard` postcard file or a `prt disc` label file |
 | `prt jobs [--all]` / `prt jobs wait ID` / `prt jobs cancel ID` | List jobs, wait for one to finish, or cancel one |
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
 | `prt tui` | Full-screen dashboard |
@@ -278,7 +279,7 @@ $ prt styles -f json | jq -c '.[] | {name, command, args, schema}'
 {"name":"gazette-landscape","command":"gazette","args":["--landscape"],"schema":"gazette"}
 ```
 
-`prt schema story`, `prt schema article`, `prt schema gazette`, `prt schema page`, `prt schema card`, `prt schema recipe`, `prt schema postcard` and `prt schema disc` print the JSON Schema (draft 2020-12) of the file `prt booth --story-file`, `prt article FILE.json`, `prt gazette --story-file`, `prt compose`, `prt card --card-file`, `prt recipe FILE.json`, `prt postcard --postcard-file` and `prt disc --disc-file` read. A file that passes the schema is accepted by the command; the one thing the schema cannot check is the character set, so text in a script the page font cannot print (emoji, Chinese) is still refused. For a page file, the image files must also exist and be readable, and the page must fit in 10 pages. In Python the same data is in `prt.catalog` (`styles()`, `schema(name)`, and `register_schema` to add one).
+`prt schema story`, `prt schema article`, `prt schema gazette`, `prt schema page`, `prt schema card`, `prt schema comic`, `prt schema recipe`, `prt schema postcard` and `prt schema disc` print the JSON Schema (draft 2020-12) of the file `prt booth --story-file`, `prt article FILE.json`, `prt gazette --story-file`, `prt compose`, `prt card --card-file`, `prt comic --comic-file`, `prt recipe FILE.json`, `prt postcard --postcard-file` and `prt disc --disc-file` read. A file that passes the schema is accepted by the command; the one thing the schema cannot check is the character set, so text in a script the page font cannot print (emoji, Chinese) is still refused. For a page file, the image files must also exist and be readable, and the page must fit in 10 pages. In Python the same data is in `prt.catalog` (`styles()`, `schema(name)`, and `register_schema` to add one).
 
 ## The TUI
 
@@ -353,6 +354,44 @@ printf '%s' '{"greeting": "Thank You", "verse": "..."}' | prt card me.jpg --card
 - The photo and the card are checked before anything is sent: an unreadable photo or a bad card file exits with code 3 and prints nothing. The text font covers Latin letters, as in the photo booth.
 
 The [greeting-card skill](https://github.com/luongnv89/printer-cli/blob/main/skills/greeting-card/SKILL.md) has an AI agent look at the photo, write a verse for it and the occasion, preview the card and print it (`prt skills install` installs it).
+
+## Comic strips
+
+`prt comic` prints 3 to 6 photos as the panels of a comic page on A4, with speech bubbles, thought bubbles and captions written in a JSON comic file. With no comic file it prints its own "The Big Day" comic.
+
+```bash
+prt comic a.jpg b.jpg c.jpg d.jpg --comic-file comic.json -o comic.png   # nothing printed
+prt comic a.jpg b.jpg c.jpg --comic-file comic.json --yes                # print it
+prt comic a.jpg b.jpg c.jpg -f json -o comic.png | jq '{fits, cut}'      # check that every bubble fits
+```
+
+<p align="center"><img src="https://raw.githubusercontent.com/luongnv89/printer-cli/main/assets/samples/comic.jpg" width="270" alt="comic strip sample page: a handwritten title over four photo panels in black borders, with speech bubbles, a thought bubble and yellow narration captions"></p>
+
+The sample uses [comic.json](https://github.com/luongnv89/printer-cli/blob/main/assets/samples/comic.json).
+
+The photos are the panels in reading order, row by row from the top: 3 photos make one wide panel over two, 4 make a 2×2 grid, 5 make two, one wide and two, and 6 make three rows of two. Each photo is cropped to fill its panel. The comic file has one panel per photo, in the same order:
+
+```json
+{"title": "One Small Step", "byline": "A prt comic",
+ "panels": [
+  {"caption": "Tranquility Base", "bubbles": [{"text": "Houston, the view is incredible.", "tail": "right"}]},
+  {"bubbles": [{"text": "Is it supposed to shake?!"}, {"text": "Too late now.", "kind": "thought"}]},
+  {"bubbles": [{"text": "Did anyone print the photos?", "position": "bottom-left"}]}
+ ]}
+```
+
+| Field | Max characters | Printed |
+|---|---|---|
+| `title` | 60 | Large handwriting above the panels, on one line (`--title` overrides it) |
+| `byline` | 60 | Under the title (`--byline` overrides it) |
+| `panels[].caption` | 100 | A yellow narration box in the panel's top-left corner, on up to two lines |
+| `panels[].bubbles[].text` | 140 | The words in one bubble; up to 3 bubbles a panel |
+
+- `position` puts a bubble in the `top` or `bottom` band of its panel: `top-left`, `top`, `top-right`, `bottom-left`, `bottom` or `bottom-right`. Without one, a panel's first bubble goes top-left, the second top-right and the third bottom-right. Bubbles in the same band share its width, from left to right, each later one set a little further in from the edge of the panel.
+- `tail` points the bubble at the speaker: down out of a top bubble, up out of a bottom one, towards the `left`, the `center` (the default) or the `right`; `none` leaves it off. `kind` is `speech` (an oval with a pointed tail, the default) or `thought` (a cloud with a trail of puffs).
+- Each bubble and caption is set in the bundled Caveat handwriting font, as large as fits its space. Text that still does not fit is cut with `…`, the command warns, and with `-f json` the fit report names it by where it is in the file, e.g. `"cut": {"panels[1].bubbles[0]": {"max_fit": 52, "given": 120}}`. Shortening that text to `max_fit` characters makes it fit. Fewer bubbles in a band, or the band to itself, give a bubble more room.
+- Pass the file with `--comic-file comic.json`, or pipe it in with `--comic-file -`. `prt schema comic` prints its JSON Schema. A comic file with more or fewer panels than photos, or fewer than 3 or more than 6 photos, is refused with exit code 2; a bad comic file exits with code 3 and prints nothing. The font has Latin and Cyrillic letters; emoji and other scripts are refused.
+- `--preview`/`-o` saves the page without printing, and `--save` keeps a copy and prints, as in `prt booth`. A file name that would overwrite a photo or the comic file is refused with exit code 2. With `-f json` the output gives the number of `photos`, the `title`, the `paper`, the fit report and the `estimate`.
 
 ## 4×6 photo prints
 
@@ -553,7 +592,7 @@ prt schema page                              # the page file's JSON Schema
 
 Before you let an AI agent print unattended, set `PRT_AGENT=1` in its environment and, if you like, page caps in the config file:
 
-- **Agent mode** (`PRT_AGENT=1`, also `true`, `yes` or `on`): every command that prints or uses ink — `print`, `booth`, `card`, `strip`, `instant`, `postcard`, `disc`, `article`, `recipe`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean` — refuses to run without `--yes`, even at a terminal, so an agent never sits waiting on a prompt and never prints without deciding to. The refusal exits `2` with kind `agent_confirmation_required`. `--preview` needs no `--yes`: it prints nothing.
+- **Agent mode** (`PRT_AGENT=1`, also `true`, `yes` or `on`): every command that prints or uses ink — `print`, `booth`, `card`, `comic`, `strip`, `instant`, `postcard`, `disc`, `article`, `recipe`, `gazette`, `compose`, `maintain test-page`, `maintain nozzle-check`, `maintain clean` — refuses to run without `--yes`, even at a terminal, so an agent never sits waiting on a prompt and never prints without deciding to. The refusal exits `2` with kind `agent_confirmation_required`. `--preview` needs no `--yes`: it prints nothing.
 - **Per-run cap**: `max_pages_per_run` in the config limits the pages one command may print (copies count). In agent mode it defaults to 10 when not set.
 - **Daily cap**: `max_pages_per_day` in the config limits the pages printed per calendar day, counted across every command in `~/.cache/prt/pages.json`. A page counts once its job has been sent, even if sending failed, because the printer may have taken it.
 - A print over a cap is refused whole, before the prompt and before anything is sent (exit `1`, kind `page_cap_exceeded` or `daily_page_cap_exceeded`). Configured caps apply outside agent mode too, and in the TUI. While a cap is in force, a file whose pages cannot be counted (plain text, PWG raster, office files) is refused with `page_count_unknown`; images count as one page and PDF pages are counted from the file.
