@@ -286,25 +286,33 @@ FOOTER_SIZE = 34
 GREY = (110, 110, 120)
 
 
+def _lead(size: int) -> int:
+    """The distance from one line of text at ``size`` to the next."""
+    return round(size * 1.05)
+
+
 def _centred(d: ImageDraw.ImageDraw, lines: list[str], font, size: int, cx: float, cy: float, fill) -> None:
     """``lines`` centred as a block on (``cx``, ``cy``)."""
-    lead = round(size * 1.05)
+    lead = _lead(size)
     top = cy - lead * len(lines) / 2
     for k, line in enumerate(lines):
         d.text((cx, top + lead * k + lead / 2), line, font=font, fill=fill, anchor="mm")
 
 
-def _fit_word(word: str, width: int):
-    """The largest size (:data:`WORD_SIZE` down to :data:`WORD_MIN`) at which ``word`` wraps into
-    :data:`WORD_LINES` lines of ``width`` without splitting a word of it; failing that, as ``vintage._fit_face``
-    fits it (split by character, cut with "…" at the smallest). Returns (font, size, lines, cut)."""
+def _fit_word(word: str, width: int, height: int | None = None):
+    """The largest size (:data:`WORD_SIZE` down to :data:`WORD_MIN`) at which ``word`` wraps into at most
+    :data:`WORD_LINES` lines of ``width``, no taller than ``height`` (``width`` when not given: the square), without
+    splitting a word of it; failing that, at :data:`WORD_MIN` split by character as ``vintage._fit_face`` fits it,
+    cut with "…" if even that is too long. Returns (font, size, lines, cut)."""
+    height = width if height is None else height
     for size in range(WORD_SIZE, WORD_MIN - 1, -2):
         font = fonts.face("hand", size)
         printable = _printable_face(word, font)
         lines = _wrap(printable, font, width)
-        if len(lines) <= WORD_LINES and all(font.getlength(part) <= width for part in printable.split()):
+        if (len(lines) <= WORD_LINES and len(lines) * _lead(size) <= height
+                and all(font.getlength(part) <= width for part in printable.split())):
             return font, size, lines, None
-    return _fit_face(word, "hand", WORD_SIZE, WORD_MIN, width, WORD_LINES)
+    return _fit_face(word, "hand", WORD_MIN, WORD_MIN, width, max(1, min(WORD_LINES, height // _lead(WORD_MIN))))
 
 
 def grid_top() -> int:

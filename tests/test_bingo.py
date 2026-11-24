@@ -103,7 +103,25 @@ def test_the_longest_word_fits_its_square_without_a_cut():
     for word in ["W" * bingo.MAX_WORD, "M" * bingo.MAX_WORD, "WWWWWWWWWWW " + "W" * (bingo.MAX_WORD - 12)]:
         font, size, lines, cut = bingo._fit_word(word, width)
         assert cut is None and len(lines) <= bingo.WORD_LINES
-        assert size * 1.05 * len(lines) <= bingo.CELL - 2 * bingo.CELL_PAD + 4  # the lines fit the square's height
+        assert bingo._lead(size) * len(lines) <= bingo.CELL - 2 * bingo.CELL_PAD  # the lines fit the square's height
+
+
+@pytest.mark.parametrize("word", ["Boss tells a long story", "Who brought the cake?", "Hippopotomonstrous",
+                                  "Supercalifragilistic", "Supercalifragilisticexpi", "a b c d e f g h i j k l"])
+def test_every_word_fits_inside_its_square(word):
+    space = bingo.CELL - 2 * bingo.CELL_PAD
+    font, size, lines, cut = bingo._fit_word(word, space)
+    assert cut is None and len(lines) <= bingo.WORD_LINES
+    assert bingo._lead(size) * len(lines) <= space  # the block of lines no taller than the square
+    assert all(font.getlength(line) <= space for line in lines)
+
+
+@pytest.mark.parametrize("word", ["Hippopotomonstrous", "Supercalifragilistic", "W" * bingo.MAX_WORD])
+def test_a_word_too_long_to_keep_whole_is_split_small_not_large(word):
+    space = bingo.CELL - 2 * bingo.CELL_PAD
+    whole = bingo._fit_word("Photosynthesis", space)[1]  # the smallest a word kept whole prints
+    font, size, lines, cut = bingo._fit_word(word, space)
+    assert len(lines) > 1 and size <= bingo.WORD_MIN <= whole
 
 
 # --- the game: theme, words file, title ----------------------------------------------------------
