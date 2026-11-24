@@ -153,7 +153,6 @@ The tests use the demo printer (`FakeDriver` replaying `src/prt/fixtures/epson-x
 - Errors are `PrinterError(message, hint, exit_code, kind)`. A new failure that a script could branch on gets its own `kind`, added to the kinds table in the README.
 - Every command that prints goes through `guard.check` / `guard.reserve` (see `_authorize` in `cli.py`).
 - A page laid out for a sheet other than A4 is sent with `render.send_pages(..., paper)` and estimated with `guard.estimate(pages, paper)`; a new size or tray (A6, a disc) is one more `Paper` in `prt.paper`.
-- A page laid out for a sheet other than A4 is sent with `render.send_pages(..., paper)` and estimated with `guard.estimate(pages, paper)`; a new size or tray is one more `Paper` in `prt.paper`.
 - A change to `prt booth`, `prt card`, `prt article`, `prt gazette`, `prt scan` or their flags is also a change to the matching skill in `skills/`. Keep the skill's examples true.
 - `version` in `.claude-plugin/plugin.json` must match `pyproject.toml` (a test checks this), because the plugin version pins plugin users to it.
 - Commit messages follow Conventional Commits: `feat(scope): description (#issue)`.
