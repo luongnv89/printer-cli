@@ -249,7 +249,7 @@ POSTCARD_DESCRIPTION = ("Two-sided postcard on 4×6 photo paper, read on its sid
 DISC_DESCRIPTION = ("Disc label on a printable 12 cm CD or DVD, through the disc tray: the photo fills the printable "
                     f"ring ({disc.OUTER_D_MM} mm across, a {disc.INNER_D_MM} mm hole round the hub), the title and "
                     "subtitle in handwriting above the hub, the tracks in two columns either side of it and a footer "
-                    "line at the foot; white outside the ring")
+                    "line at the foot; left blank outside the ring, but for a faint JPEG haze at its edges")
 RECIPE_DESCRIPTION = ("6×4 in index card on 4×6 photo paper: the title in handwriting over a red rule, the "
                       "ingredients and numbered steps on blue lines in two columns; runs on to more cards when needed")
 GAZETTE_KIND = "vintage newspaper"
