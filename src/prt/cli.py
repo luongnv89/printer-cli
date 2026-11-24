@@ -965,8 +965,9 @@ def _print_sheet(action: str, rendered: render.Rendered, label: str, preview: Op
                  copies: list[tuple[Path, str]], question: str, job_name: str, yes: bool,
                  info: dict[str, Any], done: str | None = None,
                  precheck: Callable[[Driver], None] | None = None) -> None:
-    """Save, preview or print one rendered sheet on its own paper (``prt strip``, ``prt instant``, ``prt disc``):
-    the preview and the copies are written before a driver exists, then the sheet is sent under the print guard.
+    """Save, preview or print one rendered sheet on its own paper (``prt comic``, ``prt strip``, ``prt instant``,
+    ``prt disc``): the preview and the copies are written before a driver exists, then the sheet is sent under the
+    print guard.
 
     ``precheck`` asks the printer whether it can take the sheet at all (``prt disc``: a disc tray); it runs after
     the agent-mode check, so an agent without ``--yes`` hears that first, and before the page caps and the prompt.
@@ -1008,6 +1009,50 @@ def _print_sheet(action: str, rendered: render.Rendered, label: str, preview: Op
         STATE.note("info", done)
     if STATE.json:
         STATE.write(json.dumps({"action": action, "job_id": job, **report, **extra}) + "\n")
+
+
+@app.command("comic")
+def comic_cmd(
+    photos: list[Path] = typer.Argument(..., help="3 to 6 photos (JPEG, PNG, WebP, GIF, BMP or TIFF), one per panel, "
+                                                  "in reading order: row by row from the top, left to right."),
+    comic_file: Optional[Path] = typer.Option(None, "--comic-file",
+                                              help="JSON comic: panels (one per photo, each with up to 3 bubbles "
+                                                   "and a caption) required; title and byline optional. Use - to "
+                                                   "read it from stdin. `prt schema comic` gives its JSON Schema."),
+    title: Optional[str] = typer.Option(None, "--title", help="Title above the panels (overrides the comic file); "
+                                                              "'' for none."),
+    byline: Optional[str] = typer.Option(None, "--byline", help="Line under the title, e.g. 'by Jo and Sam'; '' for "
+                                                                "none."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save the page here instead of printing; the extension picks the "
+                                                "file type: .pdf, .png, .jpg or .jpeg."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of the page here (.pdf, .png, .jpg or .jpeg) "
+                                                   "before printing it; repeat for more files."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Comic strip: 3 to 6 photos as the panels of a comic page, with speech bubbles, thought bubbles and captions
+    (A4).
+
+    Each panel's bubbles and caption come from --comic-file, one panel per photo; text too long for its bubble is
+    cut with "…" and named in the fit report. Without a comic file a built-in comic is printed.
+    """
+    from prt import booth, comic, photocard, vintage
+    # Check every input before a file is written or a driver exists, so a bad file name, a wrong number of
+    # photos, a bad comic file or an unreadable photo never leaves a partial result or reaches the printer.
+    comic.check_count(len(photos))
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    if preview:
+        booth.format_for(preview)
+    inputs = list(photos) + ([comic_file] if comic_file and str(comic_file) != booth.STDIN else [])
+    vintage.check_outputs([path for path in [preview] + [p for p, _ in copies] if path], inputs)
+    base = comic.load_comic(comic_file) if comic_file else comic.default_comic(len(photos))
+    text = comic.with_overrides(base, title=title, byline=byline)
+    comic.check_panels(text, len(photos))
+    images = photocard.load_photos(photos)
+    rendered = render.comic_page(images, text)
+    _print_sheet("comic", rendered, comic.KIND, preview, copies, f"Print {len(photos)} photos as a {comic.KIND}",
+                 f"prt comic {photos[0].name}", yes, {"photos": len(photos), "title": text.title})
 
 
 PREVIEW_4X6_HELP = ("Save the print here instead of printing; the extension picks the file type: .pdf, .png, .jpg "
@@ -1563,8 +1608,8 @@ def compose_cmd(
 
 @app.command("styles")
 def styles_cmd() -> None:
-    """List every page style of booth, card, strip, instant, postcard, disc, article, recipe and gazette: what it
-    prints and the options that pick it.
+    """List every page style of booth, card, comic, strip, instant, postcard, disc, article, recipe and gazette: what
+    it prints and the options that pick it.
 
     With -f json each style also lists its fields, their character limits, how many photos it takes and a
     link to a sample page. `prt schema NAME` prints the JSON Schema of a style's input file.
@@ -1593,12 +1638,12 @@ def _schema_names(incomplete: str) -> list[str]:
 
 @app.command("schema")
 def schema_cmd(name: str = typer.Argument(..., metavar="NAME", autocompletion=_schema_names,
-                                          help="story, article, gazette, page, card, recipe, postcard or "
-                                               "disc.")) -> None:
+                                          help="story, article, gazette, page, card, comic, recipe, postcard "
+                                               "or disc.")) -> None:
     """Print the JSON Schema of an input file: story (prt booth --story-file), article (an article JSON file for
     prt article), gazette (prt gazette --story-file), page (a page file for prt compose), card (prt card
-    --card-file), recipe (a recipe JSON file for prt recipe), postcard (prt postcard --postcard-file) or disc (prt
-    disc --disc-file).
+    --card-file), comic (prt comic --comic-file), recipe (a recipe JSON file for prt recipe), postcard (prt postcard
+    --postcard-file) or disc (prt disc --disc-file).
 
     A file that passes the schema is accepted by the command. The schema is JSON whatever -f says.
     """

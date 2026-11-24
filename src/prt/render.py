@@ -1,4 +1,4 @@
-"""Booth, card, article, compose, strip, instant, recipe, postcard and disc pages as callable steps, shared by the CLI commands and the MCP server.
+"""Booth, card, comic, article, compose, strip, instant, recipe, postcard and disc pages as callable steps, shared by the CLI commands and the MCP server.
 
 Each front end reads its own input (files and flags, or MCP tool arguments) and decides how to show the result;
 what happens in between is here: lay the pages out, say what did not fit and what printing them would cost, and
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from prt.article import Article
     from prt.booth import Story
     from prt.card import Card
+    from prt.comic import Comic
     from prt.compose import Page
     from prt.disc import Disc
     from prt.drivers.base import Driver
@@ -74,6 +75,15 @@ def card_page(photo: Image.Image, card: Card) -> Rendered:
     laid out to fold into a card."""
     from prt import card as cards
     page, cut = cards.compose(photo, card)
+    return Rendered([page], cut)
+
+
+def comic_page(photos: Sequence[Image.Image], comic: Comic | None = None) -> Rendered:
+    """The comic page of 3 to 6 ``photos`` as its panels, with the title, captions and bubbles of ``comic`` (see
+    ``comic.compose``); bubbles and captions cut with "…" to fit are named ``panels[i].bubbles[j]`` and
+    ``panels[i].caption`` in ``cut``."""
+    from prt import comic as comics
+    page, cut = comics.compose(photos, comic)
     return Rendered([page], cut)
 
 

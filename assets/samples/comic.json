@@ -1,0 +1,30 @@
+{
+  "title": "One Small Step",
+  "byline": "A prt comic, July 1969",
+  "panels": [
+    {
+      "caption": "Tranquility Base, a quiet morning...",
+      "bubbles": [
+        {"text": "Houston, the view up here is incredible.", "position": "top-left", "tail": "right"}
+      ]
+    },
+    {
+      "caption": "Four days earlier",
+      "bubbles": [
+        {"text": "Is it supposed to shake this much?!", "position": "top-left", "tail": "right"},
+        {"text": "Too late to ask now.", "position": "top-right", "kind": "thought"}
+      ]
+    },
+    {
+      "bubbles": [
+        {"text": "Look! You can see the whole Earth from here.", "position": "top", "tail": "center"}
+      ]
+    },
+    {
+      "caption": "Back home...",
+      "bubbles": [
+        {"text": "Did anyone remember to print the photos?", "position": "bottom-left", "tail": "right"}
+      ]
+    }
+  ]
+}
