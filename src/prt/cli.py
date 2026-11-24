@@ -1715,8 +1715,8 @@ def compose_cmd(
 
 @app.command("styles")
 def styles_cmd() -> None:
-    """List every page style of booth, card, comic, strip, instant, colour-in, postcard, disc, article, recipe,
-    bingo and gazette: what it prints and the options that pick it.
+    """List every page style of booth, card, comic, strip, instant, colour-in, postcard, disc, article,
+    recipe, bingo and gazette: what it prints and the options that pick it.
 
     With -f json each style also lists its fields, their character limits, how many photos it takes and a
     link to a sample page. `prt schema NAME` prints the JSON Schema of a style's input file.
