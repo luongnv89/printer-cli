@@ -93,6 +93,7 @@ def _commands(tmp_path):
         "recipe": ["recipe", str(_recipe_file(tmp_path))],
         "postcard": ["postcard", str(photo), "--side", "front"],
         "disc": ["disc", str(photo)],
+        "bingo": ["bingo", "--theme", "road trip", "-n", "2"],
         "test-page": ["maintain", "test-page"],
         "nozzle-check": ["maintain", "nozzle-check"],
         "clean": ["maintain", "clean", "--force"],
@@ -100,7 +101,7 @@ def _commands(tmp_path):
 
 
 COMMANDS = ["print", "booth", "card", "article", "gazette", "compose", "strip", "instant", "recipe", "postcard",
-            "disc", "test-page", "nozzle-check", "clean"]
+            "disc", "bingo", "test-page", "nozzle-check", "clean"]
 
 
 # --- agent mode ------------------------------------------------------------------------------------------

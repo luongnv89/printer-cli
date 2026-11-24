@@ -3,7 +3,7 @@ the input files the print commands read.
 
 ``styles()`` lists the styles (``prt styles -f json``) and ``schema(name)`` returns one JSON Schema (``prt schema
 NAME``). Both are built from the constants the commands check their input against (``booth.FIELDS``,
-``booth.LIMITS``, ``card.LIMITS``, ``comic.LIMITS``, ``postcard.LIMITS``, ``disc.LIMITS``, ``article.FIELDS``, ``recipe.LIMITS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
+``booth.LIMITS``, ``card.LIMITS``, ``comic.LIMITS``, ``postcard.LIMITS``, ``disc.LIMITS``, ``bingo.LIMITS``, ``article.FIELDS``, ``recipe.LIMITS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
 schema is built by :mod:`prt.compose`, which checks page files against it. Other front
 ends (an MCP server, page validation) import this module instead of listing the styles again; a new input schema
 is added with ``@register_schema``.
@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
-from prt import article, booth, card, comic, compose, disc, photocard, postcard, recipe, vintage
+from prt import article, bingo, booth, card, comic, compose, disc, photocard, postcard, recipe, vintage
 from prt.drivers.base import PrinterError
 from prt.paper import PAPERS
 
@@ -165,6 +165,13 @@ DISC_ROLES = {
               f"up to {disc.MAX_TRACKS} tracks of up to {disc.MAX_TRACK} characters each",
     "footer": "Small line at the foot of the label, e.g. 'For Sam, from Jo'",
 }
+BINGO_ROLES = {
+    "title": "The title at the top of every card, in large handwriting; by default '<Theme> Bingo' from --theme",
+    "free": f"The text of the free centre square; '{bingo.DEFAULT_FREE}' when not given",
+    "words": f"The words and short phrases the cards are dealt from, each different: at least {bingo.MIN_WORDS}, "
+             f"up to {bingo.MAX_WORDS}, of up to {bingo.MAX_WORD} characters each; each card takes "
+             f"{bingo.PER_CARD} of them, and no two cards in a run take the same set",
+}
 RECIPE_ROLES = {
     "title": "The recipe's name, in handwriting at the top of the card",
     "ingredients": "The ingredients, one per item: a list of texts, or one text with a newline between items",
@@ -198,6 +205,11 @@ def postcard_fields() -> tuple[Field, ...]:
 
 def disc_fields() -> tuple[Field, ...]:
     return tuple(Field(name, DISC_ROLES[name], name in disc.REQUIRED, disc.LIMITS.get(name)) for name in disc.FIELDS)
+
+
+def bingo_fields() -> tuple[Field, ...]:
+    limits = {**bingo.LIMITS, "words": bingo.MAX_WORD}
+    return tuple(Field(name, BINGO_ROLES[name], name in bingo.REQUIRED, limits[name]) for name in bingo.FIELDS)
 
 
 def recipe_fields() -> tuple[Field, ...]:
@@ -250,6 +262,9 @@ DISC_DESCRIPTION = ("Disc label on a printable 12 cm CD or DVD, through the disc
                     f"ring ({disc.OUTER_D_MM} mm across, a {disc.INNER_D_MM} mm hole round the hub), the title and "
                     "subtitle in handwriting above the hub, the tracks in two columns either side of it and a footer "
                     "line at the foot; left blank outside the ring, but for a faint JPEG haze at its edges")
+BINGO_DESCRIPTION = ("Bingo card on A4, one per player: the title in handwriting, a row of coloured B-I-N-G-O "
+                     "letters and a 5×5 grid of words round a free centre square; every card in a run holds a "
+                     "different set of words, dealt from a bundled theme or a words file")
 RECIPE_DESCRIPTION = ("6×4 in index card on 4×6 photo paper: the title in handwriting over a red rule, the "
                       "ingredients and numbered steps on blue lines in two columns; runs on to more cards when needed")
 GAZETTE_KIND = "vintage newspaper"
@@ -278,6 +293,8 @@ def _build() -> tuple[Style, ...]:
                   article.MAX_PAGES, ARTICLE[name][1]) for name in article.ARTICLE_STYLES]
     out.append(Style("recipe", "recipe", (), recipe.KIND, RECIPE_DESCRIPTION, "recipe", recipe_fields(), (0, 0),
                      recipe.MAX_CARDS, "recipe.jpg", paper="4x6"))
+    out.append(Style("bingo", "bingo", (), bingo.KIND, BINGO_DESCRIPTION, "bingo", bingo_fields(), (0, 0),
+                     bingo.MAX_CARDS, "bingo.jpg"))
     gazette: dict[str, Any] = {"command": "gazette", "kind": GAZETTE_KIND, "schema": "gazette",
                                "fields": story_fields(GAZETTE_ROLES), "photos": (1, vintage.MAX_PHOTOS),
                                "max_pages": vintage.MAX_PAGES}
@@ -507,3 +524,27 @@ def disc_schema() -> dict[str, Any]:
             "examples": [{**asdict(disc.DEFAULT_DISC), "tracks": list(disc.DEFAULT_DISC.tracks)},
                          {"title": "Anna & Ben", "subtitle": "Our wedding · 12 June 2026",
                           "tracks": "First dance\nCake cutting\nThe last song"}]}
+
+
+@register_schema("bingo", "bingo words file: prt bingo --words-file words.json")
+def bingo_schema() -> dict[str, Any]:
+    fields = {f.name: f for f in bingo_fields()}
+    word = {"type": "string", "maxLength": bingo.MAX_WORD, "pattern": NON_BLANK}
+    return {"$schema": JSON_SCHEMA, "title": "prt bingo",
+            "description": "The words file of `prt bingo --words-file` (a file, or - for stdin); at most "
+                           f"{bingo.MAX_BINGO_FILE // 1024} KiB. Each card holds {bingo.PER_CARD} of the words round "
+                           f"the free centre square, so a file needs at least {bingo.MIN_WORDS}, every one different "
+                           "(ignoring case and spacing). The text is written in a handwriting font that has Latin "
+                           "and Cyrillic letters: accents are printed, and characters it cannot print, such as emoji "
+                           "or Chinese, are refused. Lengths count characters, with each run of spaces as one.",
+            "type": "object",
+            "properties": {"title": _text(fields["title"]), "free": _text(fields["free"]),
+                           "words": {"type": "array", "description": fields["words"].description, "items": word,
+                                     "minItems": bingo.MIN_WORDS, "maxItems": bingo.MAX_WORDS,
+                                     "uniqueItems": True}},
+            "required": ["words"], "additionalProperties": False,
+            "examples": [{"title": "Garden Bingo", "free": "SUN",
+                          "words": ["Bee", "Butterfly", "Ladybird", "Snail", "Worm", "Robin", "Daisy", "Rose",
+                                    "Tulip", "Sunflower", "Watering can", "Wheelbarrow", "Spade", "Shed", "Pond",
+                                    "Frog", "Bird bath", "Bench", "Hedge", "Apple tree", "Spider web", "Squirrel",
+                                    "Hose", "Gnome", "Bird feeder", "Swing", "Cat on the fence", "Bumblebee"]}]}
