@@ -201,6 +201,13 @@ def test_bingo_schema_agrees_with_the_words_file_check(data):
     assert Draft202012Validator(catalog.schema("bingo")).is_valid(data) == _accepted(data)
 
 
+@pytest.mark.parametrize("repeat", ["word 1", "Word  1", " WORD 1 "])
+def test_a_repeat_in_other_case_or_spacing_passes_the_schema_but_is_refused(repeat):
+    # The schema's uniqueItems compares exact texts; the check compares them as printed (documented exception).
+    data = {"words": _words(24) + [repeat]}
+    assert Draft202012Validator(catalog.schema("bingo")).is_valid(data) and not _accepted(data)
+
+
 def test_bingo_style_and_schema():
     style = next(s for s in catalog.styles() if s["name"] == "bingo")
     assert style["command"] == "bingo" and style["schema"] == "bingo" and style["kind"] == "bingo card"
