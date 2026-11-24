@@ -550,9 +550,11 @@ def test_text_reaches_the_page_as_text_never_as_markup():
 
 def test_the_heading_a_slide_change_focuses_does_not_pause_the_show():
     # After an arrow key the new slide's heading has focus; Space must then really start the show again.
-    assert re.findall(r"^  const focusPaused = [^;]*;$", JS, re.M) == [
-        "  const focusPaused = () => stage.contains(document.activeElement) && "
-        'document.activeElement.tabIndex >= 0\n    && document.activeElement.matches(":focus-visible");']
+    assert re.findall(r"^  const holdsFocus = .*$", JS, re.M) == [
+        "  const holdsFocus = (node) => (stage.contains(node) && node.tabIndex >= 0) || dots.contains(node);"]
+    assert re.findall(r"^  const focusPaused = .*$", JS, re.M) == [
+        "  const focusPaused = () => holdsFocus(document.activeElement) && "
+        'document.activeElement.matches(":focus-visible");']
     render = "\n".join(js_function("render"))
     assert "heading.tabIndex = -1;\nheading.focus({ preventScroll: true });" in render
     assert js_function("toggleAutoplay") == ["userPaused = !userPaused;", "sync();"]
@@ -622,13 +624,55 @@ def test_short_screens_put_the_text_beside_the_proof():
     assert re.search(r"\.ctl \{ width: 44px; height: 44px; \}", narrow) and ".copy { min-height: 44px; }" in narrow
 
 
+def test_arrow_keys_leave_the_slide_alone_behind_the_credits_and_with_a_modifier():
+    keydown = re.search(r'document\.addEventListener\("keydown", \(event\) => \{(.*?)\n  \}\);', JS, re.S).group(1)
+    statements = [line.strip() for line in keydown.split("\n") if line.strip() and not line.strip().startswith("//")]
+    # Shift+arrow extends a text selection; no modified key is a shortcut here.
+    assert statements[0] == ("if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) "
+                             "return;")
+    arrows = keydown.split('} else if (key === "ArrowLeft" || key === "ArrowRight") {')[1]
+    guard = 'if (credits.open || target.closest(".sheet, input, textarea, select, .credits")) return;'
+    assert guard in arrows and arrows.index(guard) < arrows.index("go(")
+    assert '<details id="credits" class="credits">' in INDEX  # .credits holds the summary and the panel
+
+
+def test_a_tick_with_keyboard_focus_holds_the_show():
+    # The row recentres on every new slide, so a show that ran on would scroll the focused tick out of sight.
+    assert "dots.contains(node)" in re.search(r"const holdsFocus = .*", JS).group(0)
+    assert "focusPaused()" in re.search(r"const playing = .*", JS).group(0)
+    # Autoplay is never turned on while a tick holds the show: Space on a tick presses it, and that step stops
+    # the show; a tick is a button, and buttons keep Space.
+    assert 'const dot = el("button", "dot");' in JS
+    assert "button" in re.search(r'target\.closest\("(button, a, [^"]*)"\)', JS).group(1).split(", ")
+    # Focus is moved to a tick only by a key pressed on the row, never by the clock.
+    assert JS.count("dots.children[index].focus()") == 2 and ".focus(" not in "\n".join(js_function("sync"))
+    assert ".focus(" not in "\n".join(js_function("tick")) + "\n".join(js_function("go"))
+
+
+def test_every_footer_link_is_a_sized_target_and_the_credit_sentences_stay_inline():
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    foot = re.search(r'<footer class="foot">(.*?)</footer>', INDEX, re.S).group(1)
+    # The three links and the summary are the footer's own children, so one rule sizes them all; the licence
+    # link takes the whole "MIT © Luong NGUYEN", not the three letters alone.
+    assert re.search(r'^\s*<a href="LICENSE">MIT © Luong NGUYEN</a>\s*<a href="[^"]+">GitHub</a>\s*'
+                     r'<a href="[^"]+">PyPI</a>\s*<details id="credits" class="credits">\s*<summary>', foot)
+    assert "<p" not in foot.split("<details")[0]
+    targets = ".foot > a, .credits summary"
+    assert re.findall(rf"{re.escape(targets)} \{{ ([^}}]*) \}}", css) == [
+        "display: flex; align-items: center; min-width: 24px; min-height: 24px;",
+        "min-width: 44px; min-height: 44px;", "min-width: 44px; min-height: 44px;",
+        "min-width: 32px; min-height: 32px;"]
+    assert not re.search(r"\.credits-panel a\b|\.foot a\b", css)
+
+
 def test_touch_targets_follow_the_pointer_as_well_as_the_width():
-    coarse = re.search(r"@media \(pointer: coarse\) \{(.*?)\n\}", CSS, re.S).group(1)
+    coarse = re.search(r"@media \(any-pointer: coarse\) \{(.*?)\n\}", CSS, re.S).group(1)
     narrow = re.search(r"@media \(max-width: 767px\) \{(.*?)\n\}", CSS, re.S).group(1)
     for rule in (".ctl { width: 44px; height: 44px; }", ".copy { min-height: 44px; }", ".dot { height: 44px; }",
-                 ".foot > a, .credits summary { min-height: 44px; }"):
+                 ".foot > a, .credits summary { min-width: 44px; min-height: 44px; }"):
         assert rule in coarse and rule in narrow, rule
-    assert CSS.index("@media (pointer: coarse)") < CSS.index("@media (max-height: 500px)")
+    assert CSS.index("@media (any-pointer: coarse)") < CSS.index("@media (max-height: 500px)")
+    assert "(pointer: coarse)" not in CSS  # the main pointer alone would miss a touch laptop
 
 
 def strip_tags(html: str) -> str:
@@ -676,8 +720,15 @@ def test_open_credits_pause_the_show_and_close_on_escape_or_a_click_outside():
     assert "credits.open" in re.search(r"const playing = .*", JS).group(0)
     assert 'const credits = byId("credits");' in JS
     keydown = re.search(r'document\.addEventListener\("keydown", \(event\) => \{(.*?)\n  \}\);', JS, re.S).group(1)
-    assert re.search(r'if \(key === "Escape" && credits\.open\) \{\s*credits\.open = false;\s*'
-                     r'credits\.querySelector\("summary"\)\.focus\(\);', keydown)
+    escape = re.search(r'if \(key === "Escape" && credits\.open\) \{(.*?)\n    \} else', keydown, re.S).group(1)
+    assert [line.strip() for line in escape.split("\n") if line.strip() and not line.strip().startswith("//")] == [
+        "const inside = credits.contains(document.activeElement);",
+        "credits.open = false;",
+        'if (inside) credits.querySelector("summary").focus();',
+    ]
+    # The panel never stays open over a control the keyboard has moved to.
+    assert js_listener("credits", "focusout") == [
+        "if (event.relatedTarget instanceof Node && !credits.contains(event.relatedTarget)) credits.open = false;"]
     assert js_listener("document", "click") == [
         "if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;"]
     # Space on the summary opens the credits and in the panel scrolls them; it must not also toggle Autoplay.

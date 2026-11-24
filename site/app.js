@@ -1,7 +1,7 @@
 // printer-cli examples: one slide at a time, advancing on its own.
 // Autoplay runs only while nothing pauses it. userPaused is the visitor's choice: any manual navigation sets
 // it, and only the Autoplay button (or Space) clears it. A mouse over the text, keyboard focus on a control inside
-// the slide, the open credits, a touch or scroll in the text or the sheet (for a few seconds after it) and a
+// the slide or on a tick, the open credits, a touch or scroll in the text or the sheet (for a few seconds after it) and a
 // hidden tab pause it only for as long as they last (WCAG 2.2.2).
 (() => {
   "use strict";
@@ -198,8 +198,10 @@
 
   // Only keyboard focus pauses: a mouse click on Copy also focuses the button, and must not freeze the show.
   // Nor does the heading render() moves focus to (tabindex -1), or Autoplay could be on with the show stopped.
-  const focusPaused = () => stage.contains(document.activeElement) && document.activeElement.tabIndex >= 0
-    && document.activeElement.matches(":focus-visible");
+  // A tick with keyboard focus holds the show too: the row recentres on each new slide, which would scroll the
+  // focused tick out of sight. Space on a control presses it, so Autoplay is never turned on from a held show.
+  const holdsFocus = (node) => (stage.contains(node) && node.tabIndex >= 0) || dots.contains(node);
+  const focusPaused = () => holdsFocus(document.activeElement) && document.activeElement.matches(":focus-visible");
   const playing = (now) => !(userPaused || hoverPaused || focusPaused() || credits.open || now < touchUntil || hidden);
 
   function tick(now) {
@@ -229,13 +231,16 @@
   toggle.addEventListener("click", toggleAutoplay);
 
   document.addEventListener("keydown", (event) => {
-    if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+    // With a modifier a key means something else: Shift+arrow extends a text selection, and must not step.
+    if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
     const target = event.target instanceof Element ? event.target : document.body;
     const key = event.key;
     const onDots = dots.contains(target);
     if (key === "Escape" && credits.open) {
+      // Focus goes back to the summary only from inside the credits; anywhere else it stays where it is.
+      const inside = credits.contains(document.activeElement);
       credits.open = false;
-      credits.querySelector("summary").focus();
+      if (inside) credits.querySelector("summary").focus();
     } else if (onDots && (key === "Home" || key === "End")) {
       event.preventDefault();
       go(key === "Home" ? 0 : slides.length - 1, true);
@@ -247,13 +252,18 @@
       event.preventDefault();
       toggleAutoplay();
     } else if (key === "ArrowLeft" || key === "ArrowRight") {
-      if (target.closest(".sheet, input, textarea, select")) return;
+      // Not behind the open credits, nor from inside them: the slide under the panel must not change unseen.
+      if (credits.open || target.closest(".sheet, input, textarea, select, .credits")) return;
       event.preventDefault();
       go(index + (key === "ArrowRight" ? 1 : -1), true);
       if (onDots) dots.children[index].focus(); // focus follows the current tick, the row's one tab stop
     }
   });
-  // The credits close on Escape (above) and on a click or tap anywhere outside them.
+  // The credits close on Escape (above), on a click or tap anywhere outside them, and when keyboard focus moves
+  // out of them, so the panel never covers the control that has focus.
+  credits.addEventListener("focusout", (event) => {
+    if (event.relatedTarget instanceof Node && !credits.contains(event.relatedTarget)) credits.open = false;
+  });
   document.addEventListener("click", (event) => {
     if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;
   });

@@ -408,7 +408,10 @@ a:hover { text-decoration-thickness: 2px; }
 }
 .foot p { margin: 0; }
 .credits { margin-left: auto; }
-.foot > a, .credits summary { display: flex; align-items: center; min-height: 24px; }
+/* The footer's own links and the Credits button are targets of a set size; the links in the credits' sentences
+   stay inline text. */
+.foot > a, .credits summary { display: flex; align-items: center; min-width: 24px; min-height: 24px; }
+.credits summary { justify-content: flex-end; }
 .credits summary {
   color: var(--ink);
   text-decoration: underline;
@@ -457,20 +460,21 @@ a:hover { text-decoration-thickness: 2px; }
   .cmd pre { font-size: 13px; }
   .brand img { height: 30px; }
   .top-controls { gap: 10px; }
-  .foot { font-size: 11.5px; padding-block: 0 4px; }
-  /* Touch targets: 44px controls and copy buttons, ticks 44px tall. */
+  .foot { font-size: 11.5px; padding-block: 0 4px; gap: 0 8px; } /* the 44px targets keep the links apart */
+  /* Touch targets: 44px controls, copy buttons and footer links; the ticks are 44px tall and 24px wide. */
   .ctl { width: 44px; height: 44px; }
   .copy { min-height: 44px; }
   .dot { height: 44px; }
-  .foot > a, .credits summary { min-height: 44px; }
+  .foot > a, .credits summary { min-width: 44px; min-height: 44px; }
 }
 
-/* The same touch targets on any screen worked by a finger, whatever its width (a tablet, a touch laptop). */
-@media (pointer: coarse) {
+/* The same touch targets on any device that has a touch screen, whatever its width and even when a mouse is its
+   main pointer (a tablet, a touch laptop). */
+@media (any-pointer: coarse) {
   .ctl { width: 44px; height: 44px; }
   .copy { min-height: 44px; }
   .dot { height: 44px; }
-  .foot > a, .credits summary { min-height: 44px; }
+  .foot > a, .credits summary { min-width: 44px; min-height: 44px; }
   .foot { padding-block: 0 4px; }
 }
 
@@ -483,7 +487,7 @@ a:hover { text-decoration-thickness: 2px; }
   .nav-row { padding-block: 2px 0; }
   .foot { padding-block: 0 4px; }
   /* The footer's links stay 32px tall here, not 44px: on a screen this short the slide needs the height more. */
-  .foot > a, .credits summary { min-height: 32px; }
+  .foot > a, .credits summary { min-width: 32px; min-height: 32px; }
   .slide { padding-block: 4px 6px; }
   .panel-inner { gap: 8px; }
   .title { font-size: 22px; }
