@@ -267,8 +267,9 @@ def _footer(d: ImageDraw.ImageDraw, footer: str, cut: Cuts) -> float:
     font, size, baselines, lines, foot_cut = _fit_upward(footer, "hand", FOOTER_SIZE, FOOTER_MIN, 1, bottom, 1.1)
     if foot_cut:
         cut["footer"] = foot_cut
-    if lines:
-        _draw(d, C, baselines[0], lines[0], font, size)
+    if not lines:  # nothing to print, e.g. only combining marks: the tracks may run down to the foot
+        return bottom
+    _draw(d, C, baselines[0], lines[0], font, size)
     return baselines[0] - _band(size)[0] - 14
 
 

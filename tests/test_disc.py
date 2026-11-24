@@ -172,6 +172,16 @@ def test_a_short_label_fits():
     assert cut == {}
 
 
+@pytest.mark.parametrize("field", ["title", "subtitle", "footer", "tracks"])
+def test_text_of_only_combining_marks_is_drawn_without_crashing(field):
+    """A field that passes the checks but has nothing to print (a lone combining accent) leaves its line empty."""
+    mark = "́"
+    value = [mark, "Song", mark * 2] if field == "tracks" else mark
+    label = disc.with_overrides(disc.DEFAULT_DISC, **{field: value})
+    page, cut = disc.compose(Image.new("RGB", (60, 40), DARK), label)
+    assert page.size == (disc.W, disc.H) and cut == {}
+
+
 # --- the label file ------------------------------------------------------------------------------
 
 def test_disc_file_takes_tracks_as_a_list_or_one_text(tmp_path):
