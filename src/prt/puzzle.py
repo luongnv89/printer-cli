@@ -60,15 +60,20 @@ class Puzzle:
     difficulty: str | None
     solution: dict[str, Any]
     layout: Any = field(repr=False, compare=False)
+    theme: str | None = None  # a word search's bundled theme (None from a words file)
 
     def answers(self) -> dict[str, Any]:
         """What ``-f json`` reports and ``--answers`` saves: enough to check a filled-in sheet without the page."""
-        return {"kind": self.kind, "title": self.title, "seed": self.seed, "difficulty": self.difficulty,
-                "solution": self.solution}
+        out = {"kind": self.kind, "title": self.title, "seed": self.seed, "difficulty": self.difficulty}
+        if self.kind == "wordsearch":
+            out["theme"] = self.theme  # the seed makes the same puzzle only from the same words
+        return {**out, "solution": self.solution}
 
     def label(self) -> str:
         """The line at the foot of the page that says which puzzle this is, e.g. ``sudoku · medium · seed 4821``."""
         parts = [NAMES[self.kind]]
+        if self.theme:
+            parts.append(self.theme)
         if self.difficulty:
             parts.append(self.difficulty)
         if self.seed is not None:
@@ -389,6 +394,7 @@ def wordsearch(seed: int, difficulty: str = DEFAULT_DIFFICULTY, words: WordList 
     :data:`SEARCH_WORDS` of the bundled ``theme`` (picked at random), hidden in a square of letters running in the
     difficulty's :data:`SEARCH_DIRECTIONS`, the other squares filled with random letters."""
     rng = random.Random(f"wordsearch:{seed}")
+    key = None
     if words is None:
         from prt import bingo
         key, default_title = theme_words(theme or bingo.DEFAULT_THEME)
@@ -433,7 +439,7 @@ def wordsearch(seed: int, difficulty: str = DEFAULT_DIFFICULTY, words: WordList 
     rows = tuple("".join(ch or rng.choice(alphabet) for ch in row) for row in grid)
     listed = tuple(sorted((h["word"] for h in hidden), key=str.casefold))
     solution = {"size": size, "grid": list(rows), "words": hidden}
-    return Puzzle("wordsearch", title or default_title, seed, difficulty, solution, SearchLayout(rows, listed))
+    return Puzzle("wordsearch", title or default_title, seed, difficulty, solution, SearchLayout(rows, listed), key)
 
 
 # --- crossword -----------------------------------------------------------------------------------------------------
@@ -823,7 +829,7 @@ def _search_page(d: ImageDraw.ImageDraw, layout: SearchLayout) -> None:
     hint = fonts.face("hand", 38)
     d.text((W / 2, top), f"Find the {len(layout.words)} words. Circle each one you find.", font=hint, fill=GREY,
            anchor="mm")
-    _columns(d, list(layout.words), top + 50, FOOT - 60, 3, "body", 40, 26)
+    _columns(d, list(layout.words), top + 50, FOOT - 60, 3 if len(layout.words) <= 15 else 4, "body", 40, 22)
 
 
 CLUE_INDENT = 50

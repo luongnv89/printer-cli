@@ -1346,7 +1346,7 @@ def _print_puzzle(puzzle: Any, preview: Optional[Path], copies: list[tuple[Path,
 @puzzle_app.command("sudoku")
 def puzzle_sudoku(
     difficulty: Difficulty = typer.Option(Difficulty.medium, "--difficulty", "-d",
-                                          help="easy (38 digits given), medium (31) or hard (26)."),
+                                          help="easy (38 digits given), medium (31) or hard (about 26)."),
     seed: Optional[int] = typer.Option(None, "--seed", min=0, help=PUZZLE_SEED_HELP),
     title: Optional[str] = typer.Option(None, "--title", help=PUZZLE_TITLE_HELP),
     preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o", help=PUZZLE_PREVIEW_HELP),

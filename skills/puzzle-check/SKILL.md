@@ -51,7 +51,7 @@ prt puzzle crossword --crossword-file crossword.json --answers crossword-answers
 
 `--answers FILE.json` writes the solution before anything is printed. Keep the file and its name, because the check usually happens in a later session. `--yes` is required when there is no terminal, and always when `PRT_AGENT=1` is set. If the owner's page caps refuse the print (exit `1`, kind `page_cap_exceeded` or `daily_page_cap_exceeded`), nothing was printed: tell the user rather than retrying.
 
-**If the answers file is lost**, the foot of the page says which puzzle it is, e.g. `sudoku · easy · seed 4821`. Run the same command with that seed and `--preview` to get the solution again: `prt puzzle sudoku --difficulty easy --seed 4821 --preview again.png -f json`. A crossword or a word search from a words file also needs the same file.
+**If the answers file is lost**, the foot of the page says which puzzle it is, e.g. `sudoku · easy · seed 4821`. Run the same command with that seed and `--preview` to get the solution again: `prt puzzle sudoku --difficulty easy --seed 4821 --preview again.png -f json`. A themed word search names its theme at the foot too (`word search · zoo · easy · seed 17`): pass the same `--theme`. A crossword or a word search from a words file also needs the same file.
 
 ### 3. Scan the filled-in sheet
 

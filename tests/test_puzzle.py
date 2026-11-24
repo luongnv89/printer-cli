@@ -292,6 +292,20 @@ def test_the_foot_of_the_page_says_which_puzzle_it_is():
     assert puzzle.crossword().label() == f"crossword · {len(puzzle.DEFAULT_CROSSWORD.entries)} clues"
 
 
+def test_a_themed_word_search_names_its_theme_at_the_foot_and_in_the_answers():
+    p = puzzle.wordsearch(17, "easy", theme="Zoo", title="Sam's puzzle")
+    assert p.label() == "word search · zoo · easy · seed 17" and p.answers()["theme"] == "zoo"
+    own = puzzle.wordsearch(17, "easy", WordList(("Cat", "Dog", "Rabbit")))
+    assert own.answers()["theme"] is None and "theme" not in puzzle.sudoku(1).answers()
+
+
+def test_twenty_words_on_the_largest_grid_stay_above_the_foot():
+    words = WordList(tuple(f"{a}{b}ume" for a, b in zip("ABCDEFGHIJKLMNOPQRST", "TSRQPONMLKJIHGFEDCBA")))
+    page, _ = puzzle.compose(puzzle.wordsearch(1, "hard", words))
+    crop = page.convert("L").crop((0, puzzle.FOOT - 30, page.width, puzzle.FOOT - 22))
+    assert crop.getextrema() == (255, 255)
+
+
 def test_a_long_title_is_cut_and_reported():
     p = puzzle.sudoku(1, title="A very long title for a sudoku that runs on and on, past the edge")
     assert list(render.puzzle_page(p).cut) == ["title"]
