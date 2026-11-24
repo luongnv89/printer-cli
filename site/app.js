@@ -1,8 +1,8 @@
 // printer-cli examples: one slide at a time, advancing on its own.
 // Autoplay runs only while nothing pauses it. userPaused is the visitor's choice: any manual navigation sets
-// it, and only the Autoplay button (or Space) clears it. A mouse over the text, keyboard focus inside the slide,
-// a touch or scroll in the text or the sheet (for a few seconds after it) and a hidden tab pause it only for as
-// long as they last (WCAG 2.2.2).
+// it, and only the Autoplay button (or Space) clears it. A mouse over the text, keyboard focus on a control inside
+// the slide, the open credits, a touch or scroll in the text or the sheet (for a few seconds after it) and a
+// hidden tab pause it only for as long as they last (WCAG 2.2.2).
 (() => {
   "use strict";
 
@@ -19,6 +19,7 @@
   const announce = byId("announce");
   const copyStatus = byId("copy-status");
   const current = byId("current");
+  const credits = byId("credits");
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   let index = 0;
@@ -166,9 +167,11 @@
   function sync() {
     toggle.setAttribute("aria-pressed", String(!userPaused));
     current.textContent = pad(index + 1);
+    // The ticks are one tab stop: only the current slide's takes Tab, and the arrow keys move along the row.
     dots.querySelectorAll(".dot").forEach((dot, i) => {
       if (i === index) dot.setAttribute("aria-current", "true");
       else dot.removeAttribute("aria-current");
+      dot.tabIndex = i === index ? 0 : -1;
     });
     const active = dots.children[index];
     dots.scrollTo({
@@ -194,8 +197,9 @@
   }
 
   // Only keyboard focus pauses: a mouse click on Copy also focuses the button, and must not freeze the show.
-  const focusPaused = () => stage.contains(document.activeElement) && document.activeElement.matches(":focus-visible");
-  const playing = (now) => !(userPaused || hoverPaused || focusPaused() || now < touchUntil || hidden);
+  // Nor does the heading render() moves focus to (tabindex -1), or Autoplay could be on with the show stopped.
+  const focusPaused = () => stage.contains(document.activeElement) && document.activeElement.tabIndex >= 0 && document.activeElement.matches(":focus-visible");
+  const playing = (now) => !(userPaused || hoverPaused || focusPaused() || credits.open || now < touchUntil || hidden);
 
   function tick(now) {
     if (playing(now)) {
@@ -227,7 +231,15 @@
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
     const target = event.target instanceof Element ? event.target : document.body;
     const key = event.key;
-    if (key === " ") {
+    const onDots = dots.contains(target);
+    if (key === "Escape" && credits.open) {
+      credits.open = false;
+      credits.querySelector("summary").focus();
+    } else if (onDots && (key === "Home" || key === "End")) {
+      event.preventDefault();
+      go(key === "Home" ? 0 : slides.length - 1, true);
+      dots.children[index].focus();
+    } else if (key === " ") {
       // On a control, Space keeps its own meaning (press the button, scroll the sheet) and toggles nothing.
       if (target.closest("button, a, input, select, textarea, summary, [contenteditable], .sheet")) return;
       event.preventDefault();
@@ -236,7 +248,12 @@
       if (target.closest(".sheet, input, textarea, select")) return;
       event.preventDefault();
       go(index + (key === "ArrowRight" ? 1 : -1), true);
+      if (onDots) dots.children[index].focus(); // focus follows the current tick, the row's one tab stop
     }
+  });
+  // The credits close on Escape (above) and on a click or tap anywhere outside them.
+  document.addEventListener("click", (event) => {
+    if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;
   });
 
   // A mouse over the text panel (reading or copying) pauses; one resting on the proof does not, since the

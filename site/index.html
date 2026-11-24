@@ -47,7 +47,17 @@
   </nav>
 
   <footer class="foot">
-    <p><a href="LICENSE">MIT</a> © Luong NGUYEN · The photos in the <a href="https://github.com/luongnv89/printer-cli/tree/main/assets/samples">sample pages</a> are public-domain NASA images from Apollo 8, Apollo 11 and Apollo 17, via Wikimedia Commons. · Fonts under the SIL OFL 1.1: <a href="fonts/OFL-PlayfairDisplay.txt">Playfair Display</a>, <a href="fonts/OFL-OldStandardTT.txt">Old Standard TT</a> · <a href="https://github.com/luongnv89/printer-cli">GitHub</a> · <a href="https://pypi.org/project/printer-cli/">PyPI</a></p>
+    <p><a href="LICENSE">MIT</a> © Luong NGUYEN</p>
+    <a href="https://github.com/luongnv89/printer-cli">GitHub</a>
+    <a href="https://pypi.org/project/printer-cli/">PyPI</a>
+    <details id="credits" class="credits">
+      <summary>Credits</summary>
+      <div class="credits-panel" role="group" aria-label="Credits" tabindex="0">
+        <p>printer-cli and this site are under the <a href="LICENSE">MIT licence</a>, © Luong NGUYEN.</p>
+        <p>The photos in the <a href="https://github.com/luongnv89/printer-cli/tree/main/assets/samples">sample pages</a> are public-domain NASA images from Apollo 8, Apollo 11 and Apollo 17, via Wikimedia Commons.</p>
+        <p>The fonts are under the SIL OFL 1.1: <a href="fonts/OFL-PlayfairDisplay.txt">Playfair Display</a> and <a href="fonts/OFL-OldStandardTT.txt">Old Standard TT</a>.</p>
+      </div>
+    </details>
   </footer>
 
   <p id="announce" class="sr-only" aria-live="polite"></p>
@@ -101,7 +111,7 @@
   "command": "prt booth astronaut.jpg --story-file story.json -o booth-metro.png",
   "prompt": "Use prt to make astronaut.jpg into a colour metro front page with the story in story.json (\"Man Walks on the Moon\"), saved as booth-metro.png.",
   "image": "samples/booth-metro.jpg",
-  "alt": "metro sample page",
+  "alt": "metro sample page: a black 'METRO' masthead with a red rule, the headline 'MAN WALKS ON THE MOON' over a colour photo of an astronaut on the Moon with its caption, and the story in two columns",
   "width": 800,
   "height": 1132
  },
@@ -114,7 +124,7 @@
   "command": "prt booth astronaut.jpg --style daily --story-file story.json -o booth-daily.png",
   "prompt": "Use prt to make astronaut.jpg into a black-and-white daily broadsheet front page with the story in story.json (\"Man Walks on the Moon\"), saved as booth-daily.png.",
   "image": "samples/booth-daily.jpg",
-  "alt": "daily sample page",
+  "alt": "daily sample page: 'The Daily Chronicle' masthead between rules, the headline 'Man Walks on the Moon' over the same photo in black and white, and the story in three columns",
   "width": 800,
   "height": 1132
  },
@@ -127,7 +137,7 @@
   "command": "prt booth astronaut.jpg --style wizard -o booth-wizard.png",
   "prompt": "Use prt to make astronaut.jpg into a wizard trading card with its built-in text, \"The Spellbound Guest\", saved as booth-wizard.png.",
   "image": "samples/booth-wizard.jpg",
-  "alt": "wizard sample page",
+  "alt": "wizard sample page: a purple and gold trading card, the photo in an arched frame over a gold banner reading 'The Spellbound Guest' and a cream text box",
   "width": 800,
   "height": 1132
  },
@@ -140,7 +150,7 @@
   "command": "prt booth astronaut.jpg --style wanted -o booth-wanted.png",
   "prompt": "Use prt to make astronaut.jpg into a wanted poster with its built-in text, \"The Grinning Captain\" with a reward of 1,000,000 gold, saved as booth-wanted.png.",
   "image": "samples/booth-wanted.jpg",
-  "alt": "wanted sample page",
+  "alt": "wanted sample page: a torn parchment poster with 'WANTED' over the framed photo, then 'DEAD OR ALIVE', the name 'THE GRINNING CAPTAIN' and a reward of 1,000,000 gold",
   "width": 800,
   "height": 1132
  },
@@ -153,7 +163,7 @@
   "command": "prt booth astronaut.jpg --style certificate -o booth-certificate.png",
   "prompt": "Use prt to make astronaut.jpg into an award certificate with its built-in text, presented to The Photo Booth Guest \"For the Brightest Smile of the Day\", saved as booth-certificate.png.",
   "image": "samples/booth-certificate.jpg",
-  "alt": "certificate sample page",
+  "alt": "certificate sample page: a 'Certificate of Achievement' in a green and gold border, the photo in an oval frame, presented to 'The Photo Booth Guest', with a date, a signature and a gold seal at the foot",
   "width": 800,
   "height": 1132
  },
@@ -166,7 +176,7 @@
   "command": "prt booth astronaut.jpg --style sports -o booth-sports.png",
   "prompt": "Use prt to make astronaut.jpg into a sports trading card with its built-in text, \"The Shutter Star\" of the Booth City Flashes, saved as booth-sports.png.",
   "image": "samples/booth-sports.jpg",
-  "alt": "sports card sample page",
+  "alt": "sports card sample page: a blue trading card for the 'Booth City Flashes', the photo over a red banner reading 'THE SHUTTER STAR', the position and number, and a white box of stats",
   "width": 800,
   "height": 1132
  },
@@ -179,7 +189,7 @@
   "command": "prt booth astronaut.jpg --style missing -o booth-missing.png",
   "prompt": "Use prt to make astronaut.jpg into a missing-pet poster with its built-in text, Whiskers the cat with \"Call 555-0134\" on the tear-off tabs, saved as booth-missing.png.",
   "image": "samples/booth-missing.jpg",
-  "alt": "missing-pet poster sample page",
+  "alt": "missing-pet poster sample page: 'MISSING' in red over 'HAVE YOU SEEN THIS CAT?', the photo, the name 'WHISKERS', a reward line, a description and a row of tear-off phone tabs",
   "width": 800,
   "height": 1132
  },
@@ -192,7 +202,7 @@
   "command": "prt booth astronaut.jpg --style movie -o booth-movie.png",
   "prompt": "Use prt to make astronaut.jpg into a movie poster with its built-in text, \"The Photo Booth\", saved as booth-movie.png.",
   "image": "samples/booth-movie.jpg",
-  "alt": "movie poster sample page",
+  "alt": "movie poster sample page: the photo filling a dark poster under a tagline, the title 'THE PHOTO BOOTH' in gold over five stars, 'COMING SOON TO A PRINTER NEAR YOU' and a credits block",
   "width": 800,
   "height": 1132
  },
@@ -322,7 +332,7 @@
   "command": "prt article article.json -o article-magazine.png",
   "prompt": "Use the article-print skill to lay out the article in article.json (\"Why the Apollo Guidance Computer Still Matters\") as magazine pages, saved as article-magazine.png.",
   "image": "samples/article-magazine.jpg",
-  "alt": "magazine sample page",
+  "alt": "magazine sample page: a blue rule and the site name over the title 'Why the Apollo Guidance Computer Still Matters' in bold type, the byline, the text in three columns, and the address and page number at the foot",
   "width": 800,
   "height": 1132
  },
@@ -335,7 +345,7 @@
   "command": "prt article article.json --style classic-magazine -o article-classic.png",
   "prompt": "Use prt to lay out the article in article.json (\"Why the Apollo Guidance Computer Still Matters\") in the classic-magazine style, saved as article-classic.png.",
   "image": "samples/article-classic.jpg",
-  "alt": "classic-magazine sample page",
+  "alt": "classic-magazine sample page: a cream page in a double border, the site name, title and byline centred between ornaments, the text in one column opening with a red drop cap, and the page number at the foot",
   "width": 800,
   "height": 1132
  },
@@ -348,7 +358,7 @@
   "command": "prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file story.json -o gazette.png",
   "prompt": "Use prt to make a vintage gazette front page from astronaut.jpg, launch.jpg and earthrise.jpg with the story in story.json (\"Man Walks on the Moon\"), saved as gazette.png.",
   "image": "samples/gazette.jpg",
-  "alt": "portrait sample page",
+  "alt": "portrait gazette sample page: 'The Photo Gazette' in blackletter on cream paper, the headline 'MAN WALKS ON THE MOON' over a sepia photo of an astronaut on the Moon, two smaller photos of a rocket launch and the Earth over the Moon, and the story in two columns",
   "width": 800,
   "height": 1132
  },
@@ -361,7 +371,7 @@
   "command": "prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file story.json --landscape -o gazette-landscape.png",
   "prompt": "Use prt to make a vintage gazette front page on landscape A4 from astronaut.jpg, launch.jpg and earthrise.jpg with the story in story.json (\"Man Walks on the Moon\"), saved as gazette-landscape.png.",
   "image": "samples/gazette-landscape.jpg",
-  "alt": "--landscape sample page",
+  "alt": "--landscape gazette sample page: the same gazette on its side, the large photo on the left, the story in three columns beside it and the two smaller photos under the story",
   "width": 1000,
   "height": 707
  },

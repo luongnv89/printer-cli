@@ -393,8 +393,54 @@ a:hover { text-decoration-thickness: 2px; }
 .dot.section { margin-left: 10px; }
 .dots :focus-visible { outline-offset: -2px; }
 
-.foot { padding: 2px var(--gutter) 12px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+/* One short line: the licence, two links and the credits. The long credit lines open in a panel over the page,
+   so they take no height from the slide and never need sideways scrolling. */
+.foot {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 16px;
+  padding: 2px var(--gutter) 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
 .foot p { margin: 0; }
+.credits { margin-left: auto; }
+.foot > a, .credits summary { display: flex; align-items: center; min-height: 24px; }
+.credits summary {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  list-style: none;
+}
+.credits summary::-webkit-details-marker { display: none; }
+.credits summary:hover { text-decoration-thickness: 2px; }
+/* The panel opens upwards from the footer, inside the page: it is as wide as the page allows and scrolls within
+   itself when the page is too short for it, so nothing is pushed off screen. */
+.credits-panel {
+  position: absolute;
+  z-index: 2;
+  right: var(--gutter);
+  bottom: 100%;
+  width: min(34em, 100% - 2 * var(--gutter));
+  max-height: calc(100vh - 100% - 8px);
+  max-height: calc(100dvh - 100% - 8px);
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--control);
+  border-radius: 6px;
+  background-color: var(--card);
+  color: var(--card-text);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.credits-panel p + p { margin-top: 8px; }
+.credits-panel:focus-visible { outline-offset: -4px; }
 
 /* --- narrow screens: the proof above, the text below; only the text panel may scroll ------------- */
 
@@ -411,21 +457,33 @@ a:hover { text-decoration-thickness: 2px; }
   .cmd pre { font-size: 13px; }
   .brand img { height: 30px; }
   .top-controls { gap: 10px; }
-  .foot { font-size: 11.5px; padding-bottom: 8px; }
+  .foot { font-size: 11.5px; padding-block: 0 4px; }
   /* Touch targets: 44px controls and copy buttons, ticks 44px tall. */
   .ctl { width: 44px; height: 44px; }
   .copy { min-height: 44px; }
   .dot { height: 44px; }
+  .foot > a, .credits summary { min-height: 44px; }
 }
 
-/* --- short screens (a phone on its side): every row of chrome tightened, the footer one line that scrolls
-   sideways, so the slide keeps most of the height --------------------------------------------------- */
+/* The same touch targets on any screen worked by a finger, whatever its width (a tablet, a touch laptop). */
+@media (pointer: coarse) {
+  .ctl { width: 44px; height: 44px; }
+  .copy { min-height: 44px; }
+  .dot { height: 44px; }
+  .foot > a, .credits summary { min-height: 44px; }
+  .foot { padding-block: 0 4px; }
+}
+
+/* --- short screens (a phone on its side): every row of chrome tightened, so the slide keeps most of the
+   height; the footer wraps like any other text and never scrolls sideways ---------------------------- */
 
 @media (max-height: 500px) {
   .top { padding-block: 4px 2px; }
   .brand img { height: 24px; }
   .nav-row { padding-block: 2px 0; }
-  .foot { padding-block: 0 4px; white-space: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .foot { padding-block: 0 4px; }
+  /* The footer's links stay 32px tall here, not 44px: on a screen this short the slide needs the height more. */
+  .foot > a, .credits summary { min-height: 32px; }
   .slide { padding-block: 4px 6px; }
   .panel-inner { gap: 8px; }
   .title { font-size: 22px; }

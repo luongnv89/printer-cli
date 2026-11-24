@@ -7,7 +7,9 @@ and check the autoplay controls the slideshow needs to stay pausable.
 
 import json
 import re
+import sys
 import tomllib
+import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 
 import pytest
@@ -308,9 +310,15 @@ def css_values(css: str) -> list[str]:
     return values
 
 
+PRESENTATION = "fill|stroke|stop-color|color|flood-color|lighting-color"
+JS_STYLE_ATTRIBUTE = re.compile(r"""setAttribute\(\s*["'`]style["'`]\s*,\s*(["'`])(.*?)\1""", re.S)
+
+
 def colour_sources() -> list[tuple[str, str]]:
     sources = [("styles.css", v) for v in css_values(CSS)]
     html = SLIDES_BLOCK.sub("", INDEX)
+    # The inline icons: a colour can sit in an SVG presentation attribute, outside any style.
+    sources += [("index.html attribute", v) for v in re.findall(rf'\s(?:{PRESENTATION})="([^"]*)"', html)]
     for style in re.findall(r"<style[^>]*>(.*?)</style>", html, re.S):
         sources += [("index.html <style>", v) for v in css_values(style)]
     sources += [("index.html style=", v) for v in re.findall(r'\sstyle="([^"]*)"', html)]
@@ -326,6 +334,11 @@ def colour_sources() -> list[tuple[str, str]]:
     for pattern in (r"\.style\.\w+\s*=\s*([^;\n]+)", r"style\.setProperty\(([^;\n]+)",
                     r"\.style\.cssText\s*\+?=\s*([^;\n]+)"):
         sources += [("app.js", re.sub(r"[\"'`]", " ", v)) for v in re.findall(pattern, JS)]
+    # A colour set as an attribute: a presentation attribute's value, or each declaration of a style attribute.
+    attribute = rf"""setAttribute\(\s*["'`](?:{PRESENTATION})["'`]\s*,\s*([^;\n]+)"""
+    sources += [("app.js setAttribute", re.sub(r"[\"'`]", " ", v)) for v in re.findall(attribute, JS)]
+    for _, style in JS_STYLE_ATTRIBUTE.findall(JS):
+        sources += [("app.js setAttribute style", v) for v in css_values("{" + style + "}")]
     return sources
 
 
@@ -333,6 +346,33 @@ def test_every_colour_is_grey_black_or_white():
     sources = colour_sources()
     assert len(sources) > 50 and any(name == "theme-color" for name, _ in sources)
     assert [(name, value, colour_problems(value)) for name, value in sources if colour_problems(value)] == []
+    # A style attribute set from a variable could not be read, so every one must be a string literal.
+    assert len(re.findall(r"""setAttribute\(\s*["'`]style["'`]""", JS)) == len(JS_STYLE_ATTRIBUTE.findall(JS))
+    assert any(name == "index.html attribute" and value == "currentColor" for name, value in sources)
+
+
+def colour_failures() -> list[tuple[str, str]]:
+    return [(name, value) for name, value in colour_sources() if colour_problems(value)]
+
+
+@pytest.mark.parametrize("name, old, new, source, bad", [
+    ("INDEX", 'fill="currentColor"', 'fill="#00FF41"', "index.html attribute", True),
+    ("INDEX", 'stroke="currentColor"', 'stroke="tomato"', "index.html attribute", True),
+    ("INDEX", 'fill="currentColor"', 'fill="#0a0a0a"', "index.html attribute", False),
+    ("JS", 'glyph.setAttribute("aria-hidden", "true");',
+     'glyph.setAttribute("style", "background:#00FF41");', "app.js setAttribute style", True),
+    ("JS", 'glyph.setAttribute("aria-hidden", "true");',
+     'glyph.setAttribute("style", "background:#eeeeee");', "app.js setAttribute style", False),
+    ("JS", 'glyph.setAttribute("aria-hidden", "true");',
+     'glyph.setAttribute("fill", "#00FF41");', "app.js setAttribute", True),
+])
+def test_colour_scan_reads_svg_attributes_and_attributes_set_from_the_script(monkeypatch, name, old, new, source, bad):
+    module = sys.modules[__name__]
+    text = getattr(module, name)
+    assert old in text and colour_failures() == []
+    monkeypatch.setattr(module, name, text.replace(old, new, 1))
+    assert any(found == source for found, _ in colour_sources())
+    assert [found for found, _ in colour_failures()] == ([source] if bad else [])
 
 
 @pytest.mark.parametrize("value, bad", [
@@ -434,6 +474,105 @@ def test_autoplay_toggle_has_a_fixed_name_and_reports_its_state():
     assert not re.search(r"toggle\.(textContent|innerText|setAttribute\(\"aria-label\")", JS)
 
 
+def js_function(name: str) -> list[str]:
+    """The statements of a top-level function in app.js, one stripped line each, without comment lines."""
+    body = re.search(rf"\n  function {name}\([^)]*\) \{{\n(.*?)\n  \}}\n", JS, re.S).group(1)
+    return [line.strip() for line in body.split("\n") if line.strip() and not line.strip().startswith("//")]
+
+
+def js_listener(target: str, event: str) -> list[str]:
+    """The statements of the one listener app.js adds for an event, without comments."""
+    found = re.findall(rf'{target}\.addEventListener\("{event}", \((?:event)?\) => \{{(.*?)\}}\);', JS, re.S)
+    assert len(found) == 1, (target, event, len(found))
+    lines = [re.sub(r"\s*//.*$", "", line).strip() for line in found[0].split("\n")]
+    return [line for line in lines if line]
+
+
+def test_playing_stops_for_every_pause():
+    assert re.findall(r"^  const playing = .*$", JS, re.M) == [
+        "  const playing = (now) => !(userPaused || hoverPaused || focusPaused() || credits.open || "
+        "now < touchUntil || hidden);"]
+
+
+def test_a_manual_step_stops_autoplay_and_only_the_clock_steps_without_stopping_it():
+    assert js_function("go") == [
+        "index = (to + slides.length) % slides.length;",
+        "elapsed = 0;",
+        "if (manual) {",
+        "userPaused = true;",
+        "announce.textContent = `Slide ${index + 1} of ${slides.length}: ${slides[index].title}`;",
+        "}",
+        "render();",
+        "sync();",
+    ]
+    calls = re.findall(r"(?<![\w.])go\((.*?), (true|false)\)", JS)
+    assert len(calls) == len(re.findall(r"(?<![\w.])go\(", JS)) - 1 == 7  # every call but the definition
+    assert [args for args, manual in calls if manual == "false"] == ["index + 1"]
+
+
+def test_the_clock_advances_the_show_only_while_it_is_playing():
+    assert js_function("tick") == [
+        "if (playing(now)) {",
+        "if (last !== null) elapsed += now - last;",
+        "last = now;",
+        "if (elapsed >= DURATION) go(index + 1, false);",
+        "} else {",
+        "last = null;",
+        "}",
+        "progress.style.transform = `scaleX(${Math.min(elapsed / DURATION, 1)})`;",
+        "requestAnimationFrame(tick);",
+    ]
+    assert re.search(r"const DURATION = \d{4};", JS)
+    assert JS.rstrip().endswith("render();\n  sync();\n  requestAnimationFrame(tick);\n})();")
+
+
+def test_a_hidden_tab_and_a_mouse_over_the_text_pause_only_while_they_last():
+    assert js_listener("document", "visibilitychange") == ["hidden = document.hidden;", "last = null;"]
+    assert "let hidden = document.hidden;" in JS
+    assert js_listener("stage", "pointerover") == [
+        'if (event.pointerType === "mouse") hoverPaused = Boolean(event.target.closest(".panel"));']
+    assert js_listener("stage", "pointerleave") == ['if (event.pointerType === "mouse") hoverPaused = false;']
+    assert sorted(re.findall(r"\bhoverPaused\s*=(?!=)\s*([^;]+);", JS)) == [
+        'Boolean(event.target.closest(".panel"))', "false", "false"]  # the declaration, then the two listeners
+
+
+def test_text_reaches_the_page_as_text_never_as_markup():
+    assert js_function("el") == [
+        "const node = document.createElement(tag);",
+        "if (className) node.className = className;",
+        "if (text !== undefined) node.textContent = text;",
+        "return node;",
+    ]
+    for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "createContextualFragment",
+                 "DOMParser", "srcdoc", "setHTML", "eval(", "new Function"):
+        assert sink not in JS, sink
+
+
+def test_the_heading_a_slide_change_focuses_does_not_pause_the_show():
+    # After an arrow key the new slide's heading has focus; Space must then really start the show again.
+    assert re.findall(r"^  const focusPaused = .*$", JS, re.M) == [
+        "  const focusPaused = () => stage.contains(document.activeElement) && "
+        'document.activeElement.tabIndex >= 0 && document.activeElement.matches(":focus-visible");']
+    render = "\n".join(js_function("render"))
+    assert "heading.tabIndex = -1;\nheading.focus({ preventScroll: true });" in render
+    assert js_function("toggleAutoplay") == ["userPaused = !userPaused;", "sync();"]
+    # The controls that do pause when the keyboard is on them can all take Tab.
+    assert "sheet.tabIndex = 0;" in JS and 'const button = el("button", "copy", "Copy");' in JS
+
+
+def test_the_ticks_are_one_tab_stop_moved_with_the_arrow_keys():
+    assert "dot.tabIndex = i === index ? 0 : -1;" in js_function("sync")
+    assert JS.count('addEventListener("keydown"') == 1  # one handler, so an arrow on a tick steps once
+    keydown = re.search(r'document\.addEventListener\("keydown", \(event\) => \{(.*?)\n  \}\);', JS, re.S).group(1)
+    assert "const onDots = dots.contains(target);" in keydown
+    assert re.findall(r"(?<![\w.])go\((.*)\);", keydown) == [
+        'key === "Home" ? 0 : slides.length - 1, true', 'index + (key === "ArrowRight" ? 1 : -1), true']
+    assert '} else if (onDots && (key === "Home" || key === "End")) {' in keydown
+    assert keydown.count("dots.children[index].focus()") == 2
+    assert "if (onDots) dots.children[index].focus();" in keydown
+    assert 'dot.addEventListener("click", () => go(i, true));' in JS
+
+
 def test_autoplay_pauses_and_only_the_toggle_resumes_it():
     for needle in ("prefers-reduced-motion", "visibilitychange", "let userPaused = reduceMotion.matches",
                    "hoverPaused", "focusPaused"):
@@ -481,6 +620,91 @@ def test_short_screens_put_the_text_beside_the_proof():
     assert "grid-template-columns" in rule and "grid-template-rows: minmax(0, 1fr)" in rule
     narrow = re.search(r"@media \(max-width: 767px\) \{(.*?)\n\}", CSS, re.S).group(1)
     assert re.search(r"\.ctl \{ width: 44px; height: 44px; \}", narrow) and ".copy { min-height: 44px; }" in narrow
+
+
+def test_touch_targets_follow_the_pointer_as_well_as_the_width():
+    coarse = re.search(r"@media \(pointer: coarse\) \{(.*?)\n\}", CSS, re.S).group(1)
+    narrow = re.search(r"@media \(max-width: 767px\) \{(.*?)\n\}", CSS, re.S).group(1)
+    for rule in (".ctl { width: 44px; height: 44px; }", ".copy { min-height: 44px; }", ".dot { height: 44px; }",
+                 ".foot > a, .credits summary { min-height: 44px; }"):
+        assert rule in coarse and rule in narrow, rule
+    assert CSS.index("@media (pointer: coarse)") < CSS.index("@media (max-height: 500px)")
+
+
+def strip_tags(html: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", html)).strip()
+
+
+def test_footer_is_a_short_line_and_the_credits_open_from_it():
+    foot = re.search(r'<footer class="foot">(.*?)</footer>', INDEX, re.S).group(1)
+    details = re.search(r'<details id="credits" class="credits">(.*?)</details>', foot, re.S)
+    line, credits = foot.replace(details.group(0), ""), details.group(1)
+    hrefs = r'<a href="([^"]+)"'
+
+    assert strip_tags(line) == "MIT © Luong NGUYEN GitHub PyPI"
+    assert re.findall(hrefs, line) == ["LICENSE", "https://github.com/luongnv89/printer-cli",
+                                       "https://pypi.org/project/printer-cli/"]
+
+    # Every credit the licences need, in the static page (no script needed to read them).
+    assert re.search(r"^\s*<summary>Credits</summary>", credits)
+    assert strip_tags(credits.split("</summary>")[1]) == (
+        "printer-cli and this site are under the MIT licence, © Luong NGUYEN. "
+        "The photos in the sample pages are public-domain NASA images from Apollo 8, Apollo 11 and Apollo 17, "
+        "via Wikimedia Commons. "
+        "The fonts are under the SIL OFL 1.1: Playfair Display and Old Standard TT.")
+    assert re.findall(hrefs, credits) == [
+        "LICENSE", "https://github.com/luongnv89/printer-cli/tree/main/assets/samples",
+        "fonts/OFL-PlayfairDisplay.txt", "fonts/OFL-OldStandardTT.txt"]
+    assert '<div class="credits-panel" role="group" aria-label="Credits" tabindex="0">' in credits
+
+
+def test_credits_need_no_sideways_scrolling_and_stay_inside_the_page():
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    foot_rules = re.findall(r"(?<![\w-])\.foot \{([^}]*)\}", css)
+    assert len(foot_rules) == 4  # the base rule, narrow screens, touch screens and short screens
+    for rule in foot_rules:
+        assert "nowrap" not in rule and "overflow" not in rule, rule
+    assert "flex-wrap: wrap" in foot_rules[0] and "position: relative" in foot_rules[0]
+    panel = re.search(r"\.credits-panel \{([^}]*)\}", css).group(1)
+    for declaration in ("position: absolute;", "bottom: 100%;", "width: min(34em, 100% - 2 * var(--gutter));",
+                        "max-height: calc(100dvh - 100% - 8px);", "overflow-y: auto;"):
+        assert declaration in panel, declaration
+    assert "white-space" not in panel and "overflow-x" not in panel
+
+
+def test_open_credits_pause_the_show_and_close_on_escape_or_a_click_outside():
+    assert "credits.open" in re.search(r"const playing = .*", JS).group(0)
+    assert 'const credits = byId("credits");' in JS
+    keydown = re.search(r'document\.addEventListener\("keydown", \(event\) => \{(.*?)\n  \}\);', JS, re.S).group(1)
+    assert re.search(r'if \(key === "Escape" && credits\.open\) \{\s*credits\.open = false;\s*'
+                     r'credits\.querySelector\("summary"\)\.focus\(\);', keydown)
+    assert js_listener("document", "click") == [
+        "if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;"]
+    # Space on the summary opens the credits; it must not also toggle Autoplay.
+    assert "summary" in re.search(r'target\.closest\("(button, a, [^"]*)"\)', JS).group(1).split(", ")
+
+
+SVG = "{http://www.w3.org/2000/svg}"
+
+
+def logo_mark(path) -> tuple[dict, list[tuple[str, dict]]]:
+    """The mark of a logo file: its one <g>, as the group's attributes and each shape's tag and attributes."""
+    groups = ET.parse(path).getroot().findall(f"{SVG}g")
+    assert len(groups) == 1, path
+    return dict(groups[0].attrib), [(shape.tag, dict(shape.attrib)) for shape in groups[0]]
+
+
+def test_favicon_is_the_readme_logo_mark():
+    favicon, logo = SITE / "favicon.svg", ROOT / "assets" / "logo" / "logo-black.svg"
+    transform, shapes = logo_mark(logo)
+    assert transform == {"transform": "translate(4,4)"} and len(shapes) == 6
+    assert all(tag == f"{SVG}path" and attrs["d"] for tag, attrs in shapes)
+    assert logo_mark(favicon) == (transform, shapes)
+    # Besides the mark the favicon draws only a white tile behind it; the logo's wordmark is left out.
+    root = ET.parse(favicon).getroot()
+    assert root.attrib["viewBox"] == "0 0 72 72"
+    assert [child.tag for child in root] == [f"{SVG}rect", f"{SVG}g"]
+    assert root[0].attrib == {"x": "0", "y": "0", "width": "72", "height": "72", "rx": "14", "fill": "#FFFFFF"}
 
 
 def test_selection_shows_on_the_command_box_and_the_sheet():
