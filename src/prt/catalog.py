@@ -3,7 +3,7 @@ the input files the print commands read.
 
 ``styles()`` lists the styles (``prt styles -f json``) and ``schema(name)`` returns one JSON Schema (``prt schema
 NAME``). Both are built from the constants the commands check their input against (``booth.FIELDS``,
-``booth.LIMITS``, ``card.LIMITS``, ``postcard.LIMITS``, ``article.FIELDS``, ``recipe.LIMITS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
+``booth.LIMITS``, ``card.LIMITS``, ``postcard.LIMITS``, ``disc.LIMITS``, ``article.FIELDS``, ``recipe.LIMITS``, ``vintage.MAX_PHOTOS``, …), so they say what the commands accept; the page
 schema is built by :mod:`prt.compose`, which checks page files against it. Other front
 ends (an MCP server, page validation) import this module instead of listing the styles again; a new input schema
 is added with ``@register_schema``.
@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
-from prt import article, booth, card, compose, photocard, postcard, recipe, vintage
+from prt import article, booth, card, compose, disc, photocard, postcard, recipe, vintage
 from prt.drivers.base import PrinterError
 from prt.paper import PAPERS
 
@@ -147,6 +147,14 @@ POSTCARD_ROLES = {
     "address": f"The address, written on the ruled lines on the right of the back: one line of text per line, up to "
                f"{postcard.ADDRESS_LINES}; when empty the lines are left blank to write on",
 }
+DISC_ROLES = {
+    "title": "The title, in large handwriting above the hub, e.g. 'Road Trip Mix'; on two lines when it is long",
+    "subtitle": "Line under the title, e.g. 'Summer 2026'",
+    "tracks": f"The track list, in two columns either side of the hub, the first half on the left, each track on one "
+              f"line as written (number them yourself): a list of texts, or one text with a newline between tracks; "
+              f"up to {disc.MAX_TRACKS} tracks of up to {disc.MAX_TRACK} characters each",
+    "footer": "Small line at the foot of the label, e.g. 'For Sam, from Jo'",
+}
 RECIPE_ROLES = {
     "title": "The recipe's name, in handwriting at the top of the card",
     "ingredients": "The ingredients, one per item: a list of texts, or one text with a newline between items",
@@ -171,6 +179,10 @@ def card_fields() -> tuple[Field, ...]:
 def postcard_fields() -> tuple[Field, ...]:
     return tuple(Field(name, POSTCARD_ROLES[name], name in postcard.REQUIRED, postcard.LIMITS[name])
                  for name in postcard.FIELDS)
+
+
+def disc_fields() -> tuple[Field, ...]:
+    return tuple(Field(name, DISC_ROLES[name], name in disc.REQUIRED, disc.LIMITS.get(name)) for name in disc.FIELDS)
 
 
 def recipe_fields() -> tuple[Field, ...]:
@@ -216,6 +228,10 @@ POSTCARD_DESCRIPTION = ("Two-sided postcard on 4×6 photo paper, read on its sid
                         "optional handwritten greeting, and on the back the message and signature, a stamp box and "
                         "four address lines; printed in one two-sided job, or front then back with the card turned "
                         "over by hand")
+DISC_DESCRIPTION = ("Disc label on a printable 12 cm CD or DVD, through the disc tray: the photo fills the printable "
+                    f"ring ({disc.OUTER_D_MM} mm across, a {disc.INNER_D_MM} mm hole round the hub), the title and "
+                    "subtitle in handwriting above the hub, the tracks in two columns either side of it and a footer "
+                    "line at the foot; white outside the ring")
 RECIPE_DESCRIPTION = ("6×4 in index card on 4×6 photo paper: the title in handwriting over a red rule, the "
                       "ingredients and numbered steps on blue lines in two columns; runs on to more cards when needed")
 GAZETTE_KIND = "vintage newspaper"
@@ -235,6 +251,8 @@ def _build() -> tuple[Style, ...]:
                      (1, 1), 1, "instant.jpg", paper="4x6"))
     out.append(Style("postcard", "postcard", (), postcard.KIND, POSTCARD_DESCRIPTION, "postcard", postcard_fields(),
                      (1, 1), len(postcard.SIDES), "postcard.jpg", paper="4x6"))
+    out.append(Style("disc", "disc", (), disc.KIND, DISC_DESCRIPTION, "disc", disc_fields(), (1, 1), 1, "disc.jpg",
+                     paper="disc"))
     out += [Style(name, "article", () if name == "magazine" else ("--style", name),
                   article.ARTICLE_STYLES[name].kind, ARTICLE[name][0], "article", article_fields(), (0, 0),
                   article.MAX_PAGES, ARTICLE[name][1]) for name in article.ARTICLE_STYLES]
@@ -406,3 +424,26 @@ def postcard_schema() -> dict[str, Any]:
             "examples": [asdict(postcard.DEFAULT_POSTCARD),
                          {"message": "Made it to the coast!\nThe sea is cold but the chips are perfect.",
                           "signature": "Love, Jo", "address": "Sam Lee\n4 Elm Road\nLeeds LS6 1AB"}]}
+
+
+@register_schema("disc", "disc label file: prt disc PHOTO --disc-file disc.json")
+def disc_schema() -> dict[str, Any]:
+    props: dict[str, Any] = {f.name: _text(f) for f in disc_fields() if f.name != "tracks"}
+    track = {"type": "string", "maxLength": disc.MAX_TRACK}
+    # As one text, the tracks are split at each newline: at most MAX_TRACKS lines. As a list, each item is a track.
+    lines = rf"^[^\n]{{0,{disc.MAX_TRACK}}}(\n[^\n]{{0,{disc.MAX_TRACK}}}){{0,{disc.MAX_TRACKS - 1}}}$"
+    props["tracks"] = {"description": DISC_ROLES["tracks"], "anyOf": [
+        {"type": "string", "pattern": lines},
+        {"type": "array", "items": track, "maxItems": disc.MAX_TRACKS}]}
+    return {"$schema": JSON_SCHEMA, "title": "prt disc",
+            "description": "The label file of `prt disc --disc-file` (a file, or - for stdin); at most "
+                           f"{disc.MAX_DISC_FILE // 1024} KiB. The photo is given on the command line. The text is "
+                           "written in a handwriting font that has Latin and Cyrillic letters: accents are "
+                           "printed, and characters it cannot print, such as emoji or Chinese, are refused. Lengths "
+                           f"count characters, with each run of spaces as one. At most {disc.MAX_TRACKS} tracks, or "
+                           "lines when the tracks are one text; empty ones are dropped.",
+            "type": "object", "properties": props,
+            "required": [f.name for f in disc_fields() if f.required], "additionalProperties": False,
+            "examples": [{**asdict(disc.DEFAULT_DISC), "tracks": list(disc.DEFAULT_DISC.tracks)},
+                         {"title": "Anna & Ben", "subtitle": "Our wedding · 12 June 2026",
+                          "tracks": "First dance\nCake cutting\nThe last song"}]}

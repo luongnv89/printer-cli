@@ -963,9 +963,14 @@ def card_cmd(
 
 def _print_sheet(action: str, rendered: render.Rendered, label: str, preview: Optional[Path],
                  copies: list[tuple[Path, str]], question: str, job_name: str, yes: bool,
-                 info: dict[str, Any], done: str | None = None) -> None:
-    """Save, preview or print one rendered sheet on its own paper (``prt strip``, ``prt instant``): the preview
-    and the copies are written before a driver exists, then the sheet is sent under the print guard."""
+                 info: dict[str, Any], done: str | None = None,
+                 precheck: Callable[[Driver], None] | None = None) -> None:
+    """Save, preview or print one rendered sheet on its own paper (``prt strip``, ``prt instant``, ``prt disc``):
+    the preview and the copies are written before a driver exists, then the sheet is sent under the print guard.
+
+    ``precheck`` asks the printer whether it can take the sheet at all (``prt disc``: a disc tray); it runs after
+    the agent-mode check, so an agent without ``--yes`` hears that first, and before the page caps and the prompt.
+    """
     from prt import booth
     page, paper = rendered.pages[0], rendered.paper
     preview_format = booth.format_for(preview) if preview else None
@@ -993,6 +998,9 @@ def _print_sheet(action: str, rendered: render.Rendered, label: str, preview: Op
         return
     d = STATE.driver()
     d.require(Capability.PRINT)
+    if precheck:
+        guard.require_consent(yes)  # agent mode: --yes first, before asking the printer anything more
+        precheck(d)
     with _authorize(1, yes, f"{question} on {d.display_name}? (load {paper.loaded})") as ticket:
         job, = render.send_pages(d, rendered.jpegs(), [job_name], ticket, paper)
     STATE.note("ok", f"{label} queued as job {job}", f"{d.display_name} · {paper.loaded}")
@@ -1128,6 +1136,63 @@ def recipe_cmd(
                f"{d.display_name} · {paper.loaded}")
     if STATE.json:
         STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
+
+
+def _require_disc_tray(d: Driver) -> None:
+    """Refuse a disc label on a printer that lists its trays and has no disc tray among them (exit code 1); a
+    printer that lists no trays is left to decide for itself."""
+    sources = d.info().media_sources
+    if sources and "disc" not in sources:
+        raise PrinterError(f"{d.display_name} has no disc tray (trays: {', '.join(sources)})",
+                           hint="print the label on a printer with a CD/DVD tray, or keep it with --preview",
+                           kind="disc_tray_unavailable")
+
+
+@app.command("disc")
+def disc_cmd(
+    photo: Path = typer.Argument(..., help="Photo for the label: JPEG, PNG, WebP, GIF, BMP or TIFF; it is cropped to "
+                                           "fill the disc."),
+    disc_file: Optional[Path] = typer.Option(None, "--disc-file",
+                                             help="JSON disc label: title required; subtitle, tracks (a list) and "
+                                                  "footer optional. Use - to read it from stdin."),
+    title: Optional[str] = typer.Option(None, "--title", help="Title above the hub, e.g. 'Road Trip Mix' (overrides "
+                                                              "the disc file)."),
+    subtitle: Optional[str] = typer.Option(None, "--subtitle", help="Line under the title, e.g. 'Summer 2026'; '' for "
+                                                                    "none."),
+    track: Optional[list[str]] = typer.Option(None, "--track", metavar="TEXT",
+                                              help="One track, e.g. '1. Open Road'; repeat it for each track, in "
+                                                   "order. Replaces the disc file's tracks."),
+    footer: Optional[str] = typer.Option(None, "--footer", help="Small line at the foot of the label, e.g. 'For Sam, "
+                                                                "from Jo'; '' for none."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save the label here instead of printing; the extension picks the "
+                                                "file type: .pdf, .png, .jpg or .jpeg (a 120 mm square at 300 dpi)."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of the label here (.pdf, .png, .jpg or .jpeg) "
+                                                   "before printing it; repeat for more files."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Disc label: a photo, a title and a track list on a printable CD/DVD, printed through the disc tray.
+
+    The photo fills the printable ring (116 mm across, a 43 mm hole round the hub); the title goes above the hub,
+    the tracks in two columns either side of it. Without a label the built-in mixtape is printed. Label flags
+    override --disc-file.
+    """
+    from prt import booth, disc, vintage
+    # Check every input and lay the label out before a file is written or a driver exists, so a bad file name or a
+    # bad label never leaves a partial result or reaches the printer.
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    if preview:
+        booth.format_for(preview)
+    inputs = [photo] + ([disc_file] if disc_file and str(disc_file) != booth.STDIN else [])
+    vintage.check_outputs([path for path in [preview] + [p for p, _ in copies] if path], inputs)
+    image = booth.load_photo(photo)
+    text = disc.with_overrides(disc.load_disc(disc_file) if disc_file else disc.DEFAULT_DISC, title=title,
+                               subtitle=subtitle, footer=footer, tracks=track)
+    rendered = render.disc_label(image, text)
+    _print_sheet("disc", rendered, disc.KIND, preview, copies, f"Print {photo.name} as a {disc.KIND}",
+                 f"prt disc {photo.name}", yes, {"title": text.title, "tracks": len(text.tracks)},
+                 precheck=_require_disc_tray)
 
 
 class PostcardSide(str, Enum):
@@ -1498,8 +1563,8 @@ def compose_cmd(
 
 @app.command("styles")
 def styles_cmd() -> None:
-    """List every page style of booth, card, strip, instant, article, recipe and gazette: what it prints and the
-    options that pick it.
+    """List every page style of booth, card, strip, instant, postcard, disc, article, recipe and gazette: what it
+    prints and the options that pick it.
 
     With -f json each style also lists its fields, their character limits, how many photos it takes and a
     link to a sample page. `prt schema NAME` prints the JSON Schema of a style's input file.
@@ -1528,10 +1593,12 @@ def _schema_names(incomplete: str) -> list[str]:
 
 @app.command("schema")
 def schema_cmd(name: str = typer.Argument(..., metavar="NAME", autocompletion=_schema_names,
-                                          help="story, article, gazette, page or card.")) -> None:
+                                          help="story, article, gazette, page, card, recipe, postcard or "
+                                               "disc.")) -> None:
     """Print the JSON Schema of an input file: story (prt booth --story-file), article (an article JSON file for
-    prt article), gazette (prt gazette --story-file), page (a page file for prt compose) or card (prt card
-    --card-file).
+    prt article), gazette (prt gazette --story-file), page (a page file for prt compose), card (prt card
+    --card-file), recipe (a recipe JSON file for prt recipe), postcard (prt postcard --postcard-file) or disc (prt
+    disc --disc-file).
 
     A file that passes the schema is accepted by the command. The schema is JSON whatever -f says.
     """

@@ -1,4 +1,4 @@
-"""Booth, card, article, compose, strip, instant, recipe and postcard pages as callable steps, shared by the CLI commands and the MCP server.
+"""Booth, card, article, compose, strip, instant, recipe, postcard and disc pages as callable steps, shared by the CLI commands and the MCP server.
 
 Each front end reads its own input (files and flags, or MCP tool arguments) and decides how to show the result;
 what happens in between is here: lay the pages out, say what did not fit and what printing them would cost, and
@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from prt import guard
-from prt.paper import A4, PHOTO_4X6, Paper
+from prt.paper import A4, DISC, PHOTO_4X6, Paper
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from prt.booth import Story
     from prt.card import Card
     from prt.compose import Page
+    from prt.disc import Disc
     from prt.drivers.base import Driver
     from prt.layout import Cut
     from prt.postcard import Postcard
@@ -130,6 +131,14 @@ def postcard_sides(photo: Image.Image, card: Postcard) -> Rendered:
     from prt import postcard
     pages, cut = postcard.compose(photo, card)
     return Rendered(pages, cut, PHOTO_4X6)
+
+
+def disc_label(photo: Image.Image, disc: Disc) -> Rendered:
+    """The disc label of ``photo`` and ``disc`` (see ``disc.compose``) on a printable CD/DVD, white outside the
+    printable ring."""
+    from prt import disc as discs
+    page, cut = discs.compose(photo, disc)
+    return Rendered([page], cut, DISC)
 
 
 def send_two_sided(queue: str, pages: Sequence[Image.Image], name: str, ticket: guard.Ticket,
