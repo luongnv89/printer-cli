@@ -1,12 +1,14 @@
 // printer-cli examples: one slide at a time, advancing on its own.
 // Autoplay runs only while nothing pauses it. userPaused is the visitor's choice: any manual navigation sets
-// it, and only the Autoplay button (or P / Space) clears it. Hover, focus inside the slide and a hidden tab
-// pause it only for as long as they last (WCAG 2.2.2).
+// it, and only the Autoplay button (or Space) clears it. A mouse over the text, keyboard focus inside the slide,
+// a touch or scroll in the text or the sheet (for a few seconds after it) and a hidden tab pause it only for as
+// long as they last (WCAG 2.2.2).
 (() => {
   "use strict";
 
   const DURATION = 7000; // ms per slide: time to read the title, the command and the prompt
   const SWIPE = 48; // px of horizontal travel that counts as a swipe
+  const TOUCH_HOLD = 5000; // ms the show stays put after the last touch or scroll in the text or the sheet
 
   const slides = JSON.parse(document.getElementById("slides").textContent);
   const byId = (id) => document.getElementById(id);
@@ -22,7 +24,7 @@
   let index = 0;
   let userPaused = reduceMotion.matches;
   let hoverPaused = false;
-  let focusPaused = false;
+  let touchUntil = 0; // performance.now() before which a touch or scroll keeps the slide
   let hidden = document.hidden;
   let elapsed = 0;
   let last = null;
@@ -148,9 +150,14 @@
     const panel = el("div", "panel");
     panel.append(inner);
     article.append(matFor(slide), panel);
+    // Focus inside the old slide (a copy button, the sheet) would fall to <body> with it: keep it on the new one.
+    const hadFocus = stage.contains(document.activeElement);
     stage.replaceChildren(article);
-    // The focused copy button may just have been replaced; only real focus inside the slide pauses autoplay.
-    focusPaused = stage.contains(document.activeElement);
+    if (hadFocus) {
+      const heading = article.querySelector(".title");
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
 
     const next = slides[(index + 1) % slides.length];
     if (next.image) img(next.image, "");
@@ -186,10 +193,12 @@
     sync();
   }
 
-  const playing = () => !(userPaused || hoverPaused || focusPaused || hidden);
+  // Only keyboard focus pauses: a mouse click on Copy also focuses the button, and must not freeze the show.
+  const focusPaused = () => stage.contains(document.activeElement) && document.activeElement.matches(":focus-visible");
+  const playing = (now) => !(userPaused || hoverPaused || focusPaused() || now < touchUntil || hidden);
 
   function tick(now) {
-    if (playing()) {
+    if (playing(now)) {
       if (last !== null) elapsed += now - last;
       last = now;
       if (elapsed >= DURATION) go(index + 1, false);
@@ -218,13 +227,9 @@
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
     const target = event.target instanceof Element ? event.target : document.body;
     const key = event.key;
-    if (key === "p" || key === "P") {
-      if (target.closest("input, textarea, select, [contenteditable]")) return;
-      event.preventDefault();
-      toggleAutoplay();
-    } else if (key === " ") {
+    if (key === " ") {
       // On a control, Space keeps its own meaning (press the button, scroll the sheet) and toggles nothing.
-      if (target.closest("button, a, input, select, textarea, summary, [contenteditable], [tabindex]")) return;
+      if (target.closest("button, a, input, select, textarea, summary, [contenteditable], .sheet")) return;
       event.preventDefault();
       toggleAutoplay();
     } else if (key === "ArrowLeft" || key === "ArrowRight") {
@@ -240,8 +245,16 @@
     if (event.pointerType === "mouse") hoverPaused = Boolean(event.target.closest(".panel"));
   });
   stage.addEventListener("pointerleave", (event) => { if (event.pointerType === "mouse") hoverPaused = false; });
-  stage.addEventListener("focusin", () => { focusPaused = true; });
-  stage.addEventListener("focusout", (event) => { focusPaused = stage.contains(event.relatedTarget); });
+  // A finger has no hover: touching or scrolling the text or the sheet holds the slide for TOUCH_HOLD after the
+  // last touch or scroll, so it is not swapped (and its scroll reset) under the reader. scroll does not bubble.
+  const hold = (event) => {
+    if (event.target instanceof Element && event.target.closest(".panel, .sheet")) {
+      touchUntil = performance.now() + TOUCH_HOLD;
+    }
+  };
+  stage.addEventListener("touchstart", hold, { passive: true });
+  stage.addEventListener("touchmove", hold, { passive: true });
+  stage.addEventListener("scroll", hold, { capture: true, passive: true });
   document.addEventListener("visibilitychange", () => {
     hidden = document.hidden;
     last = null; // a hidden tab gets no frames, so the time away must not count towards the slide
@@ -253,7 +266,10 @@
 
   let touch = null;
   stage.addEventListener("touchstart", (event) => {
-    touch = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+    // A sideways drag on the sheet scrolls its wide output; it is not a swipe to the next slide.
+    const onSheet = event.target instanceof Element && event.target.closest(".sheet");
+    const [first] = event.touches;
+    touch = event.touches.length === 1 && !onSheet ? { x: first.clientX, y: first.clientY } : null;
   }, { passive: true });
   stage.addEventListener("touchend", (event) => {
     if (!touch) return;

@@ -442,3 +442,73 @@ def test_autoplay_pauses_and_only_the_toggle_resumes_it():
     assert writes == {"reduceMotion.matches", "true", "!userPaused"}
     space = re.search(r'key === " "\)(.*?)\} else', JS, re.S).group(1)
     assert re.search(r"target\.closest\(\"button, a, input", space) and space.index("return") < space.index("toggleAutoplay()")
+
+
+def test_keyboard_shortcuts_have_no_single_letter_key():
+    # WCAG 2.1.4: a one-letter shortcut that cannot be turned off fires on speech input; Space and the button stay.
+    assert not re.search(r"key === \"[a-zA-Z]\"", JS)
+    assert "(P)" not in INDEX and "P / Space" not in JS
+
+
+def test_only_keyboard_focus_pauses_and_focus_survives_a_slide_change():
+    assert 'document.activeElement.matches(":focus-visible")' in JS
+    assert "focusPaused()" in re.search(r"const playing = .*", JS).group(0)
+    render = re.search(r"function render\(\) \{(.*?)\n  \}", JS, re.S).group(1)
+    assert render.index("const hadFocus = stage.contains(document.activeElement)") < render.index("replaceChildren")
+    assert "focus({ preventScroll: true })" in render
+
+
+def test_a_touch_or_scroll_in_the_text_holds_the_slide():
+    assert re.search(r"const TOUCH_HOLD = \d{4};", JS)
+    assert "now < touchUntil" in re.search(r"const playing = .*", JS).group(0)
+    assert 'closest(".panel, .sheet")' in JS
+    for listener in ('addEventListener("touchstart", hold', 'addEventListener("scroll", hold, { capture: true'):
+        assert listener in JS, listener
+
+
+# --- layout ---------------------------------------------------------------------------------------------
+
+
+def test_sheet_type_has_a_floor_and_scrolls_instead():
+    size = re.search(r"\.sheet pre \{[^}]*font-size:\s*([^;]+);", CSS).group(1)
+    floor = re.match(r"clamp\((\d+)px,", size)
+    assert floor and int(floor.group(1)) >= 10, size
+    assert re.search(r"\.sheet \{[^}]*overflow: auto", CSS)
+
+
+def test_short_screens_put_the_text_beside_the_proof():
+    rule = re.search(r"@media \(max-width: 767px\) and \(max-height: 500px\) \{(.*?)\n\}", CSS, re.S).group(1)
+    assert "grid-template-columns" in rule and "grid-template-rows: minmax(0, 1fr)" in rule
+    narrow = re.search(r"@media \(max-width: 767px\) \{(.*?)\n\}", CSS, re.S).group(1)
+    assert re.search(r"\.ctl \{ width: 44px; height: 44px; \}", narrow) and ".copy { min-height: 44px; }" in narrow
+
+
+def test_selection_shows_on_the_command_box_and_the_sheet():
+    assert ".cmd ::selection { background-color: var(--term-text); color: var(--term); }" in CSS
+    assert ".sheet ::selection { background-color: var(--paper-ink); color: var(--paper); }" in CSS
+
+
+# --- prompts ------------------------------------------------------------------------------------------
+
+
+def test_image_slide_prompts_ask_for_the_sample_shown():
+    for s in IMAGE_SLIDES:
+        command, prompt = s["command"], s["prompt"]
+        output = re.search(r"-o (\S+)", command)
+        if output:
+            assert output.group(1) in prompt, (s["id"], output.group(1))
+            inputs = re.findall(r"(?<![\w-])([\w-]+\.(?:jpg|json))\b", command.replace(output.group(0), ""))
+            assert inputs, s["id"]
+            for name in inputs:
+                assert name in prompt, (s["id"], name)
+        for caption in re.findall(r'--caption "([^"]+)"', command):
+            assert caption in prompt, (s["id"], caption)
+        for name in re.findall(r"([\w-]+\.json)", command):
+            data = json.loads((ROOT / "assets" / "samples" / name).read_text(encoding="utf-8"))
+            title = next(data[key] for key in ("title", "headline", "greeting") if key in data)
+            assert title in prompt, (s["id"], name, title)
+    prompts = {s["id"]: s["prompt"] for s in SLIDES}
+    assert "Space Camp" in prompts["bingo"] and "1969" in prompts["bingo"]
+    assert "Earthrise" in prompts["instant"] and "Summer" not in prompts["instant"]
+    assert "Blue Marble Mix" in prompts["disc"] and "road-trip" not in prompts["disc"]
+    assert "Whiskers" in prompts["booth-missing"] and "built-in text" in prompts["booth-wizard"]
