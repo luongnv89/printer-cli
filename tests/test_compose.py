@@ -478,6 +478,56 @@ def test_too_many_pages_are_refused(monkeypatch):
     assert exc.value.exit_code == 3
 
 
+TALL_HEADING = " ".join(["W" * 9] * 30)  # 299 characters, one word a line: taller than a page at level 1
+
+
+def test_a_heading_taller_than_a_page_is_refused():
+    with pytest.raises(PrinterError, match=r"blocks\[1\]: the heading is taller than a page") as exc:
+        compose.layout(_parse({"blocks": [{"type": "rule"}, {"type": "heading", "text": TALL_HEADING}]}))
+    assert exc.value.exit_code == 3
+
+
+def test_a_heading_taller_than_a_page_in_a_column_is_refused():
+    heading = {"type": "heading", "text": TALL_HEADING, "level": 2}  # smaller type, but a quarter of the width
+    with pytest.raises(PrinterError, match=r"blocks\[0\]\.columns\[3\]\[0\]: the heading is taller than a page"):
+        compose.layout(_parse({"blocks": [{"type": "columns", "columns": [[], [], [], [heading]]}]}))
+
+
+def test_a_long_heading_that_fits_a_page_still_prints():
+    text = " ".join(["WWWWWWWW"] * 33)[:300]  # as long as a heading may be, yet under a page tall
+    (sheet,) = compose.layout(_parse({"blocks": [{"type": "heading", "text": text}]}))
+    assert compose.TOP + sheet[0][1].height <= compose.BOTTOM
+
+
+@pytest.mark.parametrize("blocks", [
+    [{"type": "columns", "columns": [[], []]}],
+    [{"type": "text", "text": "\u0301"}],  # a combining mark alone prints nothing
+    [{"type": "text", "text": "\u0007\n\u0301"}],  # a control character is dropped
+    [{"type": "heading", "text": "\u0301"}, {"type": "columns", "columns": [[{"type": "text", "text": "\u0301"}], []]}],
+], ids=["empty columns", "combining mark", "control character", "heading and columns"])
+def test_a_page_file_with_nothing_to_print_is_refused(blocks):
+    page = _parse({"blocks": blocks})
+    with pytest.raises(PrinterError, match="the page file has nothing to print") as exc:
+        compose.layout(page)
+    assert exc.value.exit_code == 3
+
+
+def test_empty_columns_never_start_a_blank_page():
+    lead = compose._lead(compose.TEXT_SIZES["normal"])
+    for n in range(compose.CONTENT_H // lead - 3, compose.CONTENT_H // lead + 1):  # text filling page 1 to the foot
+        page = _parse({"blocks": [{"type": "text", "text": "\n".join(["line"] * n)},
+                                  {"type": "columns", "columns": [[], []]}]})
+        sheets = compose.layout(page)
+        assert all(sheet and sheet[0][1].ink for sheet in sheets)
+        assert all(piece.height for sheet in sheets for _, piece in sheet)  # the empty columns are left out
+
+
+def test_a_paragraph_that_prints_nothing_adds_no_gap():
+    plain = compose.layout(_parse({"blocks": [{"type": "text", "text": "A\nB"}]}))
+    with_blank = compose.layout(_parse({"blocks": [{"type": "text", "text": "A\n\u0301\nB\n\u0301"}]}))
+    assert [y for y, _ in plain[0]] == [y for y, _ in with_blank[0]]
+
+
 def test_columns_taller_than_a_page_are_refused():
     tall = {"type": "text", "text": "\n".join(["line"] * 80)}
     with pytest.raises(PrinterError, match=r"blocks\[0\]: the columns block is taller than a page"):
@@ -661,6 +711,9 @@ def test_page_from_stdin_reads_images_from_the_current_folder(capsys, tmp_path, 
     ({"blocks": [{"type": "image", "path": "missing.png"}]}, "image not found"),
     ({"blocks": [{"type": "image", "path": "https://example.com/a.png"}]}, "is a web link"),
     ({"blocks": [{"type": "heading", "text": "Party 🎉"}]}, "cannot print"),
+    ({"blocks": [{"type": "heading", "text": TALL_HEADING}]}, "blocks[0]: the heading is taller than a page"),
+    ({"blocks": [{"type": "columns", "columns": [[], []]}]}, "has nothing to print"),
+    ({"blocks": [{"type": "text", "text": "\u0301"}]}, "has nothing to print"),
 ])
 def test_an_invalid_page_file_is_refused_before_anything_is_printed(capsys, tmp_path, printer, page,
                                                                     kind_of_problem):
