@@ -9,7 +9,9 @@ print the text and that every image file can be read.
 
 The blocks are laid out top to bottom on A4 at 150 dpi, like the other pages, and run on to a new page when one
 is full (up to ``MAX_PAGES``): nothing is cut. A heading is kept with what follows it; a text block may break
-between lines; any other block moves to the next page whole.
+between lines; any other block moves to the next page whole. A heading or ``columns`` block taller than a page,
+and a page file with nothing to print (empty columns, or text the page font prints as nothing), are refused
+rather than printed cut short or blank.
 
 Image paths come from the page file, so they are untrusted: only local files are read (a web link is refused,
 nothing is downloaded), only regular files of the photo formats, at most ``MAX_IMAGE_BYTES`` and
@@ -500,6 +502,7 @@ class Piece:
     draw: Draw
     keep_with_next: bool = False  # a heading: start a new page rather than end one with it
     space: bool = False  # the gap between two paragraphs: dropped at the top of a page
+    ink: bool = True  # False when it leaves nothing on the paper (a gap, a columns block of empty cells)
 
 
 def _x(align: str, width: int, used: float) -> float:
@@ -595,25 +598,35 @@ def _text(block: dict[str, Any], width: int) -> list[Piece]:
     font, align = _font(size), block.get("align", "left")
     pieces: list[Piece] = []
     for para in _printable(block["text"]).split("\n"):
-        if pieces:
-            pieces.append(Piece(_lead(size) // 2, lambda *_: None, space=True))
-        pieces += [_lines_piece([line], size, width, align, INK) for line in _wrap(para, font, width)]
+        lines = [_lines_piece([line], size, width, align, INK) for line in _wrap(para, font, width)]
+        if lines and pieces:  # a paragraph that prints nothing adds no gap either
+            pieces.append(Piece(_lead(size) // 2, lambda *_: None, space=True, ink=False))
+        pieces += lines
     return pieces
 
 
-def _heading(block: dict[str, Any], width: int) -> list[Piece]:
+def _heading(block: dict[str, Any], width: int, where: str) -> list[Piece]:
+    """A heading as one piece, never split across pages; refuses (exit code 3) one taller than a page, whose last
+    lines would run off the sheet."""
     size = HEADING_SIZES[int(block.get("level", 1))]
     lines = _wrap(_printable(block["text"]), _font(size), width)
-    return [_lines_piece(lines, size, width, block.get("align", "left"), INK, bold=1, keep_with_next=True)] \
-        if lines else []
+    if not lines:
+        return []
+    piece = _lines_piece(lines, size, width, block.get("align", "left"), INK, bold=1, keep_with_next=True)
+    if piece.height > CONTENT_H:
+        raise PrinterError(f"{where}: the heading is taller than a page", exit_code=3,
+                           hint="shorten the heading, or move part of it into a text block")
+    return [piece]
 
 
 def _stack(blocks: list[dict[str, Any]], width: int, where: str) -> Iterator[tuple[int, Piece]]:
     """The pieces of ``blocks`` laid out at ``width``, each with the gap above it (GAP before each block but the
-    first). A block is measured only when its pieces are asked for, so a caller can stop early."""
+    first). A block is measured only when its pieces are asked for, so a caller can stop early. A piece that
+    leaves nothing on the paper (a columns block of empty cells) is left out, so it can never start a page."""
     started = False
     for i, block in enumerate(blocks):
-        for n, piece in enumerate(_pieces(block, width, f"{where}[{i}]")):
+        pieces = [p for p in _pieces(block, width, f"{where}[{i}]") if p.ink or p.space]
+        for n, piece in enumerate(pieces):
             yield (GAP if started and n == 0 else 0), piece
             started = True
 
@@ -633,6 +646,7 @@ def _columns(block: dict[str, Any], width: int, where: str) -> Piece:
                                    hint="split it into several columns blocks, or move long text out of it")
         stacks.append(stack)
     height = max((sum(gap + p.height for gap, p in stack) for stack in stacks), default=0)
+    ink = any(piece.ink for stack in stacks for _, piece in stack)
 
     def draw(page: Image.Image, d: ImageDraw.ImageDraw, x: int, y: int) -> None:
         for c, stack in enumerate(stacks):
@@ -641,13 +655,13 @@ def _columns(block: dict[str, Any], width: int, where: str) -> Piece:
                 top += gap
                 piece.draw(page, d, x + c * (cell_w + GUTTER), top)
                 top += piece.height
-    return Piece(height, draw)
+    return Piece(height, draw, ink=ink)
 
 
 def _pieces(block: dict[str, Any], width: int, where: str) -> list[Piece]:
     kind = block["type"]
     if kind == "heading":
-        return _heading(block, width)
+        return _heading(block, width, where)
     if kind == "text":
         return _text(block, width)
     if kind == "image":
@@ -661,7 +675,8 @@ def _pieces(block: dict[str, Any], width: int, where: str) -> list[Piece]:
 
 def layout(page: Page) -> list[list[tuple[int, Piece]]]:
     """Each page's pieces with the y they start at; refuses (exit code 3) a page file needing over MAX_PAGES,
-    as soon as it does, without measuring the blocks after that."""
+    as soon as it does, without measuring the blocks after that, and one with nothing to print, which would
+    come out as a blank sheet."""
     sheets: list[list[tuple[int, Piece]]] = [[]]
     seq = _stack(page.blocks, CONTENT_W, "blocks")
     y = TOP
@@ -684,6 +699,10 @@ def layout(page: Page) -> list[list[tuple[int, Piece]]]:
         y += gap
         sheets[-1].append((y, piece))
         y += piece.height
+    if not sheets[0]:
+        raise PrinterError("the page file has nothing to print: its blocks leave the page blank", exit_code=3,
+                           hint="add text, an image, a QR code or a rule; empty columns and text the page font "
+                                "prints as nothing, such as a lone accent mark, do not count")
     return sheets
 
 
