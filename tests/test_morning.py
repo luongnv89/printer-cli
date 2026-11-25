@@ -5,7 +5,7 @@ import json
 import pytest
 from jsonschema import Draft202012Validator
 
-from prt import catalog, morning
+from prt import catalog, morning, render
 from prt.cli import main
 from prt.drivers.base import PrinterError
 
@@ -75,6 +75,12 @@ def test_morning_document_has_the_four_required_sections():
     doc = morning.document(paper)
     assert [s.key for s in doc.sections] == ["weather", "calendar", "todos", "headlines"]
     assert doc.masthead == "The Morning Gazette" and doc.edition == "Morning edition"
+
+
+def test_a_long_date_is_cut_before_it_overlaps_the_edition_line():
+    paper = morning.parse_morning(json.dumps({**EXAMPLE, "date": "D" * morning.LIMITS["date"]}))
+    cut = render.morning_page(paper).cut["date"]
+    assert cut.given == morning.LIMITS["date"] and 0 < cut.max_fit < cut.given
 
 
 def test_morning_stdin_matches_the_file(capsys, tmp_path, stdin):

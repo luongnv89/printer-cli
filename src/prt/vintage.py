@@ -378,11 +378,18 @@ def draw_head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet, masthead: str 
     y += bottom - top + 16
     y, _ = _centred(d, y, tagline, "body-italic", 24, 24, 1, left, width)
     y = _double(d, y + 4, sheet)
-    parts = [_caps(text, "body-bold", 18) for text in (dateline or booth._today(), edition, price)]
+    edition_runs = _caps(edition, "body-bold", 18)
+    price_runs = _caps(price, "body-bold", 18)
+    centre_x = (sheet.width - _caps_width(edition_runs)) / 2
+    # The dateline is user text on the text-first gazettes: keep it clear of the centred edition line.
+    dateline_width = max(0, int(centre_x - left - 24))
+    dateline_runs, _, cut_dateline = _fit_caps(dateline or booth._today(), "body-bold", 18, 12, dateline_width)
     baseline = y + 30
-    _draw_caps(d, left, baseline, parts[0])
-    _draw_caps(d, (sheet.width - _caps_width(parts[1])) / 2, baseline, parts[1])
-    _draw_caps(d, right - _caps_width(parts[2]), baseline, parts[2])
+    _draw_caps(d, left, baseline, dateline_runs)
+    _draw_caps(d, centre_x, baseline, edition_runs)
+    _draw_caps(d, right - _caps_width(price_runs), baseline, price_runs)
+    if cut_dateline:
+        cut["date"] = cut_dateline
     y = _double(d, baseline + 12, sheet) + 22
 
     if story.kicker:
