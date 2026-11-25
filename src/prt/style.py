@@ -18,8 +18,9 @@ import math
 import os
 import re
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TextIO
+from typing import Literal, TextIO
 
 from rich.cells import cell_len
 from rich.console import Console
@@ -37,7 +38,9 @@ ROLES = {
     "info": "#6B7280",
 }
 
-TIERS = {"none": None, "16": "standard", "256": "256", "truecolor": "truecolor"}
+ColorSystem = Literal["auto", "standard", "256", "truecolor", "windows"]  # rich Console's color_system values
+
+TIERS: dict[str, ColorSystem | None] = {"none": None, "16": "standard", "256": "256", "truecolor": "truecolor"}
 
 
 @dataclass(frozen=True)
@@ -319,7 +322,9 @@ def status(level: str, word: str, mode: Mode) -> Text:
     return out
 
 
-def box(title: str, rows: list[Text | str | None], mode: Mode, footer: str | None = None, max_width: int = 100) -> str:
+def box(
+    title: str, rows: Sequence[Text | str | None], mode: Mode, footer: str | None = None, max_width: int = 100
+) -> str:
     """Rounded box with the title notched into the top border. ``None`` rows are dividers."""
     g = glyphs(mode)
     width = max(30, min(mode.width, max_width))
@@ -351,7 +356,7 @@ def box(title: str, rows: list[Text | str | None], mode: Mode, footer: str | Non
 
 
 def table_rows(
-    header: list[str], rows: list[list[Text | str]], mode: Mode, right: set[int] | None = None, gap: int = 2
+    header: list[str], rows: Sequence[Sequence[Text | str]], mode: Mode, right: set[int] | None = None, gap: int = 2
 ) -> list[Text]:
     """Column-aligned rows (header in the title role, no rule under it — like btop's proc list)."""
     right = right or set()

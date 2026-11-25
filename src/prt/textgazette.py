@@ -125,7 +125,7 @@ def _cuts(blocks: tuple[TextBlock, ...], wrapped: list[Wrapped], printed: list[E
         if block is not None:
             shown.setdefault(block, []).append(line)
     cuts: Cuts = {}
-    for index, block in enumerate(blocks):
+    for index, field in enumerate(blocks):
         display, printable, lines = wrapped[index]
         got = shown.get(index, [])
         complete = len(got) >= len(lines)
@@ -140,10 +140,10 @@ def _cuts(blocks: tuple[TextBlock, ...], wrapped: list[Wrapped], printed: list[E
         if complete and not modified:
             continue
         if not got:
-            cuts[block.key] = Cut(0, len(block.text))
+            cuts[field.key] = Cut(0, len(field.text))
             continue
         base = _in_source(_cut(printable, got), display, lambda c: vintage._printable_face(c, font))
-        cuts[block.key] = Cut(max(0, base.max_fit - len(block.label)), max(0, base.given - len(block.label)))
+        cuts[field.key] = Cut(max(0, base.max_fit - len(field.label)), max(0, base.given - len(field.label)))
     return cuts
 
 

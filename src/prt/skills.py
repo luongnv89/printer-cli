@@ -22,7 +22,7 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from prt.drivers.base import PrinterError
 
@@ -269,9 +269,9 @@ class _Undo:
                     path.unlink(missing_ok=True)
                 elif kind == "link":
                     path.unlink(missing_ok=True)
-                    os.symlink(before, path)
+                    os.symlink(cast(str, before), path)  # a "link" step holds the readlink() target
                 else:
-                    _replace(path, before)
+                    _replace(path, cast(bytes, before))  # a "file" step holds the bytes it read
             except OSError:
                 pass
 

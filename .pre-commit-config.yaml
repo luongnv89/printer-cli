@@ -47,6 +47,17 @@ repos:
 
   - repo: local
     hooks:
+      # Type check of src/ with the locked mypy; settings and file list: [tool.mypy] in pyproject.toml.
+      # The whole package every time (a change in one module can break another): 4 s cold, under 1 s
+      # with the .mypy_cache of an earlier run.
+      - id: mypy
+        name: mypy (src/)
+        entry: uv run --locked mypy
+        language: system
+        pass_filenames: false
+        require_serial: true
+        files: ^(src/.*\.pyi?|pyproject\.toml|uv\.lock)$
+
       # Tests named after the staged files (src/prt/cli.py -> tests/test_cli.py,
       # tests/conftest.py -> all of tests/); nothing related exits 0, because the
       # push-stage suite below is the gate.

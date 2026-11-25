@@ -12,7 +12,7 @@ import json
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from prt.drivers.epson import EpsonDriver
 from prt.models import ScanSettings, Target
@@ -142,7 +142,8 @@ class FakeDriver(EpsonDriver):
     def __init__(self, target: Target | None = None, timeout: float = 5.0, fixture: str = FIXTURE):
         self.fixture = load_fixture(fixture)
         target = target or Target(name="demo", host="demo", driver="fake")
-        super().__init__(target, timeout, client=FakeIPPClient(self.fixture))
+        # The fake duck-types IPPClient; subclassing it would run the real client's __init__.
+        super().__init__(target, timeout, client=cast(ipp.IPPClient, FakeIPPClient(self.fixture)))
         self.raw_sent: list[bytes] = []
 
     # Replace the network side-channels with fixture data / recorders.

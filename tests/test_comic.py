@@ -1,6 +1,7 @@
 """prt comic: 3 to 6 photos as comic panels with speech bubbles from a JSON comic file (#30)."""
 
 import json
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -292,6 +293,16 @@ def test_flags_override_the_file_and_are_checked_as_usage():
     with pytest.raises(PrinterError) as exc:
         comic.with_overrides(base, title="t" * 61)
     assert exc.value.exit_code == 2
+
+
+def test_an_override_changes_only_its_own_field():
+    base = replace(comic.default_comic(3), title="Base title", byline="by the base")
+    kept = comic.with_overrides(base)
+    assert (kept.title, kept.byline, kept.panels) == ("Base title", "by the base", base.panels)
+    titled = comic.with_overrides(base, title="New")
+    assert (titled.title, titled.byline) == ("New", "by the base")
+    signed = comic.with_overrides(base, byline="by us")
+    assert (signed.title, signed.byline) == ("Base title", "by us")
 
 
 def test_to_dict_round_trips_through_the_parser():

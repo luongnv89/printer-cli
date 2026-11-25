@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import cast
 
 from rich.text import Text
 from textual import on, work
@@ -288,7 +289,7 @@ class PrtApp(App):
             ("#btn-print", Capability.PRINT),
             ("#btn-scan", Capability.SCAN),
         ):
-            self.query_one(btn, Button).disabled = bool(caps) and not caps.supports(cap)
+            self.query_one(btn, Button).disabled = caps is not None and not caps.supports(cap)
 
     def log_line(self, level: str, message: str) -> None:
         sym, colour = {"ok": ("●", GREEN), "warn": ("▲", AMBER), "err": ("✗", RED)}.get(level, ("◆", "#FFFFFF"))
@@ -310,9 +311,9 @@ class PrtApp(App):
             info = self.info if self.info and self.info.name == name else d.info()
             self.call_from_thread(self._apply, name, st, info, None)
         except Unreachable as exc:
-            st = cache.load(name)
+            cached = cache.load(name)
             self.call_from_thread(
-                self._apply, name, st, self.info if self.info and self.info.name == name else None, str(exc)
+                self._apply, name, cached, self.info if self.info and self.info.name == name else None, str(exc)
             )
         except PrinterError as exc:
             self.call_from_thread(self._apply, name, None, None, str(exc))
@@ -469,7 +470,7 @@ class PrtApp(App):
     def _b_scan(self) -> None:
         settings = ScanSettings(
             format=str(self.query_one("#scan-format", Select).value),
-            dpi=int(self.query_one("#scan-dpi", Select).value),
+            dpi=int(cast(int, self.query_one("#scan-dpi", Select).value)),  # allow_blank=False: never Select.BLANK
             mode=str(self.query_one("#scan-mode", Select).value),
             area=str(self.query_one("#scan-area", Select).value),
         )

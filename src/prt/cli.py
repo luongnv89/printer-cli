@@ -9,8 +9,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
+from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, NoReturn, Optional, cast
 
 import typer
 from rich.text import Text
@@ -134,7 +135,7 @@ def root(
     ),
 ) -> None:
     STATE._cfg, STATE._driver = None, None  # fresh per invocation (tests call main() repeatedly)
-    STATE._stale_exit = False  # type: ignore[attr-defined]
+    STATE._stale_exit = False  # type: ignore[attr-defined]  # not a State field: read back with getattr()
     STATE.printer, STATE.fmt, STATE.verbose, STATE.quiet = printer, fmt, verbose, quiet
     STATE.timeout, STATE.config_path, STATE.no_color = timeout, config, no_color
     from prt.transport import ipp as _ipp
@@ -287,7 +288,7 @@ def _fetch_status(d: Driver | None = None) -> tuple[Driver | None, Status]:
             f"{target.name} is not answering — showing last known status",
             f"from {time.strftime('%Y-%m-%d %H:%M', time.localtime(cached.checked_at))}",
         )
-        STATE._stale_exit = True  # type: ignore[attr-defined]
+        STATE._stale_exit = True  # type: ignore[attr-defined]  # not a State field: read back with getattr()
         return d, cached
     cache.save(target.name, st)
     return d, st
@@ -301,7 +302,7 @@ def _quick_facts(d: Driver | None) -> tuple[str, str | None, int | None, int | N
         return STATE.cfg.resolve(STATE.printer).name, None, None, None
     pages = None
     if d.supports(Capability.COUNTERS) and hasattr(d, "snmp_page_count"):
-        pages = d.snmp_page_count()  # type: ignore[attr-defined]
+        pages = d.snmp_page_count()
     if isinstance(d, IPPDriver) and d._attrs_cache:
         info = d.parse_info(d._attrs_cache)
         return info.make_model, info.firmware, info.uptime_seconds, pages
@@ -489,7 +490,7 @@ def _yn(v: bool | None) -> str | None:
 
 def _scanner_info(d: Driver) -> dict[str, Any]:
     if hasattr(d, "scanner_info"):
-        return d.scanner_info()  # type: ignore[attr-defined]
+        return d.scanner_info()
     from prt.transport.escl import ESCLClient
 
     try:
@@ -554,7 +555,7 @@ def discover(timeout: float = typer.Option(3.0, "--wait", help="Seconds to liste
         )
     cfg = STATE.cfg
     results = _save_discovered(cfg, found)
-    added = [name for name, new in results if new]
+    added = [cast(str, name) for name, new in results if new]  # a printer added now always has a name
     hint = None
     if added:
         cfg.save()
@@ -636,7 +637,7 @@ def printers_list(check: bool = typer.Option(True, "--check/--no-check", help=CH
     states: list[str | None] = [None] * len(targets)
     if check:
         states = list(_check_printers(targets, STATE.timeout or min(cfg.timeout, 3)))
-    rows_data = [
+    rows_data: list[dict[str, Any]] = [
         {"name": name, "host": tgt.host, "driver": tgt.driver, "default": name == cfg.default, "reachable": reach}
         for (name, tgt), reach in zip(cfg.printers.items(), states)
     ]
@@ -938,7 +939,7 @@ def print_cmd(
                 exit_code=2,
                 hint="convert it to JPEG, or print it without --wait and follow it with `lpstat`",
             )
-    results = []
+    results: list[dict[str, Any]] = []
     with _authorize(guard.job_pages(files, copies), yes, None) as ticket:
         for f in files:
             opts = PrintOptions(
@@ -952,17 +953,17 @@ def print_cmd(
                 job_name=f.name,
             )
             pages = guard.job_pages([f], copies) or 0
-            job = d.print_file(f, opts, before_send=lambda n=pages: ticket.attempt(n))  # booked only once it is sent
+            job = d.print_file(f, opts, before_send=partial(ticket.attempt, pages))  # booked only once it is sent
             results.append({"file": str(f), "job_id": job})
             STATE.note("ok", f"{f.name} → job {job}" if job else f"{f.name} sent", d.display_name)
     failure = None
     if wait:
-        finished = []
+        finished: list[Job] = []
         try:
             for r in results:
-                job = _await_job(d, r["job_id"], wait_timeout)
-                r["state"] = job.state
-                finished.append(job)
+                done = _await_job(d, r["job_id"], wait_timeout)
+                r["state"] = done.state
+                finished.append(done)
         except (PrinterError, KeyboardInterrupt):
             if STATE.json:  # every job was sent: name them all, with the state reached so far (or null)
                 STATE.write(json.dumps([{"state": None, **r} for r in results]) + "\n")
@@ -1080,11 +1081,11 @@ def booth_cmd(
             "shorten it, or check the page with --preview",
         )
     if preview:
-        preview_size = _save_booth_page(booth.to_bytes(page, preview_format), preview)
+        preview_size = _save_booth_page(booth.to_bytes(page, cast(str, preview_format)), preview)
         STATE.note(
             "ok",
             f"saved {preview}",
-            f"{paper.value} page · {preview_format.upper()} · {preview_size / 1024:,.0f} KiB · not printed",
+            f"{paper.value} page · {cast(str, preview_format).upper()} · {preview_size / 1024:,.0f} KiB · not printed",
         )
     # Copies are written before connecting, so they exist even when the printer is unreachable.
     saved = []
@@ -1202,11 +1203,11 @@ def card_cmd(
     if cut:
         STATE.note("warn", f"{', '.join(cut)} cut to fit the card", "shorten it, or check the card with --preview")
     if preview:
-        preview_size = _save_booth_page(booth.to_bytes(page, preview_format), preview)
+        preview_size = _save_booth_page(booth.to_bytes(page, cast(str, preview_format)), preview)
         STATE.note(
             "ok",
             f"saved {preview}",
-            f"greeting card · {preview_format.upper()} · {preview_size / 1024:,.0f} KiB · not printed",
+            f"greeting card · {cast(str, preview_format).upper()} · {preview_size / 1024:,.0f} KiB · not printed",
         )
         STATE.note("info", card.FOLD)
     # Copies are written before connecting, so they exist even when the printer is unreachable.
@@ -1262,11 +1263,11 @@ def _print_sheet(
             "warn", f"{', '.join(rendered.cut)} cut to fit the {label}", "shorten it, or check the print with --preview"
         )
     if preview:
-        preview_size = _save_booth_page(paper.to_bytes(page, preview_format), preview)
+        preview_size = _save_booth_page(paper.to_bytes(page, cast(str, preview_format)), preview)
         STATE.note(
             "ok",
             f"saved {preview}",
-            f"{label} · {paper.label} · {preview_format.upper()} · {preview_size / 1024:,.0f} KiB · not printed",
+            f"{label} · {paper.label} · {cast(str, preview_format).upper()} · {preview_size / 1024:,.0f} KiB · not printed",
         )
     # Copies are written before connecting, so they exist even when the printer is unreachable.
     saved = []
@@ -1547,7 +1548,7 @@ def recipe_cmd(
     if rendered.cut:
         STATE.note("warn", "title cut to fit the card", "shorten it in a recipe file, or check the card with --preview")
     inputs = [Path(source)] if source != booth.STDIN and not article._LINK.match(source) else []
-    outputs = [(preview, preview_format)] if preview else []
+    outputs = [(preview, cast(str, preview_format))] if preview else []  # preview_format is set whenever preview is
     vintage.check_outputs(
         [file for path, fmt in outputs + copies for file in vintage.page_paths(path, fmt, len(pages))], inputs
     )
@@ -1561,7 +1562,7 @@ def recipe_cmd(
             written.append({"file": str(file), "format": fmt, "bytes": size})
         return written
 
-    files = write(preview, preview_format) if preview else []
+    files = write(preview, cast(str, preview_format)) if preview else []
     # Copies are written before connecting, so they exist even when the printer is unreachable.
     saved = [entry for path, fmt in copies for entry in write(path, fmt)]
     summary = {
@@ -1653,7 +1654,7 @@ def bingo_cmd(
     preview_format = booth.format_for(preview) if preview else None
     copies = [(path, booth.format_for(path)) for path in save or []]
     inputs = [words_file] if words_file and str(words_file) != booth.STDIN else []
-    outputs = [(preview, preview_format)] if preview else []
+    outputs = [(preview, cast(str, preview_format))] if preview else []  # preview_format is set whenever preview is
     vintage.check_outputs(
         [file for path, fmt in outputs + copies for file in vintage.page_paths(path, fmt, count)], inputs
     )
@@ -1675,7 +1676,7 @@ def bingo_cmd(
             written.append({"file": str(file), "format": fmt, "bytes": size})
         return written
 
-    files = write(preview, preview_format) if preview else []
+    files = write(preview, cast(str, preview_format)) if preview else []
     # Copies are written before connecting, so they exist even when the printer is unreachable.
     saved = [entry for path, fmt in copies for entry in write(path, fmt)]
     summary = {
@@ -2233,7 +2234,7 @@ def article_cmd(
             written.append({"file": str(file), "format": fmt, "bytes": size})
         return written
 
-    files = write(preview, preview_format) if preview else []
+    files = write(preview, cast(str, preview_format)) if preview else []
     # Copies are written before connecting, so they exist even when the printer is unreachable.
     saved = [entry for path, fmt in copies for entry in write(path, fmt)]
     summary = {
@@ -2252,7 +2253,7 @@ def article_cmd(
     d = STATE.driver()
     d.require(Capability.PRINT)
     kind = article.ARTICLE_STYLES[paper.value].kind
-    jobs = []
+    jobs: list[int] = []
     with _authorize(len(pages), yes, f"Print {count} of '{text.title}' as a {kind} on {d.display_name}?") as ticket:
         jobs.extend(
             render.send_pages(
@@ -2276,7 +2277,7 @@ class ReceiptPeriod(str, Enum):
     week = "week"
 
 
-def _gazette_usage(message: str, hint: str) -> None:
+def _gazette_usage(message: str, hint: str) -> NoReturn:
     raise PrinterError(message, hint=hint, exit_code=2)
 
 
@@ -2395,7 +2396,7 @@ def gazette_cmd(
         )
     vintage.check_count(len(photos))
     count = len(vintage.plan_pages(len(photos)))
-    outputs = [(preview, preview_format)] if preview else []
+    outputs = [(preview, cast(str, preview_format))] if preview else []  # preview_format is set whenever preview is
     vintage.check_outputs(
         [file for path, fmt in outputs + copies for file in vintage.page_paths(path, fmt, count)], photos
     )
@@ -2418,7 +2419,7 @@ def gazette_cmd(
             written.append({"file": str(file), "format": fmt, "bytes": size})
         return written
 
-    files = write(preview, preview_format) if preview else []
+    files = write(preview, cast(str, preview_format)) if preview else []
     # Copies are written before connecting, so they exist even when the printer is unreachable.
     saved = [entry for path, fmt in copies for entry in write(path, fmt)]
     summary = {
@@ -2562,7 +2563,7 @@ def compose_cmd(
     copies = [(path, booth.format_for(path)) for path in save or []]
     page = compose.load(page_file)
     pages = render.composed_pages(page).pages
-    outputs = [(preview, preview_format)] if preview else []
+    outputs = [(preview, cast(str, preview_format))] if preview else []  # preview_format is set whenever preview is
     vintage.check_outputs(
         [file for path, fmt in outputs + copies for file in vintage.page_paths(path, fmt, len(pages))], page.inputs
     )
@@ -2576,7 +2577,7 @@ def compose_cmd(
             written.append({"file": str(file), "format": fmt, "bytes": size})
         return written
 
-    files = write(preview, preview_format) if preview else []
+    files = write(preview, cast(str, preview_format)) if preview else []
     # Copies are written before connecting, so they exist even when the printer is unreachable.
     saved = [entry for path, fmt in copies for entry in write(path, fmt)]
     summary = {
@@ -2761,7 +2762,7 @@ def jobs(ctx: typer.Context, all_: bool = typer.Option(False, "--all", "-a", hel
 def _jobs_box(items: list[Job], d: Driver, mode: Mode, empty: str) -> str:
     if not items:
         return style.box("jobs", [style.seg(empty, "dim")], mode, footer=d.target.name)
-    rows = [
+    rows: list[list[Text | str]] = [
         [
             str(j.id),
             t(j.name),
@@ -2945,7 +2946,7 @@ def _configure_help(argv: list[str]) -> None:
     ru.STYLE_USAGE = ROLES["title"]
     ru.STYLE_OPTIONS_PANEL_BORDER = ru.STYLE_COMMANDS_PANEL_BORDER = ROLES["border"]
     ru.STYLE_ERRORS_PANEL_BORDER = ROLES["err"]
-    ru.STYLE_METAVAR = ROLES["dim"] if hasattr(ru, "STYLE_METAVAR") else None
+    setattr(ru, "STYLE_METAVAR", ROLES["dim"] if hasattr(ru, "STYLE_METAVAR") else None)  # gone in newer typer
 
 
 GLOBAL_WITH_VALUE = {"-p", "--printer", "-f", "--format", "--timeout", "--config"}
@@ -3037,7 +3038,7 @@ def main(argv: list[str] | None = None) -> int:
                 code = int(exc.exit_code)
                 ctx = getattr(exc, "ctx", None)
                 path = ctx.command_path if ctx is not None else "prt"
-                message = exc.format_message() or f"missing command for `{path}`"  # type: ignore[attr-defined]
+                message = exc.format_message() or f"missing command for `{path}`"  # type: ignore[attr-defined]  # a click UsageError here
                 return _report(
                     PrinterError(
                         message, f"see `{path} --help`", exit_code=code, kind=KIND_BY_EXIT_CODE.get(code, "error")

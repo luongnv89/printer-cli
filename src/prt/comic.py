@@ -313,8 +313,10 @@ def parse_comic(text: str, name: str = "comic") -> Comic:
 
 def with_overrides(base: Comic, title: str | None = None, byline: str | None = None) -> Comic:
     """Apply command-line text over a comic; ``None`` keeps the base value."""
-    changes = {k: v for k, v in (("title", title), ("byline", byline)) if v is not None}
-    return check_comic(replace(base, **changes), exit_code=2)
+    changed = replace(
+        base, title=base.title if title is None else title, byline=base.byline if byline is None else byline
+    )
+    return check_comic(changed, exit_code=2)
 
 
 # --- the page ----------------------------------------------------------------------------------

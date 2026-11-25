@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import unicodedata
+from typing import cast
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -421,7 +422,7 @@ def draw_head(
         s for s in range(sheet.masthead_max, 40, -4) if fonts.face("masthead", s).getlength(masthead) <= width - 80
     )
     mast = fonts.face("masthead", size)
-    top, bottom = mast.getbbox(masthead)[1::2]
+    top, bottom = cast(tuple[int, int], mast.getbbox(masthead)[1::2])  # FreeTypeFont.getbbox gives ints
     d.text(((sheet.width - mast.getlength(masthead)) / 2, y - top), masthead, font=mast, fill=INK)
     y += bottom - top + 16
     y, _ = _centred(d, y, tagline, "body-italic", 24, 24, 1, left, width)
@@ -587,7 +588,7 @@ def _plates(
     d = ImageDraw.Draw(page)
     left, width = sheet.margin, sheet.content_w
     head = fonts.face("masthead", 48)
-    top, bottom = head.getbbox(MASTHEAD)[1::2]
+    top, bottom = cast(tuple[int, int], head.getbbox(MASTHEAD)[1::2])  # FreeTypeFont.getbbox gives ints
     d.text((left, sheet.margin - top), MASTHEAD, font=head, fill=INK)
     mark = _caps(f"{booth._today()} · Page {number} of {total}", "body-bold", 18)
     _draw_caps(d, sheet.width - left - _caps_width(mark), sheet.margin + bottom - top, mark)
@@ -646,7 +647,8 @@ def compose_pages(
     sheet = LANDSCAPE if landscape else PORTRAIT
     story = DEFAULT_GAZETTE_STORY if story is None else story
     plan = plan_pages(len(photos))
-    pages, placements, cut = [], [], {}
+    pages, placements = [], []
+    cut: Cuts = {}
     for number, indices in enumerate(plan, start=1):
         page = Image.new("RGB", (sheet.width, sheet.height), "white")
         ImageDraw.Draw(page).rectangle(

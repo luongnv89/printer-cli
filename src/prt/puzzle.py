@@ -21,7 +21,7 @@ import unicodedata
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, cast
 
 from PIL import Image, ImageDraw
 
@@ -486,7 +486,7 @@ def wordsearch(
             exit_code=3,
         )
     grid = [[""] * size for _ in range(size)]
-    hidden = []
+    hidden: list[dict[str, Any]] = []
     for index, r, c, name in sorted(placed):
         dr, dc = DIRECTIONS[name]
         cells = []
@@ -853,10 +853,10 @@ def maze(seed: int, difficulty: str = DEFAULT_DIFFICULTY, title: str = TITLES["m
                 came[cell] = (r, c)
                 queue.append(cell)
     path = []
-    cell: tuple[int, int] | None = end
-    while cell is not None:
-        path.append(cell)
-        cell = came[cell]
+    step: tuple[int, int] | None = end
+    while step is not None:
+        path.append(step)
+        step = came[step]
     path.reverse()
     solution = {
         "rows": rows,
@@ -865,7 +865,8 @@ def maze(seed: int, difficulty: str = DEFAULT_DIFFICULTY, title: str = TITLES["m
         "finish": [rows, cols],
         "path": [[r + 1, c + 1] for r, c in path],
     }
-    pairs = frozenset(tuple(sorted(pair)) for pair in open_)
+    # Each pair holds two cells; sorted() gives them as a list, so the 2-tuple shape is not inferred.
+    pairs = frozenset(cast(tuple[tuple[int, int], tuple[int, int]], tuple(sorted(pair))) for pair in open_)
     return Puzzle("maze", title, seed, difficulty, solution, MazeLayout(cols, rows, pairs, tuple(path)))
 
 
@@ -1045,7 +1046,7 @@ def _crossword_fit(layout: CrosswordLayout) -> tuple[int, int, list[tuple[str, l
             if flow is not None:
                 return cell, size, blocks, flow
             fallback = (cell, size, blocks)
-    cell, size, blocks = fallback  # type: ignore[misc]
+    cell, size, blocks = fallback  # type: ignore[misc]  # the CELL_MIN pass always sets fallback: never None here
     # Limits on entries and clues keep this from happening; if it did, the second column runs on past the room.
     return cell, size, blocks, [list(range(len(blocks) // 2)), list(range(len(blocks) // 2, len(blocks)))]
 
@@ -1110,9 +1111,13 @@ def compose(puzzle: Puzzle) -> tuple[Image.Image, Cuts]:
     page = Image.new("RGB", (W, H), (255, 255, 255))
     d = ImageDraw.Draw(page)
     cut = _title(d, puzzle.title)
-    more = {"sudoku": _sudoku_page, "wordsearch": _search_page, "crossword": _crossword_page, "maze": _maze_page}[
-        puzzle.kind
-    ](d, puzzle.layout)
+    pages: dict[str, Callable[[ImageDraw.ImageDraw, Any], Cuts | None]] = {
+        "sudoku": _sudoku_page,
+        "wordsearch": _search_page,
+        "crossword": _crossword_page,
+        "maze": _maze_page,
+    }
+    more = pages[puzzle.kind](d, puzzle.layout)
     if more:
         cut.update(more)
     _foot(d, puzzle)

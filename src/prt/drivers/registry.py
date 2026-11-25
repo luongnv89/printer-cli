@@ -1,6 +1,6 @@
 """Driver registry: pick a driver from the config or by asking the printer who it is.
 
-To add a vendor: write `drivers/<vendor>.py` subclassing IPPDriver (or Driver), then add it
+To add a vendor: write `drivers/<vendor>.py` subclassing IPPDriver, then add it
 to DRIVERS and, if it can be auto-detected, to MATCHERS.
 """
 
@@ -11,7 +11,7 @@ from prt.drivers.epson import EpsonDriver
 from prt.drivers.ipp import IPPDriver
 from prt.models import Target
 
-DRIVERS: dict[str, type[Driver]] = {
+DRIVERS: dict[str, type[IPPDriver]] = {
     "ipp": IPPDriver,
     "epson": EpsonDriver,
 }

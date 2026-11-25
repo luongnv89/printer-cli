@@ -47,7 +47,7 @@ from prt.drivers.base import PrinterError
 try:
     import fcntl
 except ImportError:  # pragma: no cover - Windows: the ledger is updated without a lock
-    fcntl = None  # type: ignore[assignment]
+    fcntl = None  # type: ignore[assignment]  # no module on Windows; callers check for None
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -414,9 +414,9 @@ def estimate(pages: Iterable[Image.Image], paper: Paper | None = None) -> dict[s
             used[ink] += share * scale / RATED_COVERAGE / CARTRIDGE_PAGES * 100
     if not colour:  # a black-and-white job: the printer mixes no colour in
         used.update(cyan=0.0, magenta=0.0, yellow=0.0)
-    ink = {k: round(v, 1) for k, v in used.items()}
+    per_ink = {k: round(v, 1) for k, v in used.items()}
     top = max(used.values()) if count else 0.0
     shown = f"{top:.0f}%" if top >= 0.5 else "<1%"
     sheet = f" ({paper.label})" if paper is not None and paper.name != "a4" else ""
     summary = f"~{_pages(count)}{sheet}, {'colour' if colour else 'black and white'}, est. ink {shown}"
-    return {"pages": count, "colour": colour, "ink": ink, "ink_percent": round(top, 1), "summary": summary}
+    return {"pages": count, "colour": colour, "ink": per_ink, "ink_percent": round(top, 1), "summary": summary}

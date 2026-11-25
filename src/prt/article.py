@@ -659,7 +659,8 @@ class _Style:
 
     kind = ""
     columns, gutter, body, width = 1, 0, 24, CONTENT_W
-    ink, rule = INK, None
+    ink = INK
+    rule: tuple[int, int, int] | None = None
     text_top, text_bottom = MARGIN, BOTTOM
     drop_cap = False
 
@@ -847,7 +848,7 @@ def compose_pages(article: Article, style: str = "magazine") -> list[Image.Image
             look.running(page, article)
         d = ImageDraw.Draw(page)
         y = top if number == 1 else look.text_top
-        if number == 1 and cap:
+        if number == 1 and cap and cap_font is not None:  # cap is set only with cap_font
             d.text((x0, y + font.getbbox("H")[1] - cap_font.getbbox("H")[1]), cap, font=cap_font, fill=RUST)
         draw_columns(
             d,
