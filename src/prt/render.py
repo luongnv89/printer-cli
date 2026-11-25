@@ -158,8 +158,9 @@ def bingo_job_names(title: str, count: int) -> list[str]:
 
 
 def puzzle_page(puzzle: Puzzle) -> Rendered:
-    """The A4 page of a sudoku, word search, crossword or maze (see ``puzzle.compose``); only a title too long for
-    its line is cut, and named in ``cut``. The solution stays with ``puzzle`` (``puzzle.answers()``)."""
+    """The A4 page of a sudoku, word search, crossword or maze (see ``puzzle.compose``); a title too long for
+    its line or a word-search word too wide for its column is cut with "…" and named in ``cut`` (``title``,
+    ``words[i]``). The solution stays with ``puzzle`` (``puzzle.answers()``)."""
     from prt import puzzle as puzzles
     page, cut = puzzles.compose(puzzle)
     return Rendered([page], cut)

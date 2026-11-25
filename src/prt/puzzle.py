@@ -28,7 +28,7 @@ from PIL import Image, ImageDraw
 from prt import fonts
 from prt.booth import STDIN, read_stdin
 from prt.drivers.base import PrinterError
-from prt.layout import Cuts, _clean, _wrap
+from prt.layout import Cuts, _clean, _cut, _ellipsize, _in_source, _wrap
 from prt.paper import A4
 from prt.vintage import _char_in, _fit_face, _printable_face
 
@@ -758,7 +758,6 @@ MARGIN = 90
 INK = (28, 28, 36)
 LINE = (60, 60, 72)
 GREY = (110, 110, 120)
-LIGHT = (150, 150, 160)
 TITLE_TOP = 100
 TITLE_SIZE, TITLE_MIN = 110, 64
 BODY_TOP = 270  # where the puzzle starts, under the title
@@ -783,8 +782,8 @@ def _sudoku_page(d: ImageDraw.ImageDraw, layout: SudokuLayout) -> None:
     digit = fonts.face("body-bold", 66)
     label = fonts.face("body", 30)
     for k in range(9):
-        d.text((x0 - 34, y0 + k * cell + cell / 2), "ABCDEFGHI"[k], font=label, fill=LIGHT, anchor="mm")
-        d.text((x0 + k * cell + cell / 2, y0 - 30), str(k + 1), font=label, fill=LIGHT, anchor="mm")
+        d.text((x0 - 34, y0 + k * cell + cell / 2), "ABCDEFGHI"[k], font=label, fill=GREY, anchor="mm")
+        d.text((x0 + k * cell + cell / 2, y0 - 30), str(k + 1), font=label, fill=GREY, anchor="mm")
     for i, v in enumerate(layout.givens):
         if v:
             r, c = divmod(i, 9)
@@ -799,23 +798,47 @@ def _sudoku_page(d: ImageDraw.ImageDraw, layout: SudokuLayout) -> None:
            fill=GREY, anchor="mm")
 
 
+LIST_INDENT = 20  # an item's indent inside its column of the word list
+
+
 def _columns(d: ImageDraw.ImageDraw, items: list[str], top: int, bottom: int, columns: int, role: str,
-             size: int, min_size: int) -> None:
-    """``items`` in ``columns`` columns between ``top`` and ``bottom``, as large as fits (``size`` down to
-    ``min_size``); each item on one line."""
-    width = (W - 2 * MARGIN) // columns
-    per = -(-len(items) // columns)
-    for s in range(size, min_size - 1, -2):
-        if per * round(s * 1.35) <= bottom - top:
+             size: int, min_size: int) -> Cuts:
+    """``items`` in ``columns`` columns between ``top`` and ``bottom``, each on one line inside its column,
+    as large as fits: the type shrinks (``size`` down to ``min_size``) for the rows and the widest item to
+    hold, then the columns widen (fewer of them) when an item still is too wide. An item too long even for
+    a column of its own is cut with "…" and named ``words[i]`` (its place in the list) in the cuts."""
+    fitted = None
+    for cols in range(columns, 0, -1):
+        width = (W - 2 * MARGIN) // cols
+        per = -(-len(items) // cols)
+        for s in range(size, min_size - 1, -2):
+            font, lead = fonts.face(role, s), round(s * 1.35)
+            if (per * lead <= bottom - top
+                    and all(font.getlength(_printable_face(item, font)) <= width - LIST_INDENT
+                            for item in items)):
+                fitted = font, lead, width, per
+                break
+        if fitted:
             break
-    font = fonts.face(role, s)
-    lead = round(s * 1.35)
+    if fitted is None:
+        # Even a column of its own cannot take an item: keep the asked-for columns and cut it below.
+        fitted = fonts.face(role, min_size), round(min_size * 1.35), (W - 2 * MARGIN) // columns, \
+            -(-len(items) // columns)
+    font, lead, width, per = fitted
+    cut: Cuts = {}
     for k, item in enumerate(items):
         col, row = divmod(k, per)
-        d.text((MARGIN + col * width + 20, top + row * lead), _printable_face(item, font), font=font, fill=INK)
+        shown = _printable_face(item, font)
+        if font.getlength(shown) > width - LIST_INDENT:
+            ellipsized = _ellipsize(shown, font, width - LIST_INDENT)
+            cut[f"words[{k}]"] = _in_source(_cut(shown, [ellipsized]), item,
+                                            lambda c: _printable_face(c, font))
+            shown = ellipsized
+        d.text((MARGIN + col * width + LIST_INDENT, top + row * lead), shown, font=font, fill=INK)
+    return cut
 
 
-def _search_page(d: ImageDraw.ImageDraw, layout: SearchLayout) -> None:
+def _search_page(d: ImageDraw.ImageDraw, layout: SearchLayout) -> Cuts:
     size = len(layout.grid)
     cell = min(68, (W - 2 * MARGIN) // size)
     side = cell * size
@@ -829,7 +852,8 @@ def _search_page(d: ImageDraw.ImageDraw, layout: SearchLayout) -> None:
     hint = fonts.face("hand", 38)
     d.text((W / 2, top), f"Find the {len(layout.words)} words. Circle each one you find.", font=hint, fill=GREY,
            anchor="mm")
-    _columns(d, list(layout.words), top + 50, FOOT - 60, 3 if len(layout.words) <= 15 else 4, "body", 40, 22)
+    return _columns(d, list(layout.words), top + 50, FOOT - 60, 3 if len(layout.words) <= 15 else 4,
+                    "body", 40, 22)
 
 
 CLUE_INDENT = 50
@@ -949,12 +973,14 @@ def _maze_page(d: ImageDraw.ImageDraw, layout: MazeLayout) -> None:
 
 def compose(puzzle: Puzzle) -> tuple[Image.Image, Cuts]:
     """The A4 page of ``puzzle``: the title in handwriting, the puzzle, and the label at the foot that says which
-    puzzle it is; and the texts cut with "…" to fit (only ever ``title``)."""
+    puzzle it is; and the texts cut with "…" to fit (``title``, or ``words[i]`` in a word search's list)."""
     page = Image.new("RGB", (W, H), (255, 255, 255))
     d = ImageDraw.Draw(page)
     cut = _title(d, puzzle.title)
-    {"sudoku": _sudoku_page, "wordsearch": _search_page, "crossword": _crossword_page,
-     "maze": _maze_page}[puzzle.kind](d, puzzle.layout)
+    more = {"sudoku": _sudoku_page, "wordsearch": _search_page, "crossword": _crossword_page,
+            "maze": _maze_page}[puzzle.kind](d, puzzle.layout)
+    if more:
+        cut.update(more)
     _foot(d, puzzle)
     return page, cut
 

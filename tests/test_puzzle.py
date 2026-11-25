@@ -306,6 +306,50 @@ def test_twenty_words_on_the_largest_grid_stay_above_the_foot():
     assert crop.getextrema() == (255, 255)
 
 
+def test_a_wide_word_list_stays_inside_its_columns_and_the_page():
+    # A hard word search on the tallest grid leaves room only for four narrow columns: CONSTELLATION used
+    # to run over the next column's words and SAN FRANCISCO past the right edge of the page, all unreported.
+    words = ["CONSTELLATION", "SAN FRANCISCO"] + [f"{c}omets" for c in "DEFGHIJKLMNOPQ"]
+    p = puzzle.wordsearch(1, "hard", WordList(tuple(words)))
+    assert len(words) == 16 and p.solution["size"] == 15
+    page, cut = puzzle.compose(p)
+    assert cut == {} and render.puzzle_page(p).fit() == {"fits": True, "cut": {}}
+    top = puzzle.BODY_TOP + 30 + 68 * 15 + 120  # the word list's band: under the hint, above the foot
+    column = (puzzle.W - 2 * puzzle.MARGIN) // 4
+    for k in (1, 2, 3):  # nothing crosses the indent before a column
+        x = puzzle.MARGIN + k * column
+        crop = page.convert("L").crop((x, top, x + puzzle.LIST_INDENT, puzzle.FOOT - 60))
+        assert crop.getextrema() == (255, 255)
+    crop = page.convert("L").crop((puzzle.W - puzzle.MARGIN + 1, 0, puzzle.W, puzzle.H))
+    assert crop.getextrema() == (255, 255)
+
+
+def test_a_word_too_wide_for_its_column_is_cut_and_reported():
+    # On the tallest grid four columns are the only ones with room, and this word is wider than a column
+    # (and than three or two columns) even at the smallest size: it is cut with "…" and named, not clipped.
+    words = ["W W W W W W W W W W W W"] + [f"{c}omets" for c in "DEFGHIJKLMNOPQRS"]
+    p = puzzle.wordsearch(1, "hard", WordList(tuple(words)))
+    i = list(p.layout.words).index("W W W W W W W W W W W W")
+    page, cut = puzzle.compose(p)
+    assert list(cut) == [f"words[{i}]"] and cut[f"words[{i}]"].given == 23
+    assert cut[f"words[{i}]"].max_fit < 23 and render.puzzle_page(p).fit()["fits"] is False
+    column = (puzzle.W - 2 * puzzle.MARGIN) // 4
+    top = puzzle.BODY_TOP + 30 + 68 * 15 + 120  # the word list's band, as above
+    for k in (1, 2, 3):  # the shortened word stays inside its column too
+        x = puzzle.MARGIN + k * column
+        crop = page.convert("L").crop((x, top, x + puzzle.LIST_INDENT, puzzle.FOOT - 60))
+        assert crop.getextrema() == (255, 255)
+
+
+def test_the_sudoku_labels_are_dark_enough_to_read():
+    # The labels name the cells the solution talks about ("B4"), so they must print legibly.
+    page, _ = puzzle.compose(puzzle.sudoku(1))
+    x0, y0 = (puzzle.W - 110 * 9) // 2, puzzle.BODY_TOP + 60
+    row_label = page.convert("L").crop((x0 - 50, y0 + 35, x0 - 15, y0 + 75))  # the "A" label
+    col_label = page.convert("L").crop((x0 + 30, y0 - 50, x0 + 80, y0 - 10))  # the "1" label
+    assert row_label.getextrema()[0] <= 130 and col_label.getextrema()[0] <= 130
+
+
 def test_a_long_title_is_cut_and_reported():
     p = puzzle.sudoku(1, title="A very long title for a sudoku that runs on and on, past the edge")
     assert list(render.puzzle_page(p).cut) == ["title"]
