@@ -793,8 +793,8 @@ def print_cmd(
         for f in files:
             opts = PrintOptions(copies=copies, media=media, mono=mono, quality=quality.value if quality else None,
                                 duplex=duplex, tray=tray, direct=direct, job_name=f.name)
-            ticket.attempt(guard.job_pages([f], copies) or 0)
-            job = d.print_file(f, opts)
+            pages = guard.job_pages([f], copies) or 0
+            job = d.print_file(f, opts, before_send=lambda n=pages: ticket.attempt(n))  # booked only once it is sent
             results.append({"file": str(f), "job_id": job})
             STATE.note("ok", f"{f.name} → job {job}" if job else f"{f.name} sent", d.display_name)
     failure = None

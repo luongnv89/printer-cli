@@ -130,8 +130,8 @@ class Driver(ABC):
     def cancel_job(self, job_id: int) -> None:
         raise Unsupported(self, Capability.JOBS)
 
-    def print_file(self, path: Path, options: PrintOptions) -> int:
-        """Submit a file; returns the job id."""
+    def print_file(self, path: Path, options: PrintOptions, before_send: Callable[[], None] | None = None) -> int:
+        """Submit a file; returns the job id. ``before_send`` runs after the file's checks, right before it is sent."""
         raise Unsupported(self, Capability.PRINT)
 
     def scan(self, settings: ScanSettings, progress=None) -> bytes:

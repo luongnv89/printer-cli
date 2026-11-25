@@ -255,6 +255,77 @@ def test_a_failed_page_gives_back_the_pages_after_it(capsys, tmp_path, printer, 
     assert guard.used_today() == 2  # both attempted
 
 
+def test_a_print_refused_before_sending_books_nothing(capsys, tmp_path, printer, monkeypatch):
+    """#51: a pre-send check that fails (bad image, --direct on a PDF, no CUPS queue) leaves the ledger alone."""
+    _config(max_pages_per_day=1)
+    broken = tmp_path / "broken.png"
+    broken.write_bytes(b"not a png")
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(_pdf(1))
+    for _ in range(3):  # an agent retrying the same failing job never uses up the day
+        code, _, err = run(capsys, "-p", "demo", "-f", "json", "print", str(broken))
+        assert code == 3 and "cannot read image" in _error(err)["message"]
+        code, _, err = run(capsys, "-p", "demo", "-f", "json", "print", str(pdf), "--direct")
+        assert code == 3 and "cannot be sent directly" in _error(err)["message"]
+    monkeypatch.setattr("prt.printing.find_cups_queue", lambda uuid, host: None)
+    code, _, err = run(capsys, "-p", "demo", "-f", "json", "print", str(pdf))
+    assert code == 1 and "no CUPS queue" in _error(err)["message"]
+    assert guard.used_today() == 0 and printer.sent() == 0
+    assert run(capsys, "-p", "demo", "print", str(_photo(tmp_path)))[0] == 0  # the one page left still prints
+    assert guard.used_today() == 1 and printer.sent() == 1
+
+
+def test_a_print_that_fails_after_a_pre_send_failure_on_another_file_counts_only_what_was_sent(
+        capsys, tmp_path, printer):
+    _config(max_pages_per_day=5)
+    broken = tmp_path / "broken.png"
+    broken.write_bytes(b"not a png")
+    assert run(capsys, "-p", "demo", "print", str(_photo(tmp_path)), str(broken))[0] == 3
+    assert guard.used_today() == 1 and printer.sent() == 1
+
+
+def test_a_print_whose_submit_fails_still_counts_the_page(capsys, tmp_path, printer, monkeypatch):
+    _config(max_pages_per_day=5)
+
+    def fail(*a, **k):
+        raise Unreachable(printer.driver.target, "timed out")
+    monkeypatch.setattr(printer.driver, "submit", fail)
+    assert run(capsys, "-p", "demo", "print", str(_photo(tmp_path)))[0] == 1
+    assert guard.used_today() == 1
+
+
+def test_a_print_refused_by_cups_still_counts_its_pages(capsys, tmp_path, printer, monkeypatch):
+    _config(max_pages_per_day=5)
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(_pdf(2))
+
+    def refuse(queue, path, options):
+        raise PrinterError("CUPS refused the job: stopped")
+    monkeypatch.setattr("prt.printing.cups_print", refuse)
+    assert run(capsys, "-p", "demo", "print", str(pdf))[0] == 1
+    assert guard.used_today() == 2
+
+
+def test_mcp_print_file_books_pages_only_when_it_sends(tmp_path, monkeypatch):
+    from prt.mcp_server import Tools
+    cfg = _config(max_pages_per_day=1)
+    fake = FakeDriver()
+    monkeypatch.setattr("prt.mcp_server.make_driver", lambda target, timeout=5.0: fake)
+    tools = Tools(cfg, "demo")
+    broken = tmp_path / "broken.png"
+    broken.write_bytes(b"not a png")
+    with pytest.raises(PrinterError):
+        tools.print_file(path=str(broken), confirm=True)
+    assert guard.used_today() == 0
+
+    def fail(*a, **k):
+        raise Unreachable(fake.target, "timed out")
+    monkeypatch.setattr(fake, "submit", fail)
+    with pytest.raises(PrinterError):
+        tools.print_file(path=str(_photo(tmp_path)), confirm=True)
+    assert guard.used_today() == 1  # the submit was attempted: the page counts
+
+
 def test_declined_prompt_books_nothing(capsys, tmp_path, printer, monkeypatch):
     _config(max_pages_per_day=5)
     monkeypatch.setattr("typer.confirm", lambda *a, **k: False)

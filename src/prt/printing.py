@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Callable
 
 from prt.drivers.base import PrinterError
 from prt.models import PrintOptions
@@ -88,15 +89,27 @@ def queue_for(driver) -> str | None:
     return find_cups_queue(info_uuid, driver.target.host)
 
 
-def print_file(driver, path: Path, options: PrintOptions) -> int:
+def print_file(driver, path: Path, options: PrintOptions, before_send: Callable[[], None] | None = None) -> int:
+    """Send ``path`` to ``driver``'s printer (directly, or through its CUPS queue); returns the job id.
+
+    ``before_send`` runs once every check has passed, right before the job is handed over: the page guard
+    books its pages there, so a file refused here (unreadable image, wrong type for --direct, no CUPS queue)
+    never counts toward the daily cap.
+    """
     from prt.drivers.ipp import DIRECT_FORMATS
+
+    def send(submit: Callable[[], int]) -> int:
+        if before_send:
+            before_send()
+        return submit()
 
     if not path.is_file():
         raise PrinterError(f"file not found: {path}", hint="check the path", exit_code=3)
     options.job_name = options.job_name or path.name
     ext = path.suffix.lower()
     if ext in DIRECT_FORMATS:
-        return driver.submit(path.read_bytes(), DIRECT_FORMATS[ext], options)
+        data = path.read_bytes()
+        return send(lambda: driver.submit(data, DIRECT_FORMATS[ext], options))
     if ext in IMAGE_EXT:
         try:
             from PIL import Image
@@ -105,7 +118,7 @@ def print_file(driver, path: Path, options: PrintOptions) -> int:
                 img.convert("RGB").save(buf, "JPEG", quality=95)
         except Exception as exc:
             raise PrinterError(f"cannot read image {path.name}: {exc}", exit_code=3) from exc
-        return driver.submit(buf.getvalue(), "image/jpeg", options)
+        return send(lambda: driver.submit(buf.getvalue(), "image/jpeg", options))
     if options.direct:
         raise PrinterError(f"{ext or 'this file type'} cannot be sent directly — the printer only "
                            "accepts JPEG, PWG-raster and URF", hint="drop --direct to print via CUPS",
@@ -116,4 +129,4 @@ def print_file(driver, path: Path, options: PrintOptions) -> int:
             f"the printer cannot take {ext or 'this file'} directly and no CUPS queue was found for it",
             hint="add the printer in System Settings → Printers (or `lpadmin`), or convert to JPEG",
             exit_code=1)
-    return cups_print(queue, path, options)
+    return send(lambda: cups_print(queue, path, options))
