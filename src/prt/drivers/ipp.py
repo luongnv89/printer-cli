@@ -154,6 +154,7 @@ class IPPDriver(Driver):
         for i, n in enumerate(names):
             lvl = _int(levels[i]) if i < len(levels) else None
             high = _int(highs[i]) if i < len(highs) else 100
+            low = _int(lows[i]) if i < len(lows) else None
             if lvl is not None and lvl < 0:
                 lvl = None  # -1 unknown, -2 unknown, -3 "some remaining"
             elif lvl is not None and high and high != 100:
@@ -163,7 +164,7 @@ class IPPDriver(Driver):
                     name=str(n),
                     color=str(colors[i]) if i < len(colors) else "#888888",
                     level=lvl,
-                    low=_int(lows[i]) if i < len(lows) else 15,
+                    low=15 if low is None else low,  # absent or unparseable: the usual 15%
                     high=100,
                     kind=str(kinds[i]) if i < len(kinds) else "ink-cartridge",
                 )
