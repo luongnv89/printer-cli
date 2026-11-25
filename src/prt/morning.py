@@ -198,7 +198,9 @@ def document(paper: Morning) -> TextGazette:
 
 
 def _string(limit: int) -> dict:
-    return {"type": "string", "minLength": 1, "maxLength": limit}
+    # ``\S`` keeps a whitespace-only string schema-invalid: the parser cleans surrounding whitespace and
+    # would otherwise reject a document the schema had accepted.
+    return {"type": "string", "minLength": 1, "maxLength": limit, "pattern": r"\S"}
 
 
 def morning_schema() -> dict:
