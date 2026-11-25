@@ -14,8 +14,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
-from prt import (article, bingo, booth, card, colourin, comic, compose, disc, photocard, postcard, puzzle, recipe,
-                 vintage)
+from prt import (article, bingo, booth, card, colourin, comic, compose, disc, morning, photocard, postcard, puzzle,
+                 recipe, vintage)
 from prt.drivers.base import PrinterError
 from prt.paper import PAPERS
 
@@ -344,6 +344,13 @@ def _build() -> tuple[Style, ...]:
             Style("gazette-landscape", args=("--landscape",), description=f"{GAZETTE_DESCRIPTION}. A4 on its side: "
                   "the lead photo beside the story, plates three abreast", sample="gazette-landscape.jpg",
                   **gazette)]
+    out.append(Style("gazette-morning", "gazette", ("--edition", "morning"), "morning newspaper",
+                     "The Morning Gazette on one upright A4 page: weather, calendar, to-dos and headlines from a "
+                     "morning JSON file, in the same cream-paper vintage typography", "morning",
+                     morning.morning_fields(), (0, 0), 1, "gazette-morning.jpg"))
+    out.append(Style("commit-receipt", "receipt", (), "commit receipt",
+                     "The Commit Receipt on one upright A4 page: the current repository's day or week of commits, "
+                     "grouped by day in ruled columns", None, (), (0, 0), 1, "commit-receipt.jpg"))
     return tuple(out)
 
 
@@ -438,6 +445,11 @@ def gazette_schema() -> dict[str, Any]:
                          f"stdin); at most {booth.MAX_STORY_FILE // 1024} KiB. The photos, 1 to "
                          f"{vintage.MAX_PHOTOS}, are given on the command line.", GAZETTE_ROLES,
                          vintage.DEFAULT_GAZETTE_STORY)
+
+
+@register_schema("morning", "morning-edition file: prt gazette --edition morning --edition-file morning.json")
+def morning_schema() -> dict[str, Any]:
+    return morning.morning_schema()
 
 
 @register_schema("page", "compose page file: prt compose page.json (or JSON piped to prt compose -)")

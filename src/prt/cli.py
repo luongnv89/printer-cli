@@ -1700,10 +1700,44 @@ def article_cmd(
         STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
 
 
+class GazetteEdition(str, Enum):
+    photos = "photos"
+    morning = "morning"
+
+
+class ReceiptPeriod(str, Enum):
+    day = "day"
+    week = "week"
+
+
+def _gazette_usage(message: str, hint: str) -> None:
+    raise PrinterError(message, hint=hint, exit_code=2)
+
+
+def _gazette_morning(edition_file: Path, preview: Optional[Path], copies: list[tuple[Path, str]], yes: bool) -> None:
+    """The text-first morning edition of ``prt gazette``: no photos, one page from a morning JSON file."""
+    from prt import morning, vintage
+    outputs = [file for path, fmt in ([(preview, "pdf")] if preview else []) + copies
+               for file in vintage.page_paths(path, fmt, 1)]
+    vintage.check_outputs(outputs, [] if str(edition_file) == "-" else [edition_file], "morning file")
+    paper = morning.load_morning(edition_file)
+    rendered = render.morning_page(paper)
+    info = {"edition": "morning", "photos": 0, "title": paper.title}
+    _print_sheet("gazette", rendered, "morning edition", preview, copies, "Print the morning edition",
+                 "prt gazette morning edition", yes, info)
+
+
 @app.command("gazette")
 def gazette_cmd(
-    photos: list[Path] = typer.Argument(..., help="One or more photos (JPEG, PNG, WebP, GIF, BMP or TIFF); the "
-                                                  "first is the lead picture on the front page."),
+    photos: Optional[list[Path]] = typer.Argument(None, help="One or more photos (JPEG, PNG, WebP, GIF, BMP or TIFF); "
+                                                             "the first is the lead picture on the front page. "
+                                                             "Omit them with --edition morning."),
+    edition: GazetteEdition = typer.Option(GazetteEdition.photos, "--edition",
+                                           help="photos (the vintage photo newspaper) or morning (the text-first "
+                                                "Morning Gazette)."),
+    edition_file: Optional[Path] = typer.Option(None, "--edition-file",
+                                                help="Morning-edition JSON (required with --edition morning). Use - "
+                                                     "to read it from stdin. `prt schema morning` gives its JSON Schema."),
     story_file: Optional[Path] = typer.Option(None, "--story-file",
                                               help="JSON story: headline and story required; kicker, caption, "
                                                    "byline optional. Use - to read it from stdin."),
@@ -1735,6 +1769,22 @@ def gazette_cmd(
     # an unreadable photo never leaves a partial result or reaches the printer.
     preview_format = booth.format_for(preview) if preview else None
     copies = [(path, booth.format_for(path)) for path in save or []]
+    photos = photos or []
+    if edition == GazetteEdition.morning:
+        if photos:
+            _gazette_usage("the morning edition takes no photos", "use --edition-file morning.json without photos")
+        if edition_file is None:
+            _gazette_usage("the morning edition needs --edition-file morning.json",
+                           "prt schema morning lists the file's shape and limits")
+        if landscape or story_file or any(value is not None for value in (headline, story, kicker, caption, byline)):
+            _gazette_usage("the morning edition does not take --landscape, --story-file or the story flags",
+                           "its text comes from the morning JSON file")
+        _gazette_morning(edition_file, preview, copies, yes)
+        return
+    if edition_file is not None:
+        _gazette_usage("--edition-file needs --edition morning", "the photo gazette reads its story with --story-file")
+    if not photos:
+        _gazette_usage("the photo gazette needs at least one photo", "or use --edition morning --edition-file morning.json")
     vintage.check_count(len(photos))
     count = len(vintage.plan_pages(len(photos)))
     outputs = [(preview, preview_format)] if preview else []
@@ -1793,6 +1843,34 @@ def gazette_cmd(
                d.display_name)
     if STATE.json:
         STATE.write(json.dumps({**summary, "job_ids": jobs, **extra}) + "\n")
+
+
+@app.command("receipt")
+def receipt_cmd(
+    repo: Path = typer.Argument(Path("."), metavar="REPO",
+                                help="Git repository to read (default: the current folder)."),
+    period: ReceiptPeriod = typer.Option(ReceiptPeriod.day, "--period",
+                                         help="day: commits since local midnight; week: the last seven days."),
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save the receipt here instead of printing; the extension picks "
+                                                "the file type: .pdf, .png, .jpg or .jpeg."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of the receipt here (.pdf, .png, .jpg or "
+                                                   ".jpeg) before printing it; repeat for more files."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Commit receipt: print the repository's day or week of git commits as a one-page gazette."""
+    from prt import booth, receipt as receipts
+    preview_format = booth.format_for(preview) if preview else None
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    del preview_format  # ``_print_sheet`` checks it again; computing it here rejects a bad name before git runs
+    data = receipts.collect(repo, period.value)
+    rendered = render.receipt_page(data)
+    name = Path(data.repository).name or data.repository
+    info = {"repository": data.repository, "period": period.value, "since": data.since.isoformat(),
+            "commits": data.total, "shown": len(data.commits)}
+    _print_sheet("receipt", rendered, "commit receipt", preview, copies,
+                 f"Print the {period.value}'s commit receipt for {name}", f"prt receipt {name}", yes, info)
 
 
 @app.command("compose")

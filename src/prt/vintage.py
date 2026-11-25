@@ -114,12 +114,12 @@ def page_paths(path: Path, fmt: str, count: int) -> list[Path]:
     return [path.with_name(f"{path.stem}-{n}{path.suffix}") for n in range(1, count + 1)]
 
 
-def check_outputs(outputs: list[Path], photos: list[Path]) -> None:
-    """Refuse (exit code 2) an output file that is one of the photos, so saving a page never destroys one."""
+def check_outputs(outputs: list[Path], photos: list[Path], input_kind: str = "photo") -> None:
+    """Refuse (exit code 2) an output file that is one of the inputs, so saving a page never destroys one."""
     for target in outputs:
         for photo in photos:
             if _same_file(target, photo):
-                raise PrinterError(f"output {target} would overwrite input photo {photo}",
+                raise PrinterError(f"output {target} would overwrite input {input_kind} {photo}",
                                    hint="save the pages under another name", exit_code=2)
 
 
@@ -357,26 +357,39 @@ def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: 
     return placements, {**cut, **cut_below}
 
 
-def _head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet) -> tuple[int, Cuts]:
-    """Masthead, tagline, dateline, kicker, headline and byline across the page; returns (y below, cut)."""
+def draw_head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet, masthead: str = MASTHEAD,
+              tagline: str = TAGLINE, dateline: str | None = None, edition: str = EDITION,
+              price: str = PRICE) -> tuple[int, Cuts]:
+    """Masthead, tagline, dateline, kicker, headline and byline across the page; returns (y below, cut).
+
+    The photo gazette uses the module constants; a text-first gazette passes its own masthead and date lines
+    while keeping the same typography.
+    """
     left, width, right = sheet.margin, sheet.content_w, sheet.width - sheet.margin
     cut: Cuts = {}
     y = sheet.margin
     _rule(d, y, sheet)
     y += 18
     size = next(s for s in range(sheet.masthead_max, 40, -4)
-                if fonts.face("masthead", s).getlength(MASTHEAD) <= width - 80)
+                if fonts.face("masthead", s).getlength(masthead) <= width - 80)
     mast = fonts.face("masthead", size)
-    top, bottom = mast.getbbox(MASTHEAD)[1::2]
-    d.text(((sheet.width - mast.getlength(MASTHEAD)) / 2, y - top), MASTHEAD, font=mast, fill=INK)
+    top, bottom = mast.getbbox(masthead)[1::2]
+    d.text(((sheet.width - mast.getlength(masthead)) / 2, y - top), masthead, font=mast, fill=INK)
     y += bottom - top + 16
-    y, _ = _centred(d, y, TAGLINE, "body-italic", 24, 24, 1, left, width)
+    y, _ = _centred(d, y, tagline, "body-italic", 24, 24, 1, left, width)
     y = _double(d, y + 4, sheet)
-    parts = [_caps(text, "body-bold", 18) for text in (booth._today(), EDITION, PRICE)]
+    edition_runs = _caps(edition, "body-bold", 18)
+    price_runs = _caps(price, "body-bold", 18)
+    centre_x = (sheet.width - _caps_width(edition_runs)) / 2
+    # The dateline is user text on the text-first gazettes: keep it clear of the centred edition line.
+    dateline_width = max(0, int(centre_x - left - 24))
+    dateline_runs, _, cut_dateline = _fit_caps(dateline or booth._today(), "body-bold", 18, 12, dateline_width)
     baseline = y + 30
-    _draw_caps(d, left, baseline, parts[0])
-    _draw_caps(d, (sheet.width - _caps_width(parts[1])) / 2, baseline, parts[1])
-    _draw_caps(d, right - _caps_width(parts[2]), baseline, parts[2])
+    _draw_caps(d, left, baseline, dateline_runs)
+    _draw_caps(d, centre_x, baseline, edition_runs)
+    _draw_caps(d, right - _caps_width(price_runs), baseline, price_runs)
+    if cut_dateline:
+        cut["date"] = cut_dateline
     y = _double(d, baseline + 12, sheet) + 22
 
     if story.kicker:
@@ -396,6 +409,11 @@ def _head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet) -> tuple[int, Cuts
         if cut_byline:
             cut["byline"] = cut_byline
     return y + 8, cut
+
+
+def _head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet) -> tuple[int, Cuts]:
+    """The photo gazette's own head (see ``draw_head``)."""
+    return draw_head(d, story, sheet)
 
 
 def _tall_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Image], story: Story,

@@ -56,7 +56,7 @@ def test_styles_json_lists_every_style_with_fields_limits_and_sample(capsys):
     assert list(styles) == ["metro", "daily", "wizard", "wanted", "certificate", "sports", "missing", "movie",
                             "card", "comic", "strip", "instant", "colour-in", "postcard", "disc", "magazine",
                             "classic-magazine", "recipe", "bingo", "sudoku", "wordsearch", "crossword", "maze", "gazette",
-                            "gazette-landscape"]
+                            "gazette-landscape", "gazette-morning", "commit-receipt"]
     metro = styles["metro"]
     assert metro["command"] == "booth" and metro["args"] == [] and metro["default"] is True
     assert metro["kind"] == "metro newspaper page" and metro["schema"] == "story"
@@ -82,10 +82,13 @@ def test_styles_json_lists_every_style_with_fields_limits_and_sample(capsys):
     assert styles["magazine"]["photos"] == {"min": 0, "max": 0} and styles["magazine"]["max_pages"] == 30
     assert styles["gazette-landscape"]["args"] == ["--landscape"] and styles["gazette"]["args"] == []
     assert styles["gazette"]["photos"] == {"min": 1, "max": vintage.MAX_PHOTOS}
-    # colour-in prints no text, so it is the one style with no fields
+    # colour-in prints no text, and the receipt reads its text from git rather than an input file
     assert styles["colour-in"]["fields"] == [] and styles["colour-in"]["schema"] is None
+    assert styles["commit-receipt"]["fields"] == [] and styles["commit-receipt"]["schema"] is None
+    assert styles["gazette-morning"]["args"] == ["--edition", "morning"]
+    assert styles["gazette-morning"]["photos"] == {"min": 0, "max": 0}
     for s in styles.values():
-        assert s["description"] and (s["fields"] or s["name"] == "colour-in")
+        assert s["description"] and (s["fields"] or s["name"] in ("colour-in", "commit-receipt"))
         assert all(f["description"] for f in s["fields"])
 
 
@@ -130,7 +133,7 @@ def test_catalog_follows_the_commands():
     assert len({s.name for s in catalog.STYLES}) == len(catalog.STYLES)
     fields = {"article": article.FIELDS, "card": card.FIELDS, "recipe": recipe.FIELDS, "strip": ("caption",),
               "instant": ("caption",), "postcard": postcard.FIELDS, "disc": disc.FIELDS,
-              "comic": tuple(catalog.COMIC_ROLES), "bingo": bingo.FIELDS, "colour-in": ()}
+              "comic": tuple(catalog.COMIC_ROLES), "bingo": bingo.FIELDS, "colour-in": (), "receipt": ()}
     # the puzzles share one command, so their fields and schema follow the kind, which is the style's name
     puzzles = {"sudoku": ("title",), "wordsearch": ("title", "words"),
                "crossword": ("title", "entries[].answer", "entries[].clue"), "maze": ("title",)}
@@ -141,15 +144,18 @@ def test_catalog_follows_the_commands():
             # sudoku and maze take their only text from --title, so they have no input file
             assert s.schema == (s.name if s.name in ("wordsearch", "crossword") else None)
             continue
-        assert names == list(fields.get(s.command, booth.FIELDS))
-        # strip and instant take their only text from --caption, and colour-in has none, so they have no input file
-        assert s.schema in catalog.schema_names() if s.command not in ("strip", "instant", "colour-in") \
+        if s.name == "gazette-morning":
+            assert names == [f.name for f in catalog.morning.morning_fields()]
+        else:
+            assert names == list(fields.get(s.command, booth.FIELDS))
+        # strip and instant take their only text from --caption, colour-in has none, and receipt reads git
+        assert s.schema in catalog.schema_names() if s.command not in ("strip", "instant", "colour-in", "receipt") \
             else s.schema is None
 
 
 # --- prt schema ---------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", ["story", "article", "gazette", "page", "card", "comic", "postcard", "disc",
+@pytest.mark.parametrize("name", ["story", "article", "gazette", "morning", "page", "card", "comic", "postcard", "disc",
                                   "bingo", "wordsearch", "crossword"])
 def test_schema_prints_a_valid_json_schema(capsys, name):
     code, out, err = run(capsys, "schema", name)
@@ -175,7 +181,7 @@ def test_schema_story_matches_the_limits():
 
 def test_schema_unknown_name_is_a_usage_error(capsys):
     code, out, err = run(capsys, "schema", "flyer")
-    assert code == 2 and out == "" and "unknown schema: flyer" in err and "story, article, gazette, page" in err
+    assert code == 2 and out == "" and "unknown schema: flyer" in err and "story, article, gazette, morning, page" in err
     code, _, err = run(capsys, "-f", "json", "schema", "flyer")
     assert code == 2 and json.loads(err)["error"]["kind"] == "usage"
 

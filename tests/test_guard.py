@@ -1,6 +1,7 @@
 """The print guard: agent mode, page caps, the daily ledger, page counting and the cost estimate (#21)."""
 
 import json
+import os
 import zlib
 from types import SimpleNamespace
 
@@ -81,12 +82,17 @@ def _config(**keys):
 
 def _commands(tmp_path):
     photo = _photo(tmp_path)
+    morning_file = tmp_path / "morning.json"
+    morning_file.write_text(json.dumps({"weather": {"summary": "Fair"}, "calendar": {"items": []},
+                                        "todos": {"items": []}, "headlines": {"items": []}}))
     return {
         "print": ["print", str(photo)],
         "booth": ["booth", str(photo)],
         "card": ["card", str(photo)],
         "article": ["article", str(_article(tmp_path))],
         "gazette": ["gazette", str(photo)],
+        "gazette-morning": ["gazette", "--edition", "morning", "--edition-file", str(morning_file)],
+        "receipt": ["receipt", os.getcwd(), "--period", "day"],
         "compose": ["compose", str(_page_file(tmp_path))],
         "strip": ["strip", str(photo), str(photo), str(photo), str(photo)],
         "instant": ["instant", str(photo)],
@@ -102,7 +108,7 @@ def _commands(tmp_path):
     }
 
 
-COMMANDS = ["print", "booth", "card", "article", "gazette", "compose", "strip", "instant", "colour-in", "recipe",
+COMMANDS = ["print", "booth", "card", "article", "gazette", "gazette-morning", "receipt", "compose", "strip", "instant", "colour-in", "recipe",
             "postcard", "disc", "bingo", "puzzle", "test-page", "nozzle-check", "clean"]
 
 

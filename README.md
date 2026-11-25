@@ -109,9 +109,11 @@ prt list
 | `prt puzzle sudoku\|wordsearch\|crossword\|maze [--difficulty easy\|medium\|hard] [--seed N] [--crossword-file crossword.json] [--answers answers.json] [--preview page.png] [--save page.pdf]` | Print a sudoku, word search, crossword or maze on A4, and keep its solution to check the filled-in sheet (see [Puzzles](#puzzles)) |
 | `prt article URL\|FILE [--style magazine\|classic-magazine] [--preview page.pdf] [--save page.pdf]` | Print a blog post, news article or X post as A4 magazine pages (see [Article printing](#article-printing)) |
 | `prt gazette PHOTO… [--landscape] [--story-file story.json] [--preview page.pdf] [--save page.pdf]` | Print one or more photos as a vintage newspaper, over as many A4 pages as the photos need (see [Vintage gazette](#vintage-gazette)) |
+| `prt gazette --edition morning --edition-file morning.json [--preview page.pdf] [--save page.pdf]` | Print the text-first Morning Gazette: weather, calendar, to-dos and headlines on one A4 page (see [Morning edition](#morning-edition)) |
+| `prt receipt [REPO] [--period day\|week] [--preview receipt.pdf] [--save receipt.pdf]` | Print the repository's day or week of git commits as a one-page commit receipt (see [Commit receipt](#commit-receipt)) |
 | `prt compose PAGE.json [--preview page.pdf] [--save page.pdf]` | Print a page you describe as blocks: headings, text, images, QR codes, columns and rules (see [Compose a page](#compose-a-page)) |
 | `prt styles` | Every booth, card, comic, strip, instant, colour-in, postcard, disc, article, recipe, bingo, puzzle and gazette style and the options that pick it; with `-f json`, also each style's fields, character limits, photo count and a sample image (see [Styles and schemas](#styles-and-schemas)) |
-| `prt schema story\|article\|gazette\|page\|card\|comic\|recipe\|postcard\|disc\|bingo\|wordsearch\|crossword` | The JSON Schema of a booth story file, an article JSON file, a gazette story file, a `prt compose` page file, a `prt card` card file, a `prt comic` comic file, a `prt recipe` recipe file, a `prt postcard` postcard file, a `prt disc` label file, a `prt bingo` words file, a `prt puzzle wordsearch` words file or a `prt puzzle crossword` crossword file |
+| `prt schema story\|article\|gazette\|morning\|page\|card\|comic\|recipe\|postcard\|disc\|bingo\|wordsearch\|crossword` | The JSON Schema of a booth story file, an article JSON file, a gazette story file, a morning-edition file, a `prt compose` page file, a `prt card` card file, a `prt comic` comic file, a `prt recipe` recipe file, a `prt postcard` postcard file, a `prt disc` label file, a `prt bingo` words file, a `prt puzzle wordsearch` words file or a `prt puzzle crossword` crossword file |
 | `prt jobs [--all]` / `prt jobs wait ID` / `prt jobs cancel ID` | List jobs, wait for one to finish, or cancel one |
 | `prt scan [-o file.pdf] [--type jpeg] [--dpi 600] [--mode gray] [--area full]` | Flatbed scan (`-o -` writes to stdout) |
 | `prt tui` | Full-screen dashboard |
@@ -283,7 +285,7 @@ $ prt styles -f json | jq -c '.[] | {name, command, args, schema}'
 {"name":"gazette-landscape","command":"gazette","args":["--landscape"],"schema":"gazette"}
 ```
 
-`prt schema story`, `prt schema article`, `prt schema gazette`, `prt schema page`, `prt schema card`, `prt schema comic`, `prt schema recipe`, `prt schema postcard`, `prt schema disc`, `prt schema bingo`, `prt schema wordsearch` and `prt schema crossword` print the JSON Schema (draft 2020-12) of the file `prt booth --story-file`, `prt article FILE.json`, `prt gazette --story-file`, `prt compose`, `prt card --card-file`, `prt comic --comic-file`, `prt recipe FILE.json`, `prt postcard --postcard-file`, `prt disc --disc-file`, `prt bingo --words-file`, `prt puzzle wordsearch --words-file` and `prt puzzle crossword --crossword-file` read. A file that passes the schema is accepted by the command; the one thing the schema cannot check is the character set, so text in a script the page font cannot print (emoji, Chinese) is still refused, and so is a bingo word that repeats another in different case or spacing (`Tractor`, `tractor`), a word search word or crossword answer with characters other than letters, spaces, hyphens and apostrophes or with the same letters as another, and a crossword answer that cannot be made to cross the others. For a page file, the image files must also exist and be readable, and the page must fit in 10 pages. In Python the same data is in `prt.catalog` (`styles()`, `schema(name)`, and `register_schema` to add one).
+`prt schema story`, `prt schema article`, `prt schema gazette`, `prt schema morning`, `prt schema page`, `prt schema card`, `prt schema comic`, `prt schema recipe`, `prt schema postcard`, `prt schema disc`, `prt schema bingo`, `prt schema wordsearch` and `prt schema crossword` print the JSON Schema (draft 2020-12) of the file `prt booth --story-file`, `prt article FILE.json`, `prt gazette --story-file`, `prt compose`, `prt card --card-file`, `prt comic --comic-file`, `prt recipe FILE.json`, `prt postcard --postcard-file`, `prt disc --disc-file`, `prt bingo --words-file`, `prt puzzle wordsearch --words-file` and `prt puzzle crossword --crossword-file` read. A file that passes the schema is accepted by the command; the one thing the schema cannot check is the character set, so text in a script the page font cannot print (emoji, Chinese) is still refused, and so is a bingo word that repeats another in different case or spacing (`Tractor`, `tractor`), a word search word or crossword answer with characters other than letters, spaces, hyphens and apostrophes or with the same letters as another, and a crossword answer that cannot be made to cross the others. For a page file, the image files must also exist and be readable, and the page must fit in 10 pages. In Python the same data is in `prt.catalog` (`styles()`, `schema(name)`, and `register_schema` to add one).
 
 ## The TUI
 
@@ -607,6 +609,37 @@ prt -p demo gazette letter.jpg --story-file story.json --preview edition.pdf -f 
 prt -p demo gazette letter.jpg --story-file story.json --yes                           # print it
 ```
 
+## Morning edition
+
+`prt gazette --edition morning --edition-file morning.json` prints **The Morning Gazette**, a text-first front page with no photos: weather, today's calendar, to-dos and headlines in ruled vintage columns on one A4 page. `prt schema morning` gives the JSON file's shape; `--edition-file -` reads it from stdin. `--preview`/`-o` renders without printing, `--save` keeps a copy, and the `-f json` line has the usual `fits`, `cut` and ink `estimate`.
+
+```bash
+prt gazette --edition morning --edition-file morning.json --preview morning.pdf -f json
+prt gazette --edition morning --edition-file morning.json --yes
+```
+
+prt deliberately does not run a scheduler. Run the same command from the operating system's scheduler; use `--yes` because there is no one to answer its prompt:
+
+```bash
+# cron, every morning at 07:30
+30 7 * * * cd /path/to/morning && prt gazette --edition morning --edition-file morning.json --yes
+# systemd: put the same prt command in the ExecStart of a service started by a timer
+# launchd: put it in ProgramArguments of a LaunchAgent with a StartCalendarInterval
+```
+
+An agent can gather the weather, calendar events, tasks and headlines itself, write the small JSON file, preview it, shorten anything `cut` names, and then print it. The file is at most 32 KiB; text in scripts the bundled fonts cannot print is refused, as for the other input files.
+
+## Commit receipt
+
+`prt receipt` prints **The Commit Receipt**, a one-page gazette of a repository's git log. `--period day` (the default) covers commits since local midnight; `--period week` covers the last seven days. The repository defaults to the current folder. Commits are grouped by day with their time, short hash, author and subject. `--preview`/`-o` renders without printing, `--save` keeps a copy, and the `-f json` line reports `repository`, `period`, `commits`, `shown`, `fits`, `cut` and the ink `estimate`.
+
+```bash
+prt receipt --preview receipt.pdf -f json          # today's commits, nothing printed
+prt receipt ~/src/project --period week --yes      # print the week
+```
+
+The repository is read only through fixed `git -C REPO log`/`rev-list` argument vectors, never through a shell. A path outside a git work tree exits with code 3; a repository or period with no commits prints an empty receipt. At most the newest 80 commits are laid out, and the summary says when more exist.
+
 ## Compose a page
 
 `prt compose page.json` prints a page you describe as a list of blocks, for printables no other command makes: a flyer, a sign, a label sheet, a Wi-Fi card. The blocks are laid out top to bottom on A4 and run on to more pages when one is full.
@@ -654,7 +687,7 @@ prt schema page                              # the page file's JSON Schema
 ## Safety
 
 - **Head cleaning is refused** while any ink is at or below its low level, or while the waste ink pad is flagged. Cleaning flushes ink into the pad, and a full pad locks the printer until it's serviced. `--force` overrides this, and the TUI offers "Clean anyway".
-- Nozzle check, cleaning, the test page, the photo booth, greeting cards, the 4×6 prints and postcards, disc labels, bingo cards, puzzles, article printing, the gazette and composed pages ask for confirmation first. In scripts, pass `--yes`.
+- Nozzle check, cleaning, the test page, the photo booth, greeting cards, the 4×6 prints and postcards, disc labels, bingo cards, puzzles, article printing, the gazette, commit receipts and composed pages ask for confirmation first. In scripts, pass `--yes`.
 - printer-cli never resets the waste ink counter or writes to the printer's EEPROM.
 
 ### Agent guardrails

@@ -27,7 +27,10 @@ if TYPE_CHECKING:
     from prt.disc import Disc
     from prt.drivers.base import Driver
     from prt.layout import Cut
+    from prt.morning import Morning
     from prt.postcard import Postcard
+    from prt.receipt import Receipt
+    from prt.textgazette import TextGazette
     from prt.puzzle import Puzzle
     from prt.recipe import Recipe
 
@@ -87,6 +90,25 @@ def comic_page(photos: Sequence[Image.Image], comic: Comic | None = None) -> Ren
     from prt import comic as comics
     page, cut = comics.compose(photos, comic)
     return Rendered([page], cut)
+
+
+def text_gazette_page(document: TextGazette) -> Rendered:
+    """Lay a sectioned text gazette out as one A4 page."""
+    from prt.textgazette import compose_page
+    page, cut = compose_page(document)
+    return Rendered([page], cut)
+
+
+def morning_page(paper: Morning) -> Rendered:
+    """Lay a validated morning-edition file out as one A4 page."""
+    from prt.morning import document
+    return text_gazette_page(document(paper))
+
+
+def receipt_page(receipt: Receipt) -> Rendered:
+    """Lay collected commits out as one A4 commit receipt."""
+    from prt.receipt import document
+    return text_gazette_page(document(receipt))
 
 
 def article_pages(text: Article, style: str) -> Rendered:
