@@ -7,11 +7,12 @@ until the scanner returns 404. Many scanners answer 503 while the head is still 
 from __future__ import annotations
 
 import time
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
 import httpx
+from defusedxml import DefusedXmlException
+from defusedxml.ElementTree import ParseError, fromstring
 
 from prt.models import ScanSettings, Target
 
@@ -44,8 +45,16 @@ def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
+def _parse_xml(xml: str | bytes):
+    # defusedxml refuses entity and DTD tricks (billion laughs, external entities) a hostile device could send.
+    try:
+        return fromstring(xml)
+    except (ParseError, DefusedXmlException) as exc:
+        raise ScanError(f"scanner sent unreadable XML: {exc}") from exc
+
+
 def parse_capabilities(xml: str | bytes) -> ScannerCaps:
-    root = ET.fromstring(xml)
+    root = _parse_xml(xml)
     caps = ScannerCaps()
     for el in root.iter():
         name, text = _local(el.tag), (el.text or "").strip()
@@ -72,7 +81,7 @@ def parse_capabilities(xml: str | bytes) -> ScannerCaps:
 
 
 def parse_state(xml: str | bytes) -> str:
-    for el in ET.fromstring(xml).iter():
+    for el in _parse_xml(xml).iter():
         if _local(el.tag) == "State":
             return (el.text or "").strip()
     return "Unknown"
@@ -116,7 +125,8 @@ class ESCLClient:
         self._transport = transport
 
     def _client(self, timeout: float | None = None) -> httpx.Client:
-        return httpx.Client(verify=False, timeout=timeout or self.timeout, transport=self._transport)
+        # verify=False on purpose: self-signed scanner certificates, see the class docstring.
+        return httpx.Client(verify=False, timeout=timeout or self.timeout, transport=self._transport)  # nosec B501
 
     @classmethod
     def for_target(cls, target: Target, timeout: float = 5.0) -> "ESCLClient":
@@ -162,8 +172,8 @@ class ESCLClient:
         caps = None
         try:
             caps = self.capabilities()
-        except httpx.HTTPError:
-            pass
+        except (httpx.HTTPError, ScanError):
+            pass  # no readable capabilities: scan with the default limits
         if caps and caps.resolutions and settings.dpi not in caps.resolutions:
             raise ScanError(f"{settings.dpi} dpi not supported; choose one of " + ", ".join(map(str, caps.resolutions)))
         body = build_settings(settings, caps)
