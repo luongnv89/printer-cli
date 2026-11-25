@@ -50,6 +50,7 @@ def _story_file(tmp_path, content):
 
 # --- rendering -------------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("style", STYLES)
 def test_page_is_a4_jpeg_at_150dpi(tmp_path, style):
     page = Image.open(io.BytesIO(_render_jpeg(booth.load_photo(_photo(tmp_path / "p.png")), style=style)))
@@ -69,8 +70,13 @@ def test_metro_keeps_colour_and_daily_is_black_and_white():
 def test_longest_story_stays_inside_the_page_margins(style):
     # 141 paragraphs cannot fit even at the smallest type, so the end of the story is cut.
     # W is the widest capital, so the kicker only fits by shrinking.
-    story = Story(headline="H" * LIMITS["headline"], story="A" * 200 + "\n" + "Wide paragraph.\n" * 140,
-                  kicker="W" * LIMITS["kicker"], caption="c " * 100, byline="B" * LIMITS["byline"])
+    story = Story(
+        headline="H" * LIMITS["headline"],
+        story="A" * 200 + "\n" + "Wide paragraph.\n" * 140,
+        kicker="W" * LIMITS["kicker"],
+        caption="c " * 100,
+        byline="B" * LIMITS["byline"],
+    )
     page = _render(Image.new("RGB", (1600, 400), "red"), booth.check_story(story, 2), style)
     w, h = A4_150DPI
     for band in [(0, 0, w, 80), (0, h - 80, w, h), (0, 0, 80, h), (w - 80, 0, w, h)]:
@@ -130,24 +136,28 @@ def test_ellipsis_cuts_at_a_whole_word():
 
 
 def test_metro_headline_is_cut_at_a_word_boundary(monkeypatch):
-    words = ("Remarkable scenes as local resident smiles broadly for the cameras outside the old town hall "
-             "while onlookers cheer")
+    words = (
+        "Remarkable scenes as local resident smiles broadly for the cameras outside the old town hall "
+        "while onlookers cheer"
+    )
     blocks = []
     real = booth._text_block
-    monkeypatch.setattr(booth, "_text_block", lambda d, x, y, block, *a, **kw: blocks.append(block) or
-                        real(d, x, y, block, *a, **kw))
+    monkeypatch.setattr(
+        booth, "_text_block", lambda d, x, y, block, *a, **kw: blocks.append(block) or real(d, x, y, block, *a, **kw)
+    )
     story = booth.check_story(Story(headline=words, story="S"), 2)
     cut = booth.compose(Image.new("RGB", (300, 400), "blue"), story, "metro")[1]
     headline = blocks[0]
     assert len(headline) == 3 and list(cut) == ["headline"]  # three lines at the smallest size, then cut
     assert headline[-1].endswith("…")
     printed = " ".join(headline)[:-1].split()
-    assert printed == words.upper().split()[:len(printed)]  # only whole words, in order
+    assert printed == words.upper().split()[: len(printed)]  # only whole words, in order
 
 
 def test_blank_lines_between_paragraphs_add_no_extra_gap():
     def page(text):
         return _render(Image.new("RGB", (300, 400), "blue"), booth.check_story(Story(headline="H", story=text), 2))
+
     assert page("A\n\nB") == page("A\nB") == page("A\n \n\n\nB")
     assert page("A\nB") != page("A B")
 
@@ -167,7 +177,11 @@ def test_daily_short_story_fills_the_page():
     for shape in [(300, 400), (360, 640), (1600, 900)]:
         page = _render(Image.new("RGB", shape, "blue"), style="daily").convert("L")
         story_area = page.crop((booth.MARGIN, 0, booth.W - booth.MARGIN, booth.BOTTOM - 1))
-        rows = [y for y in range(story_area.height) if story_area.crop((0, y, story_area.width, y + 1)).getextrema()[0] < 128]
+        rows = [
+            y
+            for y in range(story_area.height)
+            if story_area.crop((0, y, story_area.width, y + 1)).getextrema()[0] < 128
+        ]
         assert booth.BOTTOM - rows[-1] < 160, shape  # last line of text sits close to the bottom rule
 
 
@@ -178,9 +192,13 @@ def _last_ink_row(page):
     return booth.BOTTOM - rows[-1]
 
 
-ONE_SENTENCE = Story(headline="Local Star Steps Into the Spotlight", story="Local resident beams for the camera, then says cheese for good measure.",
-                     kicker="Local news", caption="Pictured: today's guest at the prt photo booth.",
-                     byline="By the prt newsroom")
+ONE_SENTENCE = Story(
+    headline="Local Star Steps Into the Spotlight",
+    story="Local resident beams for the camera, then says cheese for good measure.",
+    kicker="Local news",
+    caption="Pictured: today's guest at the prt photo booth.",
+    byline="By the prt newsroom",
+)
 
 
 @pytest.mark.parametrize("shape", [(300, 400), (360, 640), (400, 400)])
@@ -229,8 +247,13 @@ def test_kicker_within_the_limit_is_never_cut(style, kicker):
 
 def test_compose_names_the_fields_cut_to_fit():
     portrait = Image.new("RGB", (300, 400), "blue")
-    long = Story(headline="Wide headline words " * 6, story="Wide paragraph.\n" * 140, kicker="W" * 40,
-                 caption="caption words " * 14, byline="B" * 80)
+    long = Story(
+        headline="Wide headline words " * 6,
+        story="Wide paragraph.\n" * 140,
+        kicker="W" * 40,
+        caption="caption words " * 14,
+        byline="B" * 80,
+    )
     assert list(booth.compose(portrait, booth.check_story(long, 2), "metro")[1]) == ["headline", "caption", "story"]
     assert list(booth.compose(portrait, booth.check_story(long, 2), "daily")[1]) == ["story"]
     # A 40-character kicker always fits; the rest of the card or poster is cut.
@@ -248,14 +271,22 @@ def test_compose_names_the_fields_cut_to_fit():
 @pytest.mark.parametrize("style", STYLES)
 def test_compose_reports_how_much_of_each_cut_field_was_printed(style):
     portrait = Image.new("RGB", (300, 400), "blue")
-    long = booth.check_story(Story(headline="Wide headline words " * 6, story="Wide paragraph.\n" * 140,
-                                   kicker="W" * 40, caption="caption words " * 14, byline="B" * 80), 2)
+    long = booth.check_story(
+        Story(
+            headline="Wide headline words " * 6,
+            story="Wide paragraph.\n" * 140,
+            kicker="W" * 40,
+            caption="caption words " * 14,
+            byline="B" * 80,
+        ),
+        2,
+    )
     cut = booth.compose(portrait, long, style)[1]
     assert cut
     for name, fit in cut.items():
         assert fit.given == len(getattr(long, name)) and 0 < fit.max_fit < fit.given, name
         # Cut to max_fit characters, the field fits where it is (the rest of the page left as it was).
-        shorter = replace(long, **{name: getattr(long, name)[:fit.max_fit]})
+        shorter = replace(long, **{name: getattr(long, name)[: fit.max_fit]})
         assert name not in booth.compose(portrait, shorter, style)[1], name
 
 
@@ -265,25 +296,39 @@ def test_cutting_every_reported_field_at_once_makes_the_card_or_poster_fit(style
     # Shortened together, no field may grow back into the room another one needs (a two-line fallback is set
     # at its smallest size, so a shorter headline or caption never takes more height).
     import random
+
     rng = random.Random(seed)
     words = "wide words fill the whole page with WWW and more text in it".split()
 
     def text(limit):
         out = " ".join(rng.choice(words) for _ in range(limit))
         return out[:limit].strip()
-    story = booth.check_story(Story(headline=text(LIMITS["headline"]), kicker=text(LIMITS["kicker"]),
-                                    caption=text(LIMITS["caption"]), byline=text(LIMITS["byline"]),
-                                    story="\n".join(text(120) for _ in range(20))[:LIMITS["story"]]), 2)
+
+    story = booth.check_story(
+        Story(
+            headline=text(LIMITS["headline"]),
+            kicker=text(LIMITS["kicker"]),
+            caption=text(LIMITS["caption"]),
+            byline=text(LIMITS["byline"]),
+            story="\n".join(text(120) for _ in range(20))[: LIMITS["story"]],
+        ),
+        2,
+    )
     portrait = Image.new("RGB", (300, 400), "blue")
     cut = booth.compose(portrait, story, style)[1]
     assert cut
-    shorter = replace(story, **{name: getattr(story, name)[:fit.max_fit] for name, fit in cut.items()})
+    shorter = replace(story, **{name: getattr(story, name)[: fit.max_fit] for name, fit in cut.items()})
     assert booth.compose(portrait, shorter, style)[1] == {}
 
 
 # Stand-ins ("EUR" for "€", "ss" for "ß") and dropped accent marks print more or fewer characters than given.
-STAND_IN_STORY = Story(headline=("Prix € Straße " * 20)[:120], kicker="€ß" * 20, caption=("Straße € " * 30)[:200],
-                       byline="€" * 80, story=("Die Straße kostet € 5. Cafe\u0301. " * 90)[:2500])
+STAND_IN_STORY = Story(
+    headline=("Prix € Straße " * 20)[:120],
+    kicker="€ß" * 20,
+    caption=("Straße € " * 30)[:200],
+    byline="€" * 80,
+    story=("Die Straße kostet € 5. Cafe\u0301. " * 90)[:2500],
+)
 
 
 @pytest.mark.parametrize("style", STYLES)
@@ -295,7 +340,7 @@ def test_cut_counts_the_characters_given_not_their_stand_ins(style):
     for name, fit in cut.items():
         assert fit.given == len(getattr(story, name)) and 0 < fit.max_fit <= fit.given, name
         # Cut to max_fit characters, the field fits where it is (the rest of the page left as it was).
-        shorter = replace(story, **{name: getattr(story, name)[:fit.max_fit]})
+        shorter = replace(story, **{name: getattr(story, name)[: fit.max_fit]})
         assert name not in booth.compose(portrait, shorter, style)[1], name
 
 
@@ -323,6 +368,7 @@ def test_empty_optional_fields_render(style):
 
 
 # --- themed styles -------------------------------------------------------------------------------
+
 
 def _share(page, test):
     small = page.reduce(4)  # a quarter-size copy is plenty for colour shares
@@ -360,9 +406,13 @@ def test_every_style_looks_different():
 
     def white(r, g, b):
         return min(r, g, b) > 250
-    signature = {style: {test.__name__: _share(page, test)
-                         for test in (navy, gold, parchment, red, ivory, green, blue, dark, white)}
-                 for style, page in pages.items()}
+
+    signature = {
+        style: {
+            test.__name__: _share(page, test) for test in (navy, gold, parchment, red, ivory, green, blue, dark, white)
+        }
+        for style, page in pages.items()
+    }
     assert signature["wizard"]["navy"] > 0.25 and signature["wizard"]["gold"] > 0.03  # dark card, gold trim
     assert signature["wanted"]["parchment"] > 0.45  # aged paper
     assert signature["metro"]["red"] > 0.005  # red accents
@@ -385,22 +435,40 @@ def test_every_style_looks_different():
             assert signature[style]["dark"] < signature["movie"]["dark"] / 2, style
 
 
-@pytest.mark.parametrize("style, frame", [
-    ("wizard", ((booth.W - booth.CARD_W) // 2, (booth.H - booth.CARD_H) // 2,
-                (booth.W + booth.CARD_W) // 2, (booth.H + booth.CARD_H) // 2)),
-    ("wanted", (booth.MARGIN, booth.MARGIN, booth.W - booth.MARGIN, booth.BOTTOM)),
-    ("sports", ((booth.W - booth.CARD_W) // 2, (booth.H - booth.CARD_H) // 2,
-                (booth.W + booth.CARD_W) // 2, (booth.H + booth.CARD_H) // 2)),
-    ("missing", (booth.MARGIN, booth.MARGIN, booth.W - booth.MARGIN, booth.BOTTOM)),
-])  # the movie poster's photo runs edge to edge: see test_movie_photo_grows_into_room_short_credits_leave
+@pytest.mark.parametrize(
+    "style, frame",
+    [
+        (
+            "wizard",
+            (
+                (booth.W - booth.CARD_W) // 2,
+                (booth.H - booth.CARD_H) // 2,
+                (booth.W + booth.CARD_W) // 2,
+                (booth.H + booth.CARD_H) // 2,
+            ),
+        ),
+        ("wanted", (booth.MARGIN, booth.MARGIN, booth.W - booth.MARGIN, booth.BOTTOM)),
+        (
+            "sports",
+            (
+                (booth.W - booth.CARD_W) // 2,
+                (booth.H - booth.CARD_H) // 2,
+                (booth.W + booth.CARD_W) // 2,
+                (booth.H + booth.CARD_H) // 2,
+            ),
+        ),
+        ("missing", (booth.MARGIN, booth.MARGIN, booth.W - booth.MARGIN, booth.BOTTOM)),
+    ],
+)  # the movie poster's photo runs edge to edge: see test_movie_photo_grows_into_room_short_credits_leave
 @pytest.mark.parametrize("shape", [(300, 400), (1600, 900)])
 def test_photo_is_composited_into_the_frame(style, frame, shape):
     magenta = Image.new("RGB", shape, (255, 0, 255))  # a colour no style uses on its own
     page = _render(magenta, style=style)
     r, g, b = page.split()
-    hits = ImageChops.multiply(ImageChops.multiply(r.point(lambda v: 255 if v > 180 else 0),
-                                                   b.point(lambda v: 255 if v > 160 else 0)),
-                               g.point(lambda v: 255 if v < 80 else 0))
+    hits = ImageChops.multiply(
+        ImageChops.multiply(r.point(lambda v: 255 if v > 180 else 0), b.point(lambda v: 255 if v > 160 else 0)),
+        g.point(lambda v: 255 if v < 80 else 0),
+    )
     x0, y0, x1, y1 = hits.getbbox()
     assert hits.histogram()[255] > 150_000  # the photo is there, in its colours
     assert frame[0] < x0 and frame[1] < y0 and x1 < frame[2] and y1 < frame[3]  # inside the card or poster
@@ -462,9 +530,10 @@ def test_certificate_oval_keeps_the_top_of_a_full_length_portrait(monkeypatch):
 def test_certificate_photo_is_an_oval_inside_the_border(shape):
     page = _render(Image.new("RGB", shape, (255, 0, 255)), style="certificate")
     r, g, b = page.split()
-    hits = ImageChops.multiply(ImageChops.multiply(r.point(lambda v: 255 if v > 180 else 0),
-                                                   b.point(lambda v: 255 if v > 160 else 0)),
-                               g.point(lambda v: 255 if v < 80 else 0))
+    hits = ImageChops.multiply(
+        ImageChops.multiply(r.point(lambda v: 255 if v > 180 else 0), b.point(lambda v: 255 if v > 160 else 0)),
+        g.point(lambda v: 255 if v < 80 else 0),
+    )
     x0, y0, x1, y1 = hits.getbbox()
     area = (x1 - x0) * (y1 - y0)
     assert 0.7 * area < hits.histogram()[255] < 0.85 * area  # an oval fills π/4 of its box
@@ -497,8 +566,10 @@ def test_missing_poster_has_tear_off_tabs_with_the_byline():
     page = _render(blue, story, "missing")
     tab_w = booth.CONTENT_W // booth.TABS
     top = booth.BOTTOM - booth.TAB_H
-    tabs = [(booth.MARGIN + i * tab_w + 6, top + 12, booth.MARGIN + (i + 1) * tab_w - 6, booth.BOTTOM - 4)
-            for i in range(booth.TABS)]
+    tabs = [
+        (booth.MARGIN + i * tab_w + 6, top + 12, booth.MARGIN + (i + 1) * tab_w - 6, booth.BOTTOM - 4)
+        for i in range(booth.TABS)
+    ]
     assert all(_ink_in(page, tab) for tab in tabs)  # every tab carries the contact
     first = page.crop(tabs[0]).tobytes()
     assert all(page.crop(tab).tobytes() == first for tab in tabs[1:])  # the same on each one
@@ -512,7 +583,7 @@ def test_missing_poster_byline_is_cut_to_fit_a_tab():
     story = booth.check_story(replace(booth.default_story("missing"), byline="Call Jo on 555-0134 " * 4), 2)
     page, cut = booth.compose(Image.new("RGB", (300, 400), "blue"), story, "missing")
     assert list(cut) == ["byline"] and 0 < cut["byline"].max_fit < cut["byline"].given
-    shorter = replace(story, byline=story.byline[:cut["byline"].max_fit])
+    shorter = replace(story, byline=story.byline[: cut["byline"].max_fit])
     assert booth.compose(Image.new("RGB", (300, 400), "blue"), shorter, "missing")[1] == {}
 
 
@@ -560,33 +631,50 @@ def test_sports_card_team_name_stays_left_of_the_corner_stripes(kicker):
     # cut to max_fit characters it fits.
     if kicker.startswith("€"):  # each "€" prints as "EUR"
         assert cut["kicker"].given == 40 and 0 < cut["kicker"].max_fit < 40
-        assert "kicker" not in booth.compose(grey, replace(story, kicker=kicker[:cut["kicker"].max_fit]),
-                                             "sports")[1]
+        assert "kicker" not in booth.compose(grey, replace(story, kicker=kicker[: cut["kicker"].max_fit]), "sports")[1]
     else:
         assert "kicker" not in cut
 
 
 # --- saving a copy -------------------------------------------------------------------------------
 
+
 def _pdf_page_image(pdf):
     """The page picture embedded in a one-page PDF (Pillow cannot open PDFs itself)."""
     found = re.search(rb"/Filter /DCTDecode.*?/Length (\d+)\s*>>stream\n", pdf, re.S)
     assert found, "no JPEG image in the PDF"
-    image = Image.open(io.BytesIO(pdf[found.end():found.end() + int(found.group(1))]))
+    image = Image.open(io.BytesIO(pdf[found.end() : found.end() + int(found.group(1))]))
     image.load()
     return image
 
 
-@pytest.mark.parametrize("name, fmt", [("page.pdf", "pdf"), ("PAGE.PDF", "pdf"), ("page.png", "png"),
-                                       ("Page.Png", "png"), ("page.jpg", "jpeg"), ("page.JPG", "jpeg"),
-                                       ("page.jpeg", "jpeg"), ("page.Jpeg", "jpeg"), ("my page.jpg.pdf", "pdf")])
+@pytest.mark.parametrize(
+    "name, fmt",
+    [
+        ("page.pdf", "pdf"),
+        ("PAGE.PDF", "pdf"),
+        ("page.png", "png"),
+        ("Page.Png", "png"),
+        ("page.jpg", "jpeg"),
+        ("page.JPG", "jpeg"),
+        ("page.jpeg", "jpeg"),
+        ("page.Jpeg", "jpeg"),
+        ("my page.jpg.pdf", "pdf"),
+    ],
+)
 def test_format_for_reads_the_extension_in_any_case(name, fmt):
     assert booth.format_for(Path(name)) == fmt
 
 
-@pytest.mark.parametrize("name, reason", [("page.gif", "unknown file type .gif"),
-                                          ("page.pdf.txt", "unknown file type .txt"),
-                                          ("page", "no file extension"), ("folder/page", "no file extension")])
+@pytest.mark.parametrize(
+    "name, reason",
+    [
+        ("page.gif", "unknown file type .gif"),
+        ("page.pdf.txt", "unknown file type .txt"),
+        ("page", "no file extension"),
+        ("folder/page", "no file extension"),
+    ],
+)
 def test_format_for_refuses_other_file_types(name, reason):
     with pytest.raises(PrinterError) as exc:
         booth.format_for(Path(name))
@@ -628,6 +716,7 @@ def test_to_bytes_refuses_a_format_it_cannot_write():
 
 # --- photo -------------------------------------------------------------------------------------
 
+
 def test_load_photo_decodes_to_rgb_and_applies_exif_rotation(tmp_path):
     path = tmp_path / "phone.jpg"
     exif = Image.Exif()
@@ -664,13 +753,16 @@ def _bad_photo(tmp_path, kind):
     return path
 
 
-@pytest.mark.parametrize("kind, message", [
-    ("text", "cannot read photo photo.jpg: not a supported image format"),
-    ("empty", "cannot read photo photo.jpg: not a supported image format"),
-    ("truncated", "cannot read photo photo.jpg: "),
-    ("missing", "photo not found"),
-    ("directory", "photo not found"),
-])
+@pytest.mark.parametrize(
+    "kind, message",
+    [
+        ("text", "cannot read photo photo.jpg: not a supported image format"),
+        ("empty", "cannot read photo photo.jpg: not a supported image format"),
+        ("truncated", "cannot read photo photo.jpg: "),
+        ("missing", "photo not found"),
+        ("directory", "photo not found"),
+    ],
+)
 def test_load_photo_rejects_unreadable_input(tmp_path, kind, message):
     with pytest.raises(PrinterError) as exc:
         booth.load_photo(_bad_photo(tmp_path, kind))
@@ -686,6 +778,7 @@ def test_load_photo_rejects_decompression_bomb(tmp_path, monkeypatch):
 
 # --- story -------------------------------------------------------------------------------------
 
+
 def test_default_story_is_a_complete_valid_story():
     s = booth.DEFAULT_STORY
     assert all([s.headline, s.story, s.kicker, s.caption, s.byline])
@@ -693,8 +786,13 @@ def test_default_story_is_a_complete_valid_story():
 
 
 def test_story_file_round_trips_unusual_text(tmp_path):
-    data = {"headline": "Café « l'été » <b>“quoted”</b> & co", "story": "Line one…\nLine \"two\" — ok",
-            "kicker": "Naïve", "caption": "<script>x</script>", "byline": "By Zoë"}
+    data = {
+        "headline": "Café « l'été » <b>“quoted”</b> & co",
+        "story": 'Line one…\nLine "two" — ok',
+        "kicker": "Naïve",
+        "caption": "<script>x</script>",
+        "byline": "By Zoë",
+    }
     assert booth.load_story(_story_file(tmp_path, data)) == Story(**data)
 
 
@@ -702,18 +800,21 @@ def test_story_file_optional_fields_default_to_empty(tmp_path):
     assert booth.load_story(_story_file(tmp_path, {"headline": "H", "story": "S"})) == Story("H", "S", "", "", "")
 
 
-@pytest.mark.parametrize("content, message", [
-    ("{not json", "is not valid JSON"),
-    ("[1, 2]", "must hold a JSON object"),
-    ({"headline": "H"}, "is missing story"),
-    ({"story": "S"}, "is missing headline"),
-    ({"headline": "H", "story": "S", "colour": "red"}, "unknown field(s) in story file: colour"),
-    ({"headline": 5, "story": "S"}, "fields must be text: headline"),
-    ({"headline": "   ", "story": "S"}, "the story has an empty headline"),
-    ({"headline": "H", "story": "S" * 2501}, "story is too long (2501 characters, max 2500)"),
-    (b"\xff\xfe\x00bad", "is not UTF-8 text"),
-    ("x" * (64 * 1024 + 1), "larger than 64 KiB"),
-])
+@pytest.mark.parametrize(
+    "content, message",
+    [
+        ("{not json", "is not valid JSON"),
+        ("[1, 2]", "must hold a JSON object"),
+        ({"headline": "H"}, "is missing story"),
+        ({"story": "S"}, "is missing headline"),
+        ({"headline": "H", "story": "S", "colour": "red"}, "unknown field(s) in story file: colour"),
+        ({"headline": 5, "story": "S"}, "fields must be text: headline"),
+        ({"headline": "   ", "story": "S"}, "the story has an empty headline"),
+        ({"headline": "H", "story": "S" * 2501}, "story is too long (2501 characters, max 2500)"),
+        (b"\xff\xfe\x00bad", "is not UTF-8 text"),
+        ("x" * (64 * 1024 + 1), "larger than 64 KiB"),
+    ],
+)
 def test_story_file_errors(tmp_path, content, message):
     with pytest.raises(PrinterError) as exc:
         booth.load_story(_story_file(tmp_path, content))
@@ -732,17 +833,20 @@ def test_story_on_stdin_reads_like_the_same_file(tmp_path, stdin):
     assert booth.load_story(Path("-")) == booth.load_story(_story_file(tmp_path, data)) == Story(**data)
 
 
-@pytest.mark.parametrize("content, message", [
-    (b"", "story on stdin is not valid JSON"),
-    (b"{not json", "story on stdin is not valid JSON"),
-    (b"[1, 2]", "story on stdin must hold a JSON object"),
-    (b'{"headline": "H"}', "story on stdin is missing story"),
-    (b'{"headline": "H", "story": "S", "colour": "red"}', "unknown field(s) in story on stdin: colour"),
-    (b'{"headline": 5, "story": "S"}', "fields must be text: headline"),
-    (b'{"headline": "   ", "story": "S"}', "the story has an empty headline"),
-    (b"\xff\xfe\x00bad", "story on stdin is not UTF-8 text"),
-    (b"x" * (64 * 1024 + 1), "story on stdin is larger than 64 KiB"),
-])
+@pytest.mark.parametrize(
+    "content, message",
+    [
+        (b"", "story on stdin is not valid JSON"),
+        (b"{not json", "story on stdin is not valid JSON"),
+        (b"[1, 2]", "story on stdin must hold a JSON object"),
+        (b'{"headline": "H"}', "story on stdin is missing story"),
+        (b'{"headline": "H", "story": "S", "colour": "red"}', "unknown field(s) in story on stdin: colour"),
+        (b'{"headline": 5, "story": "S"}', "fields must be text: headline"),
+        (b'{"headline": "   ", "story": "S"}', "the story has an empty headline"),
+        (b"\xff\xfe\x00bad", "story on stdin is not UTF-8 text"),
+        (b"x" * (64 * 1024 + 1), "story on stdin is larger than 64 KiB"),
+    ],
+)
 def test_story_on_stdin_errors_match_the_file_errors(stdin, content, message):
     stdin(content)
     with pytest.raises(PrinterError) as exc:
@@ -780,8 +884,9 @@ def test_check_story_strips_control_characters_but_keeps_paragraphs():
 
 
 def test_line_breaks_in_one_line_fields_keep_words_apart():
-    s = booth.check_story(Story(headline="Hello\nWorld", story="One\rTwo", kicker="Big\r\nnews",
-                                caption="a\r\nb", byline="By\n\nJo"), 2)
+    s = booth.check_story(
+        Story(headline="Hello\nWorld", story="One\rTwo", kicker="Big\r\nnews", caption="a\r\nb", byline="By\n\nJo"), 2
+    )
     assert (s.headline, s.kicker, s.caption, s.byline) == ("Hello World", "Big news", "a b", "By Jo")
     assert s.story == "One\nTwo"  # in the story a lone carriage return is a line break too
 
@@ -798,14 +903,16 @@ def test_check_story_refuses_text_the_font_cannot_print():
 def test_accents_print_without_their_marks():
     def page(headline):
         return _render(Image.new("RGB", (40, 40), "white"), Story(headline=headline, story="S"), "daily")
+
     assert page("Café") == page("Café") == page("Cafe")
     assert page("Café") != page("Cafe?")
 
 
 def test_with_overrides_replaces_only_given_fields():
     base = Story(headline="Old", story="Body", kicker="K")
-    assert booth.with_overrides(base, headline="New", story=None, kicker=None, caption="Cap", byline=None) == \
-        Story(headline="New", story="Body", kicker="K", caption="Cap")
+    assert booth.with_overrides(base, headline="New", story=None, kicker=None, caption="Cap", byline=None) == Story(
+        headline="New", story="Body", kicker="K", caption="Cap"
+    )
     with pytest.raises(PrinterError) as exc:
         booth.with_overrides(base, story="")
     assert exc.value.exit_code == 2

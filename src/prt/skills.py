@@ -31,8 +31,8 @@ SKILL_FILE = "SKILL.md"
 
 # Where each agent reads skills from, under the home folder (or the project folder with --project).
 TARGETS = {
-    "claude": Path(".claude") / "skills",   # Claude Code
-    "agents": Path(".agents") / "skills",   # agents that follow the shared .agents/skills folder (e.g. Codex)
+    "claude": Path(".claude") / "skills",  # Claude Code
+    "agents": Path(".agents") / "skills",  # agents that follow the shared .agents/skills folder (e.g. Codex)
 }
 
 
@@ -45,19 +45,24 @@ class Skill:
 
     def files(self) -> list[Path]:
         """Every file of the skill, relative to its folder, in a stable order."""
-        return sorted(p.relative_to(self.path) for p in self.path.rglob("*")
-                      if p.is_file() and "__pycache__" not in p.parts)
+        return sorted(
+            p.relative_to(self.path) for p in self.path.rglob("*") if p.is_file() and "__pycache__" not in p.parts
+        )
 
     def to_dict(self) -> dict[str, Any]:
-        return {"name": self.name, "version": self.version, "description": self.description,
-                "files": [f.as_posix() for f in self.files()]}
+        return {
+            "name": self.name,
+            "version": self.version,
+            "description": self.description,
+            "files": [f.as_posix() for f in self.files()],
+        }
 
 
 @dataclass(frozen=True)
 class Installed:
     skill: str
     target: str  # claude, agents or dir
-    path: Path   # the skill's folder at the destination
+    path: Path  # the skill's folder at the destination
     status: str  # installed, updated, unchanged or replaced
 
     def to_dict(self) -> dict[str, Any]:
@@ -73,9 +78,11 @@ def source_dir() -> Path:
     repo = here.parent.parent  # src/prt -> the repository root
     if (repo / "pyproject.toml").is_file() and _has_skills(repo / "skills"):
         return repo / "skills"
-    raise PrinterError("the agent skills are missing from this prt install",
-                       hint="reinstall printer-cli, e.g. `uv tool install --reinstall printer-cli`",
-                       kind="skills_missing")
+    raise PrinterError(
+        "the agent skills are missing from this prt install",
+        hint="reinstall printer-cli, e.g. `uv tool install --reinstall printer-cli`",
+        kind="skills_missing",
+    )
 
 
 def _has_skills(folder: Path) -> bool:
@@ -104,8 +111,12 @@ def _read_skill(folder: Path) -> Skill:
             if m:
                 indent, key, value = m.groups()
                 fields[("metadata." if indent else "") + key] = _scalar(value)
-    return Skill(name=fields.get("name") or folder.name, description=fields.get("description", ""),
-                 version=fields.get("metadata.version") or None, path=folder)
+    return Skill(
+        name=fields.get("name") or folder.name,
+        description=fields.get("description", ""),
+        version=fields.get("metadata.version") or None,
+        path=folder,
+    )
 
 
 def _scalar(value: str) -> str:
@@ -125,8 +136,11 @@ def select(skills: list[Skill], names: list[str]) -> list[Skill]:
     by_name = {s.name: s for s in skills}
     unknown = [n for n in names if n not in by_name]
     if unknown:
-        raise PrinterError(f"no bundled skill named {', '.join(repr(n) for n in unknown)}",
-                           hint=f"bundled skills: {', '.join(by_name)} (see `prt skills list`)", exit_code=2)
+        raise PrinterError(
+            f"no bundled skill named {', '.join(repr(n) for n in unknown)}",
+            hint=f"bundled skills: {', '.join(by_name)} (see `prt skills list`)",
+            exit_code=2,
+        )
     return [by_name[n] for n in dict.fromkeys(names)]
 
 
@@ -136,8 +150,11 @@ def target_dir(target: str, base: Path) -> Path:
 
 
 def _in_the_way(skill: Skill, path: Path, what: str) -> PrinterError:
-    return PrinterError(f"cannot install {skill.name}: {path} is in the way ({what})",
-                        hint="nothing was installed; move it away and retry", kind="skill_exists")
+    return PrinterError(
+        f"cannot install {skill.name}: {path} is in the way ({what})",
+        hint="nothing was installed; move it away and retry",
+        kind="skill_exists",
+    )
 
 
 def _status(skill: Skill, dest: Path) -> tuple[str, list[str]]:
@@ -188,14 +205,18 @@ def install(skills: list[Skill], destinations: list[tuple[str, Path]], force: bo
             if dest.is_symlink():
                 linked.append(f"{dest} -> {os.readlink(dest)}")
     if linked and not force:
-        raise PrinterError(f"not installing into a skill folder that is a symlink to another folder: {_some(linked)}",
-                           hint="nothing was installed; remove the link, or re-run with --force to install into the "
-                                "folder it points at", kind="skill_exists")
+        raise PrinterError(
+            f"not installing into a skill folder that is a symlink to another folder: {_some(linked)}",
+            hint="nothing was installed; remove the link, or re-run with --force to install into the "
+            "folder it points at",
+            kind="skill_exists",
+        )
     if conflicts and not force:
-        raise PrinterError("not replacing skill files you have changed or that came from another version: "
-                           f"{_some(conflicts)}",
-                           hint="nothing was installed; re-run with --force to replace them with the bundled skills",
-                           kind="skill_exists")
+        raise PrinterError(
+            f"not replacing skill files you have changed or that came from another version: {_some(conflicts)}",
+            hint="nothing was installed; re-run with --force to replace them with the bundled skills",
+            kind="skill_exists",
+        )
     done = []
     undo = _Undo()
     try:
@@ -267,8 +288,10 @@ def _write(path: Path, data: bytes, undo: _Undo | None = None) -> None:
             undo.file(path)
         _replace(path, data)
     except OSError as exc:
-        raise PrinterError(f"cannot write {path}: {exc.strerror or exc}",
-                           hint="check that the folder exists and is writable; nothing was installed") from exc
+        raise PrinterError(
+            f"cannot write {path}: {exc.strerror or exc}",
+            hint="check that the folder exists and is writable; nothing was installed",
+        ) from exc
 
 
 def _replace(path: Path, data: bytes) -> None:

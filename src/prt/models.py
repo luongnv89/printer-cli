@@ -57,9 +57,21 @@ class Ink:
     def short(self) -> str:
         """Two-letter label used by compact views (PB, BK, C, M, Y …)."""
         n = self.name.lower().replace(" ink", "").replace(" toner", "").strip()
-        table = {"photo black": "PB", "black": "BK", "matte black": "MK", "cyan": "C",
-                 "magenta": "M", "yellow": "Y", "light cyan": "LC", "light magenta": "LM",
-                 "gray": "GY", "grey": "GY", "red": "R", "blue": "B", "green": "G"}
+        table = {
+            "photo black": "PB",
+            "black": "BK",
+            "matte black": "MK",
+            "cyan": "C",
+            "magenta": "M",
+            "yellow": "Y",
+            "light cyan": "LC",
+            "light magenta": "LM",
+            "gray": "GY",
+            "grey": "GY",
+            "red": "R",
+            "blue": "B",
+            "green": "G",
+        }
         return table.get(n, "".join(w[0] for w in n.split()).upper()[:2] or "?")
 
     @property
@@ -181,6 +193,7 @@ class PrintOptions:
 
 def to_dict(obj: Any) -> Any:
     """JSON-ready dict for any model (enums become their values)."""
+
     def convert(v: Any) -> Any:
         if isinstance(v, Enum):
             return v.value

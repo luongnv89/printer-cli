@@ -60,13 +60,17 @@ ADDRESS_LINES = 4  # ruled lines on the back; each line of the address is writte
 MULTILINE = ("message", "address")  # a newline starts a paragraph of the message, a line of the address
 MAX_POSTCARD_FILE = 64 * 1024
 EXPECTED = 'expected {"message": "..."}'
-FLIP = ("Put the card back in the photo tray turned over, the blank side facing the way the photo side did, with "
-        "the same edge going in first.")
+FLIP = (
+    "Put the card back in the photo tray turned over, the blank side facing the way the photo side did, with "
+    "the same edge going in first."
+)
 
 DEFAULT_POSTCARD = Postcard(
     greeting="Greetings from afar",
-    message=("The weather is lovely, the food is even better and the view is just like the picture on the "
-             "front.\nWish you were here!"),
+    message=(
+        "The weather is lovely, the food is even better and the view is just like the picture on the "
+        "front.\nWish you were here!"
+    ),
     signature="See you soon",
 )
 
@@ -79,19 +83,29 @@ def check_postcard(card: Postcard, exit_code: int) -> Postcard:
     for name in FIELDS:
         value = _clean(getattr(card, name), keep_newlines=name in MULTILINE)
         if name in REQUIRED and not value:
-            raise PrinterError(f"the postcard has an empty {name}", hint=f"give the {name} some text",
-                               exit_code=exit_code)
+            raise PrinterError(
+                f"the postcard has an empty {name}", hint=f"give the {name} some text", exit_code=exit_code
+            )
         if len(value) > LIMITS[name]:
-            raise PrinterError(f"{name} is too long ({len(value)} characters, max {LIMITS[name]})",
-                               hint=f"shorten the {name} so it fits on the postcard", exit_code=exit_code)
+            raise PrinterError(
+                f"{name} is too long ({len(value)} characters, max {LIMITS[name]})",
+                hint=f"shorten the {name} so it fits on the postcard",
+                exit_code=exit_code,
+            )
         if name == "address" and value.count("\n") >= ADDRESS_LINES:
-            raise PrinterError(f"the address has {value.count(chr(10)) + 1} lines, max {ADDRESS_LINES}",
-                               hint=f"write the address on at most {ADDRESS_LINES} lines", exit_code=exit_code)
+            raise PrinterError(
+                f"the address has {value.count(chr(10)) + 1} lines, max {ADDRESS_LINES}",
+                hint=f"write the address on at most {ADDRESS_LINES} lines",
+                exit_code=exit_code,
+            )
         unprintable = sorted({c for c in value if c not in "?\n" and _char_in(face, c) == "?"})
         if unprintable:
             shown = ", ".join(f"{c} (U+{ord(c):04X})" for c in unprintable[:10])
-            raise PrinterError(f"{name} has characters the handwriting font cannot print: {shown}",
-                               hint="write it in Latin, Greek or Cyrillic letters (no emoji)", exit_code=exit_code)
+            raise PrinterError(
+                f"{name} has characters the handwriting font cannot print: {shown}",
+                hint="write it in Latin, Greek or Cyrillic letters (no emoji)",
+                exit_code=exit_code,
+            )
         clean[name] = value
     return Postcard(**clean)
 
@@ -109,8 +123,11 @@ def load_postcard(path: Path) -> Postcard:
         too_big = path.stat().st_size > MAX_POSTCARD_FILE
         content = b"" if too_big else path.read_bytes()
     if too_big:
-        raise PrinterError(f"{name} is larger than {MAX_POSTCARD_FILE // 1024} KiB",
-                           hint="a postcard holds a short message and an address", exit_code=3)
+        raise PrinterError(
+            f"{name} is larger than {MAX_POSTCARD_FILE // 1024} KiB",
+            hint="a postcard holds a short message and an address",
+            exit_code=3,
+        )
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -124,21 +141,28 @@ def parse_postcard(text: str, name: str = "postcard", kind: str = "postcard") ->
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=EXPECTED,
-                           exit_code=3) from exc
+        raise PrinterError(
+            f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=EXPECTED, exit_code=3
+        ) from exc
     if not isinstance(data, dict):
         raise PrinterError(f"{name} must hold a JSON object", hint=EXPECTED, exit_code=3)
     unknown = sorted(set(data) - set(FIELDS))
     if unknown:
-        raise PrinterError(f"unknown field(s) in {kind}: {', '.join(unknown)}",
-                           hint="allowed fields: " + ", ".join(FIELDS), exit_code=3)
+        raise PrinterError(
+            f"unknown field(s) in {kind}: {', '.join(unknown)}",
+            hint="allowed fields: " + ", ".join(FIELDS),
+            exit_code=3,
+        )
     missing = [field for field in REQUIRED if field not in data]
     if missing:
         raise PrinterError(f"{name} is missing {' and '.join(missing)}", hint=EXPECTED, exit_code=3)
     wrong = [field for field, value in data.items() if not isinstance(value, str)]
     if wrong:
-        raise PrinterError(f"{kind} fields must be text: {', '.join(sorted(wrong))}",
-                           hint='quote the values, e.g. "address": "Jo Smith\\n12 High Street"', exit_code=3)
+        raise PrinterError(
+            f"{kind} fields must be text: {', '.join(sorted(wrong))}",
+            hint='quote the values, e.g. "address": "Jo Smith\\n12 High Street"',
+            exit_code=3,
+        )
     return check_postcard(Postcard(**data), exit_code=3)
 
 
@@ -169,8 +193,9 @@ def front(photo: Image.Image, card: Postcard, cut: Cuts) -> Image.Image:
     a see-through band (none without a greeting)."""
     page = Image.new("RGB", (W, H), CARD)
     x0, y0, x1, y1 = PHOTO_BOX
-    fitted = ImageOps.fit(photo.convert("RGB"), (x1 - x0, y1 - y0), method=Image.Resampling.LANCZOS,
-                          centering=(0.5, 0.4))
+    fitted = ImageOps.fit(
+        photo.convert("RGB"), (x1 - x0, y1 - y0), method=Image.Resampling.LANCZOS, centering=(0.5, 0.4)
+    )
     page.paste(fitted, (x0, y0))
     if card.greeting:
         font, size, lines, cut_greeting = fit_greeting(card.greeting, x1 - x0 - 2 * GREETING_PAD)
@@ -258,8 +283,9 @@ def _address(d: ImageDraw.ImageDraw, address: str, cut: Cuts) -> None:
         d.line([(ADDRESS_LEFT, baseline), (ADDRESS_RIGHT, baseline)], fill=PRINTED, width=2)
         if i >= len(lines):
             continue
-        font, _, shown, line_cut = _fit_face(lines[i], "hand", ADDRESS_SIZE, ADDRESS_MIN,
-                                             ADDRESS_RIGHT - ADDRESS_LEFT - 16, 1)
+        font, _, shown, line_cut = _fit_face(
+            lines[i], "hand", ADDRESS_SIZE, ADDRESS_MIN, ADDRESS_RIGHT - ADDRESS_LEFT - 16, 1
+        )
         d.text((ADDRESS_LEFT + 8, baseline - 14), shown[0] if shown else "", font=font, fill=PEN, anchor="ls")
         if line_cut and "address" not in cut:
             cut["address"] = Cut(done + line_cut.max_fit, len(address))
@@ -289,8 +315,9 @@ def back(card: Postcard, cut: Cuts) -> Image.Image:
         y += _lead(size) if line else _lead(size) // 2
     if card.signature:
         sx0, sy0, sx1, sy1 = SIGNATURE_BOX
-        font, size, shown, signature_cut = _fit_face(card.signature, "hand", SIGNATURE_SIZE, SIGNATURE_MIN,
-                                                     sx1 - sx0, 1)
+        font, size, shown, signature_cut = _fit_face(
+            card.signature, "hand", SIGNATURE_SIZE, SIGNATURE_MIN, sx1 - sx0, 1
+        )
         d.text((sx1, sy1 - 20), shown[0] if shown else "", font=font, fill=PEN, anchor="rs")
         if signature_cut:
             cut["signature"] = signature_cut
@@ -327,12 +354,21 @@ def side_paths(path: Path, fmt: str) -> list[Path]:
 def check_side(side: str, duplex: bool) -> None:
     """``--duplex`` prints both sides, so it cannot go with one side alone (exit code 2)."""
     if duplex and side != "both":
-        raise PrinterError(f"--duplex prints both sides, it cannot go with --side {side}",
-                           hint="drop --side, or drop --duplex", exit_code=2)
+        raise PrinterError(
+            f"--duplex prints both sides, it cannot go with --side {side}",
+            hint="drop --side, or drop --duplex",
+            exit_code=2,
+        )
 
 
-def print_method(side: str, duplex: bool, paper: Paper, two_sided: Callable[[], bool],
-                 queue: Callable[[], str | None], interactive: bool) -> tuple[str, str | None]:
+def print_method(
+    side: str,
+    duplex: bool,
+    paper: Paper,
+    two_sided: Callable[[], bool],
+    queue: Callable[[], str | None],
+    interactive: bool,
+) -> tuple[str, str | None]:
     """How to print ``side`` ("front", "back" or "both"): returns (method, CUPS queue).
 
     The method is ``front`` or ``back`` (that side alone), ``duplex`` (both sides in one two-sided job through the
@@ -348,20 +384,29 @@ def print_method(side: str, duplex: bool, paper: Paper, two_sided: Callable[[], 
         return side, None
     if duplex:
         if not two_sided():
-            raise PrinterError("the printer does not report two-sided printing",
-                               hint="drop --duplex to turn the card over by hand", kind="duplex_unavailable")
+            raise PrinterError(
+                "the printer does not report two-sided printing",
+                hint="drop --duplex to turn the card over by hand",
+                kind="duplex_unavailable",
+            )
         found = queue()
         if not found:
-            raise PrinterError("a two-sided postcard goes through the printer's CUPS queue, and none was found",
-                               hint="add the printer in System Settings → Printers (or `lpadmin`), or drop "
-                                    "--duplex to turn the card over by hand", kind="duplex_unavailable")
+            raise PrinterError(
+                "a two-sided postcard goes through the printer's CUPS queue, and none was found",
+                hint="add the printer in System Settings → Printers (or `lpadmin`), or drop "
+                "--duplex to turn the card over by hand",
+                kind="duplex_unavailable",
+            )
         return "duplex", found
     if paper.duplex and two_sided():
         found = queue()
         if found:
             return "duplex", found
     if not interactive:
-        raise PrinterError("printing both sides means turning the card over between them, and there is no "
-                           "terminal to say when", exit_code=2, kind="manual_flip_required",
-                           hint="print one side at a time: --side front, turn the card over, then --side back")
+        raise PrinterError(
+            "printing both sides means turning the card over between them, and there is no terminal to say when",
+            exit_code=2,
+            kind="manual_flip_required",
+            hint="print one side at a time: --side front, turn the card over, then --side back",
+        )
     return "flip", None

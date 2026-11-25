@@ -53,35 +53,178 @@ EXPECTED = 'expected {"title": "...", "words": ["...", "...", ...]} with at leas
 # be dealt different. Names are matched without regard to case, and with "-" or "_" read as a space.
 THEMES: dict[str, tuple[str, ...]] = {
     "road trip": (
-        "Red car", "Truck", "Motorbike", "Bridge", "Tunnel", "Cow", "Horse", "Sheep", "Gas station", "Stop sign",
-        "Traffic light", "Bus", "Train", "Airplane", "Windmill", "River", "Lake", "Mountain", "Tractor",
-        "Police car", "Camper van", "Bicycle", "Speed limit sign", "Road works", "Church", "Farm", "Dog in a car",
-        "Rest stop", "Billboard", "Yellow car", "Fire truck", "Motorway exit", "Roundabout", "Picnic table", "Flag",
+        "Red car",
+        "Truck",
+        "Motorbike",
+        "Bridge",
+        "Tunnel",
+        "Cow",
+        "Horse",
+        "Sheep",
+        "Gas station",
+        "Stop sign",
+        "Traffic light",
+        "Bus",
+        "Train",
+        "Airplane",
+        "Windmill",
+        "River",
+        "Lake",
+        "Mountain",
+        "Tractor",
+        "Police car",
+        "Camper van",
+        "Bicycle",
+        "Speed limit sign",
+        "Road works",
+        "Church",
+        "Farm",
+        "Dog in a car",
+        "Rest stop",
+        "Billboard",
+        "Yellow car",
+        "Fire truck",
+        "Motorway exit",
+        "Roundabout",
+        "Picnic table",
+        "Flag",
         "Toll booth",
     ),
     "beach": (
-        "Seashell", "Crab", "Sandcastle", "Bucket", "Spade", "Seagull", "Lifeguard", "Sunglasses", "Beach ball",
-        "Umbrella", "Towel", "Ice cream", "Boat", "Surfboard", "Starfish", "Seaweed", "Big wave", "Kite",
-        "Flip-flops", "Sun hat", "Lighthouse", "Pier", "Rock pool", "Footprints", "Sunscreen", "Dog on the beach",
-        "Swimsuit", "Jellyfish", "Sailboat", "Pebble", "Driftwood", "Snorkel",
+        "Seashell",
+        "Crab",
+        "Sandcastle",
+        "Bucket",
+        "Spade",
+        "Seagull",
+        "Lifeguard",
+        "Sunglasses",
+        "Beach ball",
+        "Umbrella",
+        "Towel",
+        "Ice cream",
+        "Boat",
+        "Surfboard",
+        "Starfish",
+        "Seaweed",
+        "Big wave",
+        "Kite",
+        "Flip-flops",
+        "Sun hat",
+        "Lighthouse",
+        "Pier",
+        "Rock pool",
+        "Footprints",
+        "Sunscreen",
+        "Dog on the beach",
+        "Swimsuit",
+        "Jellyfish",
+        "Sailboat",
+        "Pebble",
+        "Driftwood",
+        "Snorkel",
     ),
     "zoo": (
-        "Lion", "Tiger", "Elephant", "Giraffe", "Zebra", "Monkey", "Penguin", "Flamingo", "Hippo", "Rhino",
-        "Kangaroo", "Koala", "Panda", "Gorilla", "Crocodile", "Snake", "Parrot", "Owl", "Tortoise", "Seal",
-        "Meerkat", "Camel", "Brown bear", "Wolf", "Lemur", "Peacock", "Zookeeper", "Zoo map", "Feeding time",
-        "Gift shop", "Polar bear", "Otter",
+        "Lion",
+        "Tiger",
+        "Elephant",
+        "Giraffe",
+        "Zebra",
+        "Monkey",
+        "Penguin",
+        "Flamingo",
+        "Hippo",
+        "Rhino",
+        "Kangaroo",
+        "Koala",
+        "Panda",
+        "Gorilla",
+        "Crocodile",
+        "Snake",
+        "Parrot",
+        "Owl",
+        "Tortoise",
+        "Seal",
+        "Meerkat",
+        "Camel",
+        "Brown bear",
+        "Wolf",
+        "Lemur",
+        "Peacock",
+        "Zookeeper",
+        "Zoo map",
+        "Feeding time",
+        "Gift shop",
+        "Polar bear",
+        "Otter",
     ),
     "birthday": (
-        "Cake", "Candles", "Balloon", "Present", "Party hat", "Wrapping paper", "Ribbon", "Birthday card",
-        "Confetti", "Streamers", "Ice cream", "Cupcake", "Juice", "Pizza", "Party games", "Music", "Dancing",
-        "Photo", "Party bag", "Sweets", "Crisps", "Birthday song", "Make a wish", "Banner", "Magic trick",
-        "Pass the parcel", "Musical chairs", "Sandwiches", "Thank you", "Best friend", "Lemonade", "Bow",
+        "Cake",
+        "Candles",
+        "Balloon",
+        "Present",
+        "Party hat",
+        "Wrapping paper",
+        "Ribbon",
+        "Birthday card",
+        "Confetti",
+        "Streamers",
+        "Ice cream",
+        "Cupcake",
+        "Juice",
+        "Pizza",
+        "Party games",
+        "Music",
+        "Dancing",
+        "Photo",
+        "Party bag",
+        "Sweets",
+        "Crisps",
+        "Birthday song",
+        "Make a wish",
+        "Banner",
+        "Magic trick",
+        "Pass the parcel",
+        "Musical chairs",
+        "Sandwiches",
+        "Thank you",
+        "Best friend",
+        "Lemonade",
+        "Bow",
     ),
     "space": (
-        "Rocket", "Astronaut", "Moon", "Sun", "Star", "Planet", "Comet", "Meteor", "Galaxy", "Alien", "UFO",
-        "Satellite", "Telescope", "Mars", "Saturn", "Jupiter", "Earth", "Space suit", "Helmet", "Launch pad",
-        "Countdown", "Black hole", "Shooting star", "Space station", "Moon boot", "Crater", "Orbit", "Nebula",
-        "Rover", "Asteroid", "Milky Way", "Constellation",
+        "Rocket",
+        "Astronaut",
+        "Moon",
+        "Sun",
+        "Star",
+        "Planet",
+        "Comet",
+        "Meteor",
+        "Galaxy",
+        "Alien",
+        "UFO",
+        "Satellite",
+        "Telescope",
+        "Mars",
+        "Saturn",
+        "Jupiter",
+        "Earth",
+        "Space suit",
+        "Helmet",
+        "Launch pad",
+        "Countdown",
+        "Black hole",
+        "Shooting star",
+        "Space station",
+        "Moon boot",
+        "Crater",
+        "Orbit",
+        "Nebula",
+        "Rover",
+        "Asteroid",
+        "Milky Way",
+        "Constellation",
     ),
 }
 
@@ -90,6 +233,7 @@ THEMES: dict[str, tuple[str, ...]] = {
 class Bingo:
     """One game: the words the cards are dealt from (each different), the title on every card and the text of the
     free centre square."""
+
     words: tuple[str, ...]
     title: str = ""
     free: str = DEFAULT_FREE
@@ -109,15 +253,21 @@ def _printable_check(name: str, value: str, exit_code: int) -> None:
     unprintable = sorted({c for c in value if c != "?" and _char_in(face, c) == "?"})
     if unprintable:
         shown = ", ".join(f"{c} (U+{ord(c):04X})" for c in unprintable[:10])
-        raise PrinterError(f"{name} has characters the handwriting font cannot print: {shown}",
-                           hint="write it in Latin or Cyrillic letters (no emoji)", exit_code=exit_code)
+        raise PrinterError(
+            f"{name} has characters the handwriting font cannot print: {shown}",
+            hint="write it in Latin or Cyrillic letters (no emoji)",
+            exit_code=exit_code,
+        )
 
 
 def _check_text(name: str, value: str, limit: int, exit_code: int) -> str:
     value = _clean(value, keep_newlines=False)
     if len(value) > limit:
-        raise PrinterError(f"{name} is too long ({len(value)} characters, max {limit})",
-                           hint=f"shorten the {name} so it fits on the card", exit_code=exit_code)
+        raise PrinterError(
+            f"{name} is too long ({len(value)} characters, max {limit})",
+            hint=f"shorten the {name} so it fits on the card",
+            exit_code=exit_code,
+        )
     _printable_check(name, value, exit_code)
     return value
 
@@ -128,31 +278,42 @@ def check_bingo(game: Bingo, exit_code: int) -> Bingo:
     title = _check_text("title", game.title, LIMITS["title"], exit_code)
     free = _check_text("free", game.free, LIMITS["free"], exit_code) or DEFAULT_FREE
     if len(game.words) > MAX_WORDS:
-        raise PrinterError(f"the bingo game has {len(game.words)} words, more than {MAX_WORDS}",
-                           hint=f"list at most {MAX_WORDS} words", exit_code=exit_code)
+        raise PrinterError(
+            f"the bingo game has {len(game.words)} words, more than {MAX_WORDS}",
+            hint=f"list at most {MAX_WORDS} words",
+            exit_code=exit_code,
+        )
     words: list[str] = []
     seen: dict[str, int] = {}
     for i, raw in enumerate(game.words):
         name = f"words[{i}]"
         word = _clean(raw, keep_newlines=False)
         if not word:
-            raise PrinterError(f"{name} is empty", hint="give every word some text, or leave it out",
-                               exit_code=exit_code)
+            raise PrinterError(
+                f"{name} is empty", hint="give every word some text, or leave it out", exit_code=exit_code
+            )
         if len(word) > MAX_WORD:
-            raise PrinterError(f"{name} is too long ({len(word)} characters, max {MAX_WORD})",
-                               hint="shorten it so it fits its square", exit_code=exit_code)
+            raise PrinterError(
+                f"{name} is too long ({len(word)} characters, max {MAX_WORD})",
+                hint="shorten it so it fits its square",
+                exit_code=exit_code,
+            )
         _printable_check(name, word, exit_code)
         key = word.casefold()
         if key in seen:
-            raise PrinterError(f"{name} repeats words[{seen[key]}] ({word!r})",
-                               hint="every word on a bingo card must be different: leave the repeat out",
-                               exit_code=exit_code)
+            raise PrinterError(
+                f"{name} repeats words[{seen[key]}] ({word!r})",
+                hint="every word on a bingo card must be different: leave the repeat out",
+                exit_code=exit_code,
+            )
         seen[key] = i
         words.append(word)
     if len(words) < MIN_WORDS:
-        raise PrinterError(f"the bingo game has {len(words)} words, fewer than {MIN_WORDS}",
-                           hint=f"a card holds {PER_CARD} words, and different cards need at least {MIN_WORDS}",
-                           exit_code=exit_code)
+        raise PrinterError(
+            f"the bingo game has {len(words)} words, fewer than {MIN_WORDS}",
+            hint=f"a card holds {PER_CARD} words, and different cards need at least {MIN_WORDS}",
+            exit_code=exit_code,
+        )
     return Bingo(words=tuple(words), title=title, free=free)
 
 
@@ -169,8 +330,11 @@ def load_bingo(path: Path) -> Bingo:
         too_big = path.stat().st_size > MAX_BINGO_FILE
         content = b"" if too_big else path.read_bytes()
     if too_big:
-        raise PrinterError(f"{name} is larger than {MAX_BINGO_FILE // 1024} KiB",
-                           hint="a words file holds a title and a list of words", exit_code=3)
+        raise PrinterError(
+            f"{name} is larger than {MAX_BINGO_FILE // 1024} KiB",
+            hint="a words file holds a title and a list of words",
+            exit_code=3,
+        )
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -184,14 +348,18 @@ def parse_bingo(text: str, name: str = "words file", kind: str = "words file") -
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=EXPECTED,
-                           exit_code=3) from exc
+        raise PrinterError(
+            f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=EXPECTED, exit_code=3
+        ) from exc
     if not isinstance(data, dict):
         raise PrinterError(f"{name} must hold a JSON object", hint=EXPECTED, exit_code=3)
     unknown = sorted(set(data) - set(FIELDS))
     if unknown:
-        raise PrinterError(f"unknown field(s) in {kind}: {', '.join(unknown)}",
-                           hint="allowed fields: " + ", ".join(FIELDS), exit_code=3)
+        raise PrinterError(
+            f"unknown field(s) in {kind}: {', '.join(unknown)}",
+            hint="allowed fields: " + ", ".join(FIELDS),
+            exit_code=3,
+        )
     if "words" not in data:
         raise PrinterError(f"{name} is missing words", hint=EXPECTED, exit_code=3)
     words = data["words"]
@@ -200,8 +368,7 @@ def parse_bingo(text: str, name: str = "words file", kind: str = "words file") -
     wrong = sorted(f for f in ("title", "free") if f in data and not isinstance(data[f], str))
     if wrong:
         raise PrinterError(f"{kind} fields must be text: {', '.join(wrong)}", hint=EXPECTED, exit_code=3)
-    return check_bingo(Bingo(words=tuple(words), title=data.get("title", ""), free=data.get("free", "")),
-                       exit_code=3)
+    return check_bingo(Bingo(words=tuple(words), title=data.get("title", ""), free=data.get("free", "")), exit_code=3)
 
 
 def game(theme: str | None, words: Bingo | None = None) -> tuple[Bingo, str | None]:
@@ -217,9 +384,13 @@ def game(theme: str | None, words: Bingo | None = None) -> tuple[Bingo, str | No
     if words is None:
         bundled = theme_key(theme if theme is not None else DEFAULT_THEME)
         if bundled not in THEMES:
-            raise PrinterError(f"unknown bingo theme: {theme}",
-                               hint=f"choose one of: {', '.join(THEMES)}; or give your own words with "
-                                    "--words-file FILE (or - for stdin)", exit_code=2, kind="unknown_theme")
+            raise PrinterError(
+                f"unknown bingo theme: {theme}",
+                hint=f"choose one of: {', '.join(THEMES)}; or give your own words with "
+                "--words-file FILE (or - for stdin)",
+                exit_code=2,
+                kind="unknown_theme",
+            )
         words = Bingo(words=THEMES[bundled])
         theme = bundled
     title = words.title
@@ -243,9 +414,11 @@ def deal(count: int, n: int, seed: int) -> list[tuple[int, ...]]:
     cards; ``n`` larger than the number of different cards ``count`` words can make is refused (exit code 3)."""
     possible = math.comb(count, PER_CARD)
     if n > possible:
-        raise PrinterError(f"{count} words make only {possible} different bingo cards, not {n}",
-                           hint=f"add more words (each one more makes many more cards), or ask for at most "
-                                f"{possible} cards", exit_code=3)
+        raise PrinterError(
+            f"{count} words make only {possible} different bingo cards, not {n}",
+            hint=f"add more words (each one more makes many more cards), or ask for at most {possible} cards",
+            exit_code=3,
+        )
     rng = random.Random(seed)
     if possible <= SMALL_DEAL:
         # Few enough to list: each card is the words left off it, so draw n different leave-out sets.
@@ -309,8 +482,11 @@ def _fit_word(word: str, width: int, height: int | None = None):
         font = fonts.face("hand", size)
         printable = _printable_face(word, font)
         lines = _wrap(printable, font, width)
-        if (len(lines) <= WORD_LINES and len(lines) * _lead(size) <= height
-                and all(font.getlength(part) <= width for part in printable.split())):
+        if (
+            len(lines) <= WORD_LINES
+            and len(lines) * _lead(size) <= height
+            and all(font.getlength(part) <= width for part in printable.split())
+        ):
             return font, size, lines, None
     return _fit_face(word, "hand", WORD_MIN, WORD_MIN, width, max(1, min(WORD_LINES, height // _lead(WORD_MIN))))
 
@@ -338,8 +514,9 @@ def compose_card(game: Bingo, card: tuple[int, ...], number: int, of: int) -> tu
     for k, (letter, colour) in enumerate(zip(LETTERS, LETTER_COLOURS)):
         x0 = GRID_X + k * CELL
         d.rounded_rectangle((x0 + 8, head_top + 8, x0 + CELL - 8, top - 10), radius=26, fill=colour)
-        d.text((x0 + CELL / 2, head_top + (HEADER_H - 2) / 2), letter, font=letter_font, fill=(255, 255, 255),
-               anchor="mm")
+        d.text(
+            (x0 + CELL / 2, head_top + (HEADER_H - 2) / 2), letter, font=letter_font, fill=(255, 255, 255), anchor="mm"
+        )
     squares = list(card)
     centre = SIZE * SIZE // 2
     for k in range(SIZE * SIZE):

@@ -136,6 +136,8 @@ uv run prt -p demo status  # run the CLI from the checkout
 
 The tests use the demo printer (`FakeDriver` replaying `src/prt/fixtures/epson-xp6000.json`) and a temporary config, cache and home folder (`tests/conftest.py`). A test must never touch the real `~/.config/prt`, `~/.cache/prt`, `~/.claude` or `~/.agents`.
 
+Git hooks lint and format each commit and run the tests related to it; each push runs the whole suite and `scripts/e2e_test.sh`, every command against the demo printer. Install them once with `pre-commit install && pre-commit install --hook-type pre-push`, and never bypass them with `--no-verify`: CI re-runs both stages on every pull request.
+
 ### Layout
 
 | Path | What it holds |

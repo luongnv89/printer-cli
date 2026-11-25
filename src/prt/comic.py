@@ -59,6 +59,7 @@ EXPECTED = 'expected {"panels": [{"bubbles": [{"text": "..."}]}, ...]}'
 @dataclass(frozen=True)
 class Bubble:
     """One bubble: its words, which band and side of the panel it sits in, where its tail points and its shape."""
+
     text: str
     position: str = ""  # one of POSITIONS; "" takes DEFAULT_POSITIONS by the bubble's place in its panel
     tail: str = "center"  # one of TAILS
@@ -68,6 +69,7 @@ class Bubble:
 @dataclass(frozen=True)
 class Panel:
     """One panel: the bubbles over its photo, and an optional narration caption."""
+
     bubbles: tuple[Bubble, ...] = ()
     caption: str = ""
 
@@ -87,12 +89,14 @@ DEFAULT_COMIC = Comic(
     title="The Big Day",
     byline="A prt comic",
     panels=(
-        Panel(caption="It started like any other morning...",
-              bubbles=(Bubble("Is the printer even on?"),)),
-        Panel(bubbles=(Bubble("It says the ink is fine!"),
-                       Bubble("Too easy. Something is up.", position="top-right", kind="thought"))),
-        Panel(caption="Moments later",
-              bubbles=(Bubble("Wait... is that us on the page?", position="top"),)),
+        Panel(caption="It started like any other morning...", bubbles=(Bubble("Is the printer even on?"),)),
+        Panel(
+            bubbles=(
+                Bubble("It says the ink is fine!"),
+                Bubble("Too easy. Something is up.", position="top-right", kind="thought"),
+            )
+        ),
+        Panel(caption="Moments later", bubbles=(Bubble("Wait... is that us on the page?", position="top"),)),
         Panel(bubbles=(Bubble("We look amazing!", position="bottom-left"),)),
         Panel(bubbles=(Bubble("Print another one!", tail="left"),)),
         Panel(caption="The end... or is it?", bubbles=(Bubble("Same time tomorrow?", position="top-right"),)),
@@ -103,15 +107,26 @@ DEFAULT_COMIC = Comic(
 def to_dict(comic: Comic) -> dict[str, Any]:
     """The comic as a comic file holds it, leaving out what is empty or the default (``prt schema comic``'s
     example)."""
+
     def bubble(b: Bubble) -> dict[str, str]:
         out = {"text": b.text}
-        out.update({k: v for k, v, default in (("position", b.position, ""), ("tail", b.tail, "center"),
-                                                ("kind", b.kind, "speech")) if v != default})
+        out.update(
+            {
+                k: v
+                for k, v, default in (
+                    ("position", b.position, ""),
+                    ("tail", b.tail, "center"),
+                    ("kind", b.kind, "speech"),
+                )
+                if v != default
+            }
+        )
         return out
 
     def panel(p: Panel) -> dict[str, Any]:
         out: dict[str, Any] = {"caption": p.caption} if p.caption else {}
         return {**out, "bubbles": [bubble(b) for b in p.bubbles]} if p.bubbles else out
+
     head = {k: v for k, v in (("title", comic.title), ("byline", comic.byline)) if v}
     return {**head, "panels": [panel(p) for p in comic.panels]}
 
@@ -119,23 +134,29 @@ def to_dict(comic: Comic) -> dict[str, Any]:
 def default_comic(panels: int) -> Comic:
     """The built-in comic cut to ``panels`` panels: its first ones and, last, its punchline."""
     check_count(panels)
-    return check_comic(replace(DEFAULT_COMIC, panels=DEFAULT_COMIC.panels[:panels - 1] + DEFAULT_COMIC.panels[-1:]),
-                       exit_code=2)
+    return check_comic(
+        replace(DEFAULT_COMIC, panels=DEFAULT_COMIC.panels[: panels - 1] + DEFAULT_COMIC.panels[-1:]), exit_code=2
+    )
 
 
 def check_count(n: int) -> None:
     """A comic takes :data:`MIN_PANELS` to :data:`MAX_PANELS` photos (exit code 2 otherwise)."""
     if not MIN_PANELS <= n <= MAX_PANELS:
-        raise PrinterError(f"a comic strip takes {MIN_PANELS} to {MAX_PANELS} photos, got {n}",
-                           hint="give one photo per panel, in reading order (repeat one to use it twice)",
-                           exit_code=2)
+        raise PrinterError(
+            f"a comic strip takes {MIN_PANELS} to {MAX_PANELS} photos, got {n}",
+            hint="give one photo per panel, in reading order (repeat one to use it twice)",
+            exit_code=2,
+        )
 
 
 def check_panels(comic: Comic, photos: int) -> None:
     """The comic must have one panel per photo (exit code 2 otherwise)."""
     if len(comic.panels) != photos:
-        raise PrinterError(f"the comic has {len(comic.panels)} panels but {photos} photos were given",
-                           hint="give one photo per panel, in the order of the panels", exit_code=2)
+        raise PrinterError(
+            f"the comic has {len(comic.panels)} panels but {photos} photos were given",
+            hint="give one photo per panel, in the order of the panels",
+            exit_code=2,
+        )
 
 
 def _printable_check(where: str, value: str, exit_code: int) -> None:
@@ -143,18 +164,23 @@ def _printable_check(where: str, value: str, exit_code: int) -> None:
     unprintable = sorted({c for c in value if c != "?" and _char_in(face, c) == "?"})
     if unprintable:
         shown = ", ".join(f"{c} (U+{ord(c):04X})" for c in unprintable[:10])
-        raise PrinterError(f"{where} has characters the handwriting font cannot print: {shown}",
-                           hint="write it in Latin or Cyrillic letters (no emoji)", exit_code=exit_code)
+        raise PrinterError(
+            f"{where} has characters the handwriting font cannot print: {shown}",
+            hint="write it in Latin or Cyrillic letters (no emoji)",
+            exit_code=exit_code,
+        )
 
 
 def _text(where: str, raw: str, limit: int, exit_code: int, required: bool = False) -> str:
     value = _clean(raw, keep_newlines=False)
     if required and not value:
-        raise PrinterError(f"{where} is empty", hint="give it some text, or leave the bubble out",
-                           exit_code=exit_code)
+        raise PrinterError(f"{where} is empty", hint="give it some text, or leave the bubble out", exit_code=exit_code)
     if len(value) > limit:
-        raise PrinterError(f"{where} is too long ({len(value)} characters, max {limit})",
-                           hint=f"shorten it to {limit} characters or fewer", exit_code=exit_code)
+        raise PrinterError(
+            f"{where} is too long ({len(value)} characters, max {limit})",
+            hint=f"shorten it to {limit} characters or fewer",
+            exit_code=exit_code,
+        )
     _printable_check(where, value, exit_code)
     return value
 
@@ -163,28 +189,49 @@ def check_comic(comic: Comic, exit_code: int) -> Comic:
     """Normalise whitespace, fill in each bubble's default position, and enforce the number of panels and bubbles,
     the known positions, tails and kinds, the length limits and printable characters."""
     if not MIN_PANELS <= len(comic.panels) <= MAX_PANELS:
-        raise PrinterError(f"the comic has {len(comic.panels)} panels; a comic strip has {MIN_PANELS} to "
-                           f"{MAX_PANELS}", hint="give one panel per photo", exit_code=exit_code)
+        raise PrinterError(
+            f"the comic has {len(comic.panels)} panels; a comic strip has {MIN_PANELS} to {MAX_PANELS}",
+            hint="give one panel per photo",
+            exit_code=exit_code,
+        )
     panels = []
     for i, panel in enumerate(comic.panels):
         if len(panel.bubbles) > MAX_BUBBLES:
-            raise PrinterError(f"panels[{i}] has {len(panel.bubbles)} bubbles, more than {MAX_BUBBLES}",
-                               hint=f"keep to {MAX_BUBBLES} bubbles a panel", exit_code=exit_code)
+            raise PrinterError(
+                f"panels[{i}] has {len(panel.bubbles)} bubbles, more than {MAX_BUBBLES}",
+                hint=f"keep to {MAX_BUBBLES} bubbles a panel",
+                exit_code=exit_code,
+            )
         bubbles = []
         for j, bubble in enumerate(panel.bubbles):
             where = f"panels[{i}].bubbles[{j}]"
             position = bubble.position or DEFAULT_POSITIONS[j]
-            for name, value, allowed in (("position", position, POSITIONS), ("tail", bubble.tail, TAILS),
-                                         ("kind", bubble.kind, BUBBLE_KINDS)):
+            for name, value, allowed in (
+                ("position", position, POSITIONS),
+                ("tail", bubble.tail, TAILS),
+                ("kind", bubble.kind, BUBBLE_KINDS),
+            ):
                 if value not in allowed:
-                    raise PrinterError(f"{where}.{name} must be one of {', '.join(allowed)}, not {value!r}",
-                                       hint=EXPECTED, exit_code=exit_code)
-            bubbles.append(Bubble(_text(f"{where}.text", bubble.text, LIMITS["text"], exit_code, required=True),
-                                  position, bubble.tail, bubble.kind))
+                    raise PrinterError(
+                        f"{where}.{name} must be one of {', '.join(allowed)}, not {value!r}",
+                        hint=EXPECTED,
+                        exit_code=exit_code,
+                    )
+            bubbles.append(
+                Bubble(
+                    _text(f"{where}.text", bubble.text, LIMITS["text"], exit_code, required=True),
+                    position,
+                    bubble.tail,
+                    bubble.kind,
+                )
+            )
         caption = _text(f"panels[{i}].caption", panel.caption, LIMITS["caption"], exit_code)
         panels.append(Panel(tuple(bubbles), caption))
-    return Comic(tuple(panels), _text("title", comic.title, LIMITS["title"], exit_code),
-                 _text("byline", comic.byline, LIMITS["byline"], exit_code))
+    return Comic(
+        tuple(panels),
+        _text("title", comic.title, LIMITS["title"], exit_code),
+        _text("byline", comic.byline, LIMITS["byline"], exit_code),
+    )
 
 
 def load_comic(path: Path) -> Comic:
@@ -200,8 +247,11 @@ def load_comic(path: Path) -> Comic:
         too_big = path.stat().st_size > MAX_COMIC_FILE
         content = b"" if too_big else path.read_bytes()
     if too_big:
-        raise PrinterError(f"{name} is larger than {MAX_COMIC_FILE // 1024} KiB",
-                           hint="a comic holds a few short lines a panel", exit_code=3)
+        raise PrinterError(
+            f"{name} is larger than {MAX_COMIC_FILE // 1024} KiB",
+            hint="a comic holds a few short lines a panel",
+            exit_code=3,
+        )
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -214,12 +264,16 @@ def _object(value: Any, where: str, allowed: Sequence[str]) -> dict[str, Any]:
         raise PrinterError(f"{where} must be a JSON object", hint=EXPECTED, exit_code=3)
     unknown = sorted(set(value) - set(allowed))
     if unknown:
-        raise PrinterError(f"unknown field(s) in {where}: {', '.join(unknown)}",
-                           hint="allowed fields: " + ", ".join(allowed), exit_code=3)
+        raise PrinterError(
+            f"unknown field(s) in {where}: {', '.join(unknown)}",
+            hint="allowed fields: " + ", ".join(allowed),
+            exit_code=3,
+        )
     wrong = sorted(k for k, v in value.items() if k not in ("panels", "bubbles") and not isinstance(v, str))
     if wrong:
-        raise PrinterError(f"{where}: {', '.join(wrong)} must be text", hint='quote the values, e.g. "text": "Hi!"',
-                           exit_code=3)
+        raise PrinterError(
+            f"{where}: {', '.join(wrong)} must be text", hint='quote the values, e.g. "text": "Hi!"', exit_code=3
+        )
     return value
 
 
@@ -236,8 +290,9 @@ def parse_comic(text: str, name: str = "comic") -> Comic:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=EXPECTED,
-                           exit_code=3) from exc
+        raise PrinterError(
+            f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=EXPECTED, exit_code=3
+        ) from exc
     if not isinstance(data, dict):
         raise PrinterError(f"{name} must hold a JSON object", hint=EXPECTED, exit_code=3)
     data = _object(data, name, COMIC_FIELDS)
@@ -278,7 +333,7 @@ CAPTION_SIZE, CAPTION_MIN = 30, 20
 BUBBLE_SIZE, BUBBLE_MIN = 40, 22
 PAD = 14  # between a bubble's words and its edge
 KX = 1.25  # a speech bubble is this many times as wide as its words
-KY = 1 / math.sqrt(1 - 1 / KX ** 2)  # ... and so this many times as tall, for the corners of the words to fit
+KY = 1 / math.sqrt(1 - 1 / KX**2)  # ... and so this many times as tall, for the corners of the words to fit
 SUPERSAMPLE = 3  # bubbles are drawn this many times larger, then shrunk, for smooth edges
 
 
@@ -295,8 +350,9 @@ def panel_boxes(n: int, top: int = MARGIN) -> list[tuple[int, int, int, int]]:
     for r, count in enumerate(rows):
         y0 = top + r * (row_h + GUTTER)
         width = (W - 2 * MARGIN - GUTTER * (count - 1)) // count
-        boxes += [(MARGIN + c * (width + GUTTER), y0, MARGIN + c * (width + GUTTER) + width, y0 + row_h)
-                  for c in range(count)]
+        boxes += [
+            (MARGIN + c * (width + GUTTER), y0, MARGIN + c * (width + GUTTER) + width, y0 + row_h) for c in range(count)
+        ]
     return boxes
 
 
@@ -306,8 +362,10 @@ def _head(d: ImageDraw.ImageDraw, comic: Comic, cut: Cuts) -> int:
         return MARGIN
     y = MARGIN - 20
     width = W - 2 * MARGIN
-    for name, role, size, min_size in (("title", "hand-bold", TITLE_SIZE, TITLE_MIN),
-                                       ("byline", "hand", BYLINE_SIZE, BYLINE_MIN)):
+    for name, role, size, min_size in (
+        ("title", "hand-bold", TITLE_SIZE, TITLE_MIN),
+        ("byline", "hand", BYLINE_SIZE, BYLINE_MIN),
+    ):
         text = getattr(comic, name)
         if not text:
             continue
@@ -339,6 +397,7 @@ def _caption(d: ImageDraw.ImageDraw, text: str, x0: int, y0: int, width: int) ->
 @dataclass(frozen=True)
 class Fitted:
     """A bubble's words laid out: the font and size, the lines, and the size of the shape round them."""
+
     font: Any
     size: int
     lines: list[str]
@@ -408,8 +467,15 @@ def _ellipse_y(cx: float, cy: float, a: float, b: float, x: float, below: bool) 
     return cy + (1 if below else -1) * b * math.sqrt(t)
 
 
-def _draw_bubble(page: Image.Image, fitted: Fitted, box: tuple[float, float, float, float], kind: str,
-                 tail: str, tip: tuple[float, float] | None, below: bool) -> None:
+def _draw_bubble(
+    page: Image.Image,
+    fitted: Fitted,
+    box: tuple[float, float, float, float],
+    kind: str,
+    tail: str,
+    tip: tuple[float, float] | None,
+    below: bool,
+) -> None:
     """Draw the bubble filling ``box`` (its tail, if any, reaching ``tip``) in white with a black outline, then its
     words centred in it. ``below`` says the tail leaves from the bottom of the bubble (a top bubble)."""
     x0, y0, x1, y1 = box
@@ -432,8 +498,10 @@ def _draw_bubble(page: Image.Image, fitted: Fitted, box: tuple[float, float, flo
     grow = STROKE
     if kind == "thought":
         steps = max(8, round(math.pi * (a + b) / (fitted.puff * 1.5)))
-        centres = [(cx + a * math.cos(2 * math.pi * k / steps), cy + b * math.sin(2 * math.pi * k / steps))
-                   for k in range(steps)]
+        centres = [
+            (cx + a * math.cos(2 * math.pi * k / steps), cy + b * math.sin(2 * math.pi * k / steps))
+            for k in range(steps)
+        ]
         for draw, by in ((di, grow), (dp, 0)):
             oval(draw, cx, cy, a + by, b + by)
             for x, y in centres:
@@ -474,8 +542,15 @@ def _side(position: str) -> str:
     return position.partition("-")[2]
 
 
-def _band(page: Image.Image, bubbles: list[tuple[int, Bubble]], inner: tuple[int, int, int, int],
-          band: tuple[int, int], top: bool, wide: bool, cut: dict[int, Cut]) -> None:
+def _band(
+    page: Image.Image,
+    bubbles: list[tuple[int, Bubble]],
+    inner: tuple[int, int, int, int],
+    band: tuple[int, int],
+    top: bool,
+    wide: bool,
+    cut: dict[int, Cut],
+) -> None:
     """Lay out and draw the ``bubbles`` (with their numbers in the panel) of one band of a panel: side by side in
     the order of their sides, from ``band[0]`` down (a top band) or up from ``band[1]`` (a bottom band), each tail
     pointing out of the band into the panel."""
@@ -512,8 +587,9 @@ def _band(page: Image.Image, bubbles: list[tuple[int, Bubble]], inner: tuple[int
         _draw_bubble(page, fitted, (bx, by, bx + w, by + h), bubble.kind, bubble.tail, tip, below=top)
 
 
-def _panel(page: Image.Image, photo: Image.Image, panel: Panel, box: tuple[int, int, int, int], index: int,
-           cut: Cuts) -> None:
+def _panel(
+    page: Image.Image, photo: Image.Image, panel: Panel, box: tuple[int, int, int, int], index: int, cut: Cuts
+) -> None:
     """One panel: the photo cropped to fill ``box``, the caption, the bubbles and the border."""
     _photo(page, photo, box, mono=False)
     d = ImageDraw.Draw(page)
@@ -525,8 +601,10 @@ def _panel(page: Image.Image, photo: Image.Image, panel: Panel, box: tuple[int, 
         if caption_cut:
             cut[f"panels[{index}].caption"] = caption_cut
         top = bottom + 12
-    placed = [(j, replace(b, position=b.position or DEFAULT_POSITIONS[min(j, len(DEFAULT_POSITIONS) - 1)]))
-              for j, b in enumerate(panel.bubbles)]
+    placed = [
+        (j, replace(b, position=b.position or DEFAULT_POSITIONS[min(j, len(DEFAULT_POSITIONS) - 1)]))
+        for j, b in enumerate(panel.bubbles)
+    ]
     upper = [(j, b) for j, b in placed if b.position.startswith("top")]
     lower = [(j, b) for j, b in placed if b.position.startswith("bottom")]
     room = inner[3] - top

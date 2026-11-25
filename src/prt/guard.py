@@ -79,9 +79,12 @@ def agent_mode() -> bool:
 def require_consent(yes: bool) -> None:
     """In agent mode, refuse unless ``--yes`` was given — whether or not a terminal is attached."""
     if agent_mode() and not yes:
-        raise PrinterError(f"agent mode ({AGENT_ENV}=1): this command prints or uses ink only with --yes",
-                           hint="check the job first (--preview prints nothing), then re-run with --yes",
-                           exit_code=2, kind="agent_confirmation_required")
+        raise PrinterError(
+            f"agent mode ({AGENT_ENV}=1): this command prints or uses ink only with --yes",
+            hint="check the job first (--preview prints nothing), then re-run with --yes",
+            exit_code=2,
+            kind="agent_confirmation_required",
+        )
 
 
 # --- Page caps --------------------------------------------------------------------------------------------
@@ -113,19 +116,25 @@ def _check_caps(cfg: Config | None, c: Caps, pages: int | None, used_today: int)
     if not c.active:
         return
     if pages is None:
-        raise PrinterError("cannot tell how many pages this would print, and a page cap is in force",
-                           hint="print images or a PDF, whose pages can be counted, or convert the file first",
-                           kind="page_count_unknown")
+        raise PrinterError(
+            "cannot tell how many pages this would print, and a page cap is in force",
+            hint="print images or a PDF, whose pages can be counted, or convert the file first",
+            kind="page_count_unknown",
+        )
     if c.run is not None and pages > c.run:
-        raise PrinterError(f"{_pages(pages)} is over the limit of {c.run} per run — nothing was sent",
-                           hint=f"print fewer pages at a time, or raise max_pages_per_run{_where(cfg)}",
-                           kind="page_cap_exceeded")
+        raise PrinterError(
+            f"{_pages(pages)} is over the limit of {c.run} per run — nothing was sent",
+            hint=f"print fewer pages at a time, or raise max_pages_per_run{_where(cfg)}",
+            kind="page_cap_exceeded",
+        )
     if c.day is not None and used_today + pages > c.day:
-        raise PrinterError(f"{_pages(pages)} would make {used_today + pages} today, over the limit of {c.day} "
-                           "per day — nothing was sent",
-                           hint=f"{max(0, c.day - used_today)} left today; wait until tomorrow, or raise "
-                                f"max_pages_per_day{_where(cfg)}",
-                           kind="daily_page_cap_exceeded")
+        raise PrinterError(
+            f"{_pages(pages)} would make {used_today + pages} today, over the limit of {c.day} "
+            "per day — nothing was sent",
+            hint=f"{max(0, c.day - used_today)} left today; wait until tomorrow, or raise "
+            f"max_pages_per_day{_where(cfg)}",
+            kind="daily_page_cap_exceeded",
+        )
 
 
 def _pages(n: int) -> str:
@@ -218,9 +227,11 @@ def reserve(cfg: Config | None, pages: int | None) -> Iterator[Ticket]:
         _update(path, book)
     except OSError as exc:
         if c.day is not None:
-            raise PrinterError(f"cannot record printed pages in {path}: {exc.strerror or exc}",
-                               hint="max_pages_per_day needs a writable cache folder; check its permissions",
-                               kind="page_ledger_unavailable") from exc
+            raise PrinterError(
+                f"cannot record printed pages in {path}: {exc.strerror or exc}",
+                hint="max_pages_per_day needs a writable cache folder; check its permissions",
+                kind="page_ledger_unavailable",
+            ) from exc
         booked = False
     ticket = Ticket(planned)
     try:
@@ -302,7 +313,7 @@ def _objstm_objects(body: bytes) -> list[bytes] | None:
     numbers = data[:start].split()
     offsets = sorted(int(n) for n in numbers[1::2] if n.isdigit())
     ends = offsets[1:] + [len(data) - start]
-    return [data[start + a:start + b] for a, b in zip(offsets, ends)]
+    return [data[start + a : start + b] for a, b in zip(offsets, ends)]
 
 
 def count_pdf_pages(data: bytes) -> int | None:
@@ -329,8 +340,13 @@ def count_pdf_pages(data: bytes) -> int | None:
         types = set(_TYPE.findall(obj))
         if _PAGE.search(obj):
             typed += 1
-        if (b"/Parent" in obj and b"/Kids" not in obj and b"/Subtype" not in obj
-                and types <= {b"Page"} and any(k in obj for k in (b"/MediaBox", b"/Contents", b"/Resources"))):
+        if (
+            b"/Parent" in obj
+            and b"/Kids" not in obj
+            and b"/Subtype" not in obj
+            and types <= {b"Page"}
+            and any(k in obj for k in (b"/MediaBox", b"/Contents", b"/Resources"))
+        ):
             leaves += 1
         if b"/Kids" in obj:
             biggest = max([biggest, *(int(n) for n in _COUNT.findall(obj))])
@@ -357,6 +373,7 @@ def job_pages(files: Iterable[Path], copies: int = 1) -> int | None:
 def _coverage(page: Image.Image) -> tuple[dict[str, float], bool]:
     """Ink coverage (0-1) of each colour of one page, and whether the page uses colour at all."""
     from PIL import ImageChops, ImageStat
+
     rgb = page.convert("RGB")
     factor = max(1, max(rgb.size) // ESTIMATE_SIZE)
     if factor > 1:
@@ -365,11 +382,15 @@ def _coverage(page: Image.Image) -> tuple[dict[str, float], bool]:
     high = ImageChops.lighter(ImageChops.lighter(r, g), b)
     low = ImageChops.darker(ImageChops.darker(r, g), b)
     # Grey component replacement: black prints the darkness all three share, colour only the difference.
-    bands = [ImageChops.subtract(high, r), ImageChops.subtract(high, g), ImageChops.subtract(high, b),
-             ImageChops.invert(high)]
+    bands = [
+        ImageChops.subtract(high, r),
+        ImageChops.subtract(high, g),
+        ImageChops.subtract(high, b),
+        ImageChops.invert(high),
+    ]
     coverage = {ink: ImageStat.Stat(band).mean[0] / 255 for ink, band in zip(INKS, bands)}
     chroma = ImageChops.subtract(high, low).histogram()
-    colour = sum(chroma[CHROMA_THRESHOLD + 1:]) > COLOUR_SHARE * rgb.width * rgb.height
+    colour = sum(chroma[CHROMA_THRESHOLD + 1 :]) > COLOUR_SHARE * rgb.width * rgb.height
     return coverage, colour
 
 

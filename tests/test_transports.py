@@ -3,7 +3,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from prt.discovery import Discovered, merge
+from prt.discovery import merge
 from prt.models import ScanSettings
 from prt.printing import match_queue
 from prt.transport import escl, snmp
@@ -54,6 +54,7 @@ def test_escl_scan_flow():
 def test_escl_rejects_unsupported_dpi():
     def handler(req):
         return httpx.Response(200, content=CAPS)
+
     c = escl.ESCLClient("http://s/eSCL", transport=httpx.MockTransport(handler))
     with pytest.raises(escl.ScanError, match="dpi"):
         c.scan(ScanSettings(dpi=150))
@@ -76,8 +77,9 @@ def test_discovery_merge_prefers_plain_ipp_and_maps_scanner():
     txt = {"uuid": "abc", "ty": "EPSON XP-6000 Series", "rp": "ipp/print"}
     merge(found, "_ipps._tcp.local.", "EPSON XP-6000 Series", "EPSON721655.local", 631, ["192.168.1.70"], txt)
     merge(found, "_ipp._tcp.local.", "EPSON XP-6000 Series", "EPSON721655.local", 631, ["192.168.1.70"], txt)
-    merge(found, "_uscan._tcp.local.", "EPSON XP-6000 Series", "EPSON721655.local", 443, [],
-          {"uuid": "abc", "rs": "eSCL"})
+    merge(
+        found, "_uscan._tcp.local.", "EPSON XP-6000 Series", "EPSON721655.local", 443, [], {"uuid": "abc", "rs": "eSCL"}
+    )
     (d,) = found.values()
     assert d.ipp and not d.ipp_tls and d.scanner and d.scan_tls and d.scan_port == 443
     assert d.services == ["ipp", "escl"]
@@ -86,8 +88,10 @@ def test_discovery_merge_prefers_plain_ipp_and_maps_scanner():
 
 
 def test_cups_queue_matching():
-    out = ("device for EPSON_XP_6000_Series: dnssd://EPSON%20XP-6000%20Series._ipps._tcp.local./?uuid=cfe92100-67c4\n"
-           "device for Pantum: ipp://pantum.local/ipp/print\n")
+    out = (
+        "device for EPSON_XP_6000_Series: dnssd://EPSON%20XP-6000%20Series._ipps._tcp.local./?uuid=cfe92100-67c4\n"
+        "device for Pantum: ipp://pantum.local/ipp/print\n"
+    )
     assert match_queue(out, "cfe92100-67c4", "x") == "EPSON_XP_6000_Series"
     assert match_queue(out, None, "pantum.local") == "Pantum"
     assert match_queue(out, None, "nothing") is None

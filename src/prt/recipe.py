@@ -27,7 +27,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
-from prt import article, fonts
+from prt import article
 from prt.booth import STDIN, read_stdin
 from prt.drivers.base import PrinterError
 from prt.layout import Cuts, _clean, _ellipsize, _wrap
@@ -58,8 +58,10 @@ MAX_CARDS = 6  # a recipe that needs more is refused, never cut short
 MAX_BYTES = article.MAX_BYTES
 KIND = "recipe card"
 SCHEMA_HINT = "save the recipe as a JSON file (see `prt schema recipe`) and print the file"
-JSON_HINT = ('expected {"title": "...", "ingredients": ["...", "..."], "steps": ["...", "..."], "servings": "...", '
-             '"time": "...", "source": "...", "url": "..."}')
+JSON_HINT = (
+    'expected {"title": "...", "ingredients": ["...", "..."], "steps": ["...", "..."], "servings": "...", '
+    '"time": "...", "source": "...", "url": "..."}'
+)
 
 
 def load(source: str, timeout: float) -> Recipe:
@@ -71,9 +73,12 @@ def load(source: str, timeout: float) -> Recipe:
 
 
 def _no_recipe(where: str) -> PrinterError:
-    return PrinterError(f"no recipe found in {where}",
-                        hint="the page has no recipe data and no Ingredients and Instructions headings; " + SCHEMA_HINT,
-                        exit_code=3, kind="no_recipe")
+    return PrinterError(
+        f"no recipe found in {where}",
+        hint="the page has no recipe data and no Ingredients and Instructions headings; " + SCHEMA_HINT,
+        exit_code=3,
+        kind="no_recipe",
+    )
 
 
 def from_link(url: str, timeout: float) -> Recipe:
@@ -84,19 +89,25 @@ def from_link(url: str, timeout: float) -> Recipe:
         return from_html(article._decode(page.content, page.charset), page.url, host)
     if page.media_type == "text/plain":
         return from_text(article._decode(page.content, page.charset), source=host, url=page.url)
-    raise PrinterError(f"cannot print {url}: it is not a web page ({page.media_type})",
-                       hint="link to the recipe page itself, or " + SCHEMA_HINT, exit_code=3)
+    raise PrinterError(
+        f"cannot print {url}: it is not a web page ({page.media_type})",
+        hint="link to the recipe page itself, or " + SCHEMA_HINT,
+        exit_code=3,
+    )
 
 
 def load_file(path: Path) -> Recipe:
     """A recipe saved as JSON (.json, see ``JSON_HINT``), HTML (.html, .htm, .xhtml) or plain text (anything else)."""
     if not path.is_file():
-        raise PrinterError(f"file not found: {path}",
-                           hint="check the path; to fetch a web page give its full link, starting with https://",
-                           exit_code=3)
+        raise PrinterError(
+            f"file not found: {path}",
+            hint="check the path; to fetch a web page give its full link, starting with https://",
+            exit_code=3,
+        )
     if path.stat().st_size > MAX_BYTES:
-        raise PrinterError(f"{path.name} is larger than {MAX_BYTES // (1024 * 1024)} MiB",
-                           hint="save just the recipe", exit_code=3)
+        raise PrinterError(
+            f"{path.name} is larger than {MAX_BYTES // (1024 * 1024)} MiB", hint="save just the recipe", exit_code=3
+        )
     suffix = path.suffix.lower()
     kind = "html" if suffix in (".html", ".htm", ".xhtml") else "json" if suffix == ".json" else "text"
     return parse(path.read_bytes(), kind, path.name)
@@ -106,8 +117,11 @@ def load_stdin() -> Recipe:
     """A recipe piped in on stdin: JSON when it starts with ``{``, HTML when it starts with ``<``, else text."""
     content = read_stdin(MAX_BYTES)
     if len(content) > MAX_BYTES:
-        raise PrinterError(f"the recipe on stdin is larger than {MAX_BYTES // (1024 * 1024)} MiB",
-                           hint="pipe in just the recipe", exit_code=3)
+        raise PrinterError(
+            f"the recipe on stdin is larger than {MAX_BYTES // (1024 * 1024)} MiB",
+            hint="pipe in just the recipe",
+            exit_code=3,
+        )
     start = content.lstrip(b"\xef\xbb\xbf \t\r\n")[:1]
     kind = "json" if start == b"{" else "html" if start == b"<" else "text"
     return parse(content, kind, "stdin")
@@ -134,29 +148,45 @@ def parse_json(text: str, name: str = "the recipe") -> Recipe:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=JSON_HINT,
-                           exit_code=3) from exc
+        raise PrinterError(
+            f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=JSON_HINT, exit_code=3
+        ) from exc
     if not isinstance(data, dict):
         raise PrinterError(f"{name} must hold a JSON object", hint=JSON_HINT, exit_code=3)
     unknown = sorted(set(data) - set(FIELDS))
     if unknown:
-        raise PrinterError(f"unknown field(s) in {name}: {', '.join(unknown)}",
-                           hint="allowed fields: " + ", ".join(FIELDS), exit_code=3)
+        raise PrinterError(
+            f"unknown field(s) in {name}: {', '.join(unknown)}",
+            hint="allowed fields: " + ", ".join(FIELDS),
+            exit_code=3,
+        )
     missing = [field for field in REQUIRED if field not in data]
     if missing:
         raise PrinterError(f"{name} is missing {' and '.join(missing)}", hint=JSON_HINT, exit_code=3)
 
     def is_list(value: Any) -> bool:
         return isinstance(value, str) or (isinstance(value, list) and all(isinstance(v, str) for v in value))
-    wrong = sorted(field for field, value in data.items()
-                   if not (is_list(value) if field in ("ingredients", "steps") else isinstance(value, str)))
+
+    wrong = sorted(
+        field
+        for field, value in data.items()
+        if not (is_list(value) if field in ("ingredients", "steps") else isinstance(value, str))
+    )
     if wrong:
-        raise PrinterError(f"fields of {name} must be text: {', '.join(wrong)}",
-                           hint="ingredients and steps are lists of text (or one text, a newline between items)",
-                           exit_code=3)
-    return Recipe(title=data["title"], ingredients=_items(data["ingredients"]), steps=_items(data["steps"]),
-                  servings=data.get("servings", ""), time=data.get("time", ""), source=data.get("source", ""),
-                  url=data.get("url", ""))
+        raise PrinterError(
+            f"fields of {name} must be text: {', '.join(wrong)}",
+            hint="ingredients and steps are lists of text (or one text, a newline between items)",
+            exit_code=3,
+        )
+    return Recipe(
+        title=data["title"],
+        ingredients=_items(data["ingredients"]),
+        steps=_items(data["steps"]),
+        servings=data.get("servings", ""),
+        time=data.get("time", ""),
+        source=data.get("source", ""),
+        url=data.get("url", ""),
+    )
 
 
 # --- schema.org Recipe data ---------------------------------------------------------------------
@@ -290,10 +320,19 @@ def _times(obj: dict[str, Any]) -> str:
 
 def from_recipe_data(obj: dict[str, Any], title: str = "", source: str = "", url: str = "") -> Recipe:
     """A recipe from a schema.org Recipe object; ``title`` stands in for a missing name."""
-    return Recipe(title=_text(obj.get("name")) or title, ingredients=tuple(_ingredients(
-                      obj.get("recipeIngredient") if obj.get("recipeIngredient") is not None else obj.get("ingredients"))),
-                  steps=tuple(_instructions(obj.get("recipeInstructions"))), servings=_servings(obj.get("recipeYield")),
-                  time=_times(obj), source=source, url=url)
+    return Recipe(
+        title=_text(obj.get("name")) or title,
+        ingredients=tuple(
+            _ingredients(
+                obj.get("recipeIngredient") if obj.get("recipeIngredient") is not None else obj.get("ingredients")
+            )
+        ),
+        steps=tuple(_instructions(obj.get("recipeInstructions"))),
+        servings=_servings(obj.get("recipeYield")),
+        time=_times(obj),
+        source=source,
+        url=url,
+    )
 
 
 # --- pages without recipe data ------------------------------------------------------------------
@@ -370,8 +409,19 @@ def from_text(text: str, source: str = "", url: str = "", where: str | None = No
 # --- normalising for the card ------------------------------------------------------------------
 
 
-FRACTIONS = {"½": "1/2", "⅓": "1/3", "⅔": "2/3", "¼": "1/4", "¾": "3/4", "⅕": "1/5", "⅙": "1/6", "⅛": "1/8",
-             "⅜": "3/8", "⅝": "5/8", "⅞": "7/8"}
+FRACTIONS = {
+    "½": "1/2",
+    "⅓": "1/3",
+    "⅔": "2/3",
+    "¼": "1/4",
+    "¾": "3/4",
+    "⅕": "1/5",
+    "⅙": "1/6",
+    "⅛": "1/8",
+    "⅜": "3/8",
+    "⅝": "5/8",
+    "⅞": "7/8",
+}
 _FRACTION = re.compile(r"(\d?)([" + "".join(FRACTIONS) + "])")
 
 
@@ -382,6 +432,7 @@ def _fractions(text: str) -> str:
 
 def normalise(recipe: Recipe) -> Recipe:
     """Clean whitespace, map the text onto the card font's glyphs and check the limits (exit code 3)."""
+
     def line(text: str) -> tuple[str, int]:
         printable, unknown = article._printable(_fractions(_clean(text, keep_newlines=False)))
         return " ".join(printable.split()), unknown
@@ -390,8 +441,11 @@ def normalise(recipe: Recipe) -> Recipe:
     for name in ("title", "servings", "time", "source"):
         fields[name] = line(getattr(recipe, name))[0]
         if len(fields[name]) > LIMITS[name]:
-            raise PrinterError(f"the recipe's {name} is too long ({len(fields[name])} characters, max "
-                               f"{LIMITS[name]})", hint=f"shorten the {name}", exit_code=3)
+            raise PrinterError(
+                f"the recipe's {name} is too long ({len(fields[name])} characters, max {LIMITS[name]})",
+                hint=f"shorten the {name}",
+                exit_code=3,
+            )
     url = _clean(recipe.url, keep_newlines=False)
     if len(url) > LIMITS["url"]:
         url = ""  # a tracking-laden link is left off the card rather than refusing the recipe
@@ -403,22 +457,38 @@ def normalise(recipe: Recipe) -> Recipe:
         unknown += sum(bad for _, bad in items)
         kept = [text for text, _ in items if text.strip("-? ")]
         if not kept:
-            raise PrinterError(f"the recipe has no {name}", hint=f"give it at least one of its {name}", exit_code=3,
-                               kind="no_recipe")
+            raise PrinterError(
+                f"the recipe has no {name}", hint=f"give it at least one of its {name}", exit_code=3, kind="no_recipe"
+            )
         if len(kept) > MAX_ITEMS:
-            raise PrinterError(f"the recipe has {len(kept)} {name}, more than {MAX_ITEMS}",
-                               hint="a recipe card holds one recipe; " + SCHEMA_HINT, exit_code=3)
+            raise PrinterError(
+                f"the recipe has {len(kept)} {name}, more than {MAX_ITEMS}",
+                hint="a recipe card holds one recipe; " + SCHEMA_HINT,
+                exit_code=3,
+            )
         longest = max(len(text) for text in kept)
         if longest > MAX_ITEM:
-            raise PrinterError(f"one of the recipe's {name} is {longest} characters long, more than {MAX_ITEM}",
-                               hint="split it up; " + SCHEMA_HINT, exit_code=3)
+            raise PrinterError(
+                f"one of the recipe's {name} is {longest} characters long, more than {MAX_ITEM}",
+                hint="split it up; " + SCHEMA_HINT,
+                exit_code=3,
+            )
         lists[name] = tuple(kept)
     if unknown * 2 > letters:
-        raise PrinterError(f"the recipe is mostly in characters the card font cannot print ({unknown} of {letters})",
-                           hint="the card font covers Latin letters only", exit_code=3)
-    return Recipe(title=fields["title"] or fields["source"] or "Recipe", ingredients=lists["ingredients"],
-                  steps=lists["steps"], servings=fields["servings"], time=fields["time"], source=fields["source"],
-                  url=url)
+        raise PrinterError(
+            f"the recipe is mostly in characters the card font cannot print ({unknown} of {letters})",
+            hint="the card font covers Latin letters only",
+            exit_code=3,
+        )
+    return Recipe(
+        title=fields["title"] or fields["source"] or "Recipe",
+        ingredients=lists["ingredients"],
+        steps=lists["steps"],
+        servings=fields["servings"],
+        time=fields["time"],
+        source=fields["source"],
+        url=url,
+    )
 
 
 # --- the cards ---------------------------------------------------------------------------------
@@ -466,8 +536,10 @@ def rows(recipe: Recipe, size: int) -> list[Row]:
     font = _font(size)
     width = COL_W - _indent(recipe, font, size)
     out: list[Row] = []
-    for heading, items, marks in ((HEADINGS[0], recipe.ingredients, [BULLET] * len(recipe.ingredients)),
-                                  (HEADINGS[1], recipe.steps, [f"{n}." for n in range(1, len(recipe.steps) + 1)])):
+    for heading, items, marks in (
+        (HEADINGS[0], recipe.ingredients, [BULLET] * len(recipe.ingredients)),
+        (HEADINGS[1], recipe.steps, [f"{n}." for n in range(1, len(recipe.steps) + 1)]),
+    ):
         if out:
             out.append(Row("gap"))
         out.append(Row("head", heading))
@@ -491,7 +563,7 @@ def flow(body: list[Row], per_column: int) -> list[list[list[Row]]]:
         column.append(row)
     if column:
         columns.append(column)
-    return [columns[i:i + 2] for i in range(0, len(columns), 2)]
+    return [columns[i : i + 2] for i in range(0, len(columns), 2)]
 
 
 def plan(recipe: Recipe) -> tuple[int, list[list[list[Row]]]]:
@@ -503,8 +575,11 @@ def plan(recipe: Recipe) -> tuple[int, list[list[list[Row]]]]:
             return size, cards
     cards = flow(rows(recipe, RUN_ON_SIZE), (BODY_BOTTOM - BODY_TOP) // _lead(RUN_ON_SIZE))
     if len(cards) > MAX_CARDS:
-        raise PrinterError(f"the recipe needs {len(cards)} cards, more than {MAX_CARDS}",
-                           hint="shorten the steps; " + SCHEMA_HINT, exit_code=3)
+        raise PrinterError(
+            f"the recipe needs {len(cards)} cards, more than {MAX_CARDS}",
+            hint="shorten the steps; " + SCHEMA_HINT,
+            exit_code=3,
+        )
     return RUN_ON_SIZE, cards
 
 
@@ -523,8 +598,12 @@ def _header(d: ImageDraw.ImageDraw, recipe: Recipe, number: int) -> None:
     meta = " · ".join(t for t in (recipe.servings, recipe.time) if t) if number == 1 else "continued"
     if meta:
         small = _font(30)
-        d.text((MARGIN + 4, META_TOP), _ellipsize(meta, small, W - 2 * MARGIN) if small.getlength(meta) >
-               W - 2 * MARGIN else meta, font=small, fill=GREY)
+        d.text(
+            (MARGIN + 4, META_TOP),
+            _ellipsize(meta, small, W - 2 * MARGIN) if small.getlength(meta) > W - 2 * MARGIN else meta,
+            font=small,
+            fill=GREY,
+        )
     d.line([(MARGIN, RULE_Y), (W - MARGIN, RULE_Y)], fill=RED, width=4)
 
 

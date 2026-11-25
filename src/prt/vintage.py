@@ -26,8 +26,25 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 from prt import booth, fonts
 from prt.booth import Story
 from prt.drivers.base import PrinterError
-from prt.layout import (BOTTOM, CONTENT_W, ELLIPSIS, _STAND_INS, Cut, Cuts, _col_width, _cut, _ellipsize,
-                        _in_source, _lead, _paragraphs, _rows, _text_block, _wrap, draw_columns, flow_columns)
+from prt.layout import (
+    BOTTOM,
+    CONTENT_W,
+    ELLIPSIS,
+    _STAND_INS,
+    Cut,
+    Cuts,
+    _col_width,
+    _cut,
+    _ellipsize,
+    _in_source,
+    _lead,
+    _paragraphs,
+    _rows,
+    _text_block,
+    _wrap,
+    draw_columns,
+    flow_columns,
+)
 from prt.testpage import H, MARGIN, W
 
 PAPER = (244, 236, 216)  # #f4ecd8
@@ -39,6 +56,7 @@ INSET = 45  # the cream stops this far inside the sheet: the printer cannot prin
 @dataclass(frozen=True)
 class Sheet:
     """The page the gazette is laid out on, in pixels at 150 dpi."""
+
     width: int
     height: int
     margin: int
@@ -68,11 +86,13 @@ PRICE = "Price: Complimentary"
 DEFAULT_GAZETTE_STORY = Story(
     kicker="Special edition",
     headline="Pictures From a Day Worth Remembering",
-    story=("Every picture in this edition was brought to our offices this morning and set in type at once. "
-           "The first leads the page as Fig. 1, and any others follow as numbered plates for closer study.\n"
-           "Our correspondents report fair weather, good company and not a single blurred frame. The editors "
-           "have printed every picture in full, in keeping with the custom of this paper.\n"
-           "Further editions will follow as more pictures arrive."),
+    story=(
+        "Every picture in this edition was brought to our offices this morning and set in type at once. "
+        "The first leads the page as Fig. 1, and any others follow as numbered plates for closer study.\n"
+        "Our correspondents report fair weather, good company and not a single blurred frame. The editors "
+        "have printed every picture in full, in keeping with the custom of this paper.\n"
+        "Further editions will follow as more pictures arrive."
+    ),
     caption="Our lead photograph, as it came off the press.",
     byline="By the prt gazette desk",
 )
@@ -103,8 +123,11 @@ def plan_pages(n: int) -> list[list[int]]:
 def check_count(n: int) -> None:
     """Refuse (exit code 3) more photos than ``MAX_PAGES`` pages hold, rather than leave any out."""
     if n > MAX_PHOTOS:
-        raise PrinterError(f"gazette takes at most {MAX_PHOTOS} photos, got {n}",
-                           hint=f"print them in batches of up to {MAX_PHOTOS} ({MAX_PAGES} pages each)", exit_code=3)
+        raise PrinterError(
+            f"gazette takes at most {MAX_PHOTOS} photos, got {n}",
+            hint=f"print them in batches of up to {MAX_PHOTOS} ({MAX_PAGES} pages each)",
+            exit_code=3,
+        )
 
 
 def page_paths(path: Path, fmt: str, count: int) -> list[Path]:
@@ -119,8 +142,11 @@ def check_outputs(outputs: list[Path], photos: list[Path], input_kind: str = "ph
     for target in outputs:
         for photo in photos:
             if _same_file(target, photo):
-                raise PrinterError(f"output {target} would overwrite input {input_kind} {photo}",
-                                   hint="save the pages under another name", exit_code=2)
+                raise PrinterError(
+                    f"output {target} would overwrite input {input_kind} {photo}",
+                    hint="save the pages under another name",
+                    exit_code=2,
+                )
 
 
 def _same_file(target: Path, photo: Path) -> bool:
@@ -164,8 +190,7 @@ def _place(page: Image.Image, photo: Image.Image, box: tuple[int, int, int, int]
     x0, y0, x1, y1 = box
     fitted = ImageOps.fit(photo, (x1 - x0, y1 - y0), method=Image.Resampling.LANCZOS, centering=(0.5, 0.1))
     page.paste(_treat(fitted), (x0, y0))
-    ImageDraw.Draw(page).rectangle([x0 - FRAME, y0 - FRAME, x1 + FRAME - 1, y1 + FRAME - 1], outline=INK,
-                                   width=RULE)
+    ImageDraw.Draw(page).rectangle([x0 - FRAME, y0 - FRAME, x1 + FRAME - 1, y1 + FRAME - 1], outline=INK, width=RULE)
 
 
 def _contain(photo: Image.Image, top: int, x0: int, width: int, height: int) -> tuple[int, int, int, int]:
@@ -213,20 +238,32 @@ def _fit_face(text: str, role: str, size: int, min_size: int, width: int, max_li
     """Largest size (size → min_size) of ``role`` that wraps ``text`` (in capitals with ``caps``) into
     ``max_lines``; cut with "…" at the smallest. Returns (font, size, lines, cut), ``cut`` being None or the
     ``Cut`` (see ``layout._fit``), counted in the characters of ``text`` rather than in the printed ones."""
+
     def shown(c: str) -> str:
         return _printable_face(c.upper() if caps else c, font)
+
     for s in range(size, min_size - 1, -2):
         font = fonts.face(role, s)
         printable = _printable_face(text.upper() if caps else text, font)
         lines = _wrap(printable, font, width)
         if len(lines) <= max_lines:
             return font, s, lines, None
-    lines = lines[:max_lines - 1] + [_ellipsize(lines[max_lines - 1], font, width)]
+    lines = lines[: max_lines - 1] + [_ellipsize(lines[max_lines - 1], font, width)]
     return font, s, lines, _in_source(_cut(printable, lines), text, shown)
 
 
-def _centred(d: ImageDraw.ImageDraw, y: int, text: str, role: str, size: int, min_size: int, lines: int,
-             x0: int, width: int, caps: bool = False) -> tuple[int, Cut | None]:
+def _centred(
+    d: ImageDraw.ImageDraw,
+    y: int,
+    text: str,
+    role: str,
+    size: int,
+    min_size: int,
+    lines: int,
+    x0: int,
+    width: int,
+    caps: bool = False,
+) -> tuple[int, Cut | None]:
     """Fit ``text`` (in capitals with ``caps``) in ``lines`` lines centred in ``width`` from ``x0``; returns
     (y below, cut)."""
     font, s, wrapped, cut = _fit_face(text, role, size, min_size, width, lines, caps)
@@ -308,8 +345,9 @@ def _story(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], co
         while len(last) > 1 and not last[-1]:  # end on text, not on a paragraph gap
             last.pop()
         last[-1] = _ellipsize(last[-1], font, col_w)
-        cut = _in_source(_cut("\n".join(paras), [line for col in cols for line in col]), text,
-                         lambda c: _printable_face(c, font))
+        cut = _in_source(
+            _cut("\n".join(paras), [line for col in cols for line in col]), text, lambda c: _printable_face(c, font)
+        )
     draw_columns(d, cols, x0, y0, col_w, GUTTER, font, s, INK)
     # The column rule is drawn here rather than by draw_columns, at the weight of every other rule.
     depth = y0 + max((len(col) for col in cols), default=0) * _lead(s)
@@ -321,8 +359,9 @@ def _story(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], co
 
 def _story_height(text: str, size: int, width: int, columns: int = 2) -> int:
     font = fonts.face("body", size)
-    lines = _paragraphs("\n".join(_printable_face(p, font) for p in text.split("\n")), font,
-                        _col_width(width, columns, GUTTER))
+    lines = _paragraphs(
+        "\n".join(_printable_face(p, font) for p in text.split("\n")), font, _col_width(width, columns, GUTTER)
+    )
     return _rows(len(lines), columns) * _lead(size)
 
 
@@ -345,8 +384,9 @@ def _page_mark(d: ImageDraw.ImageDraw, number: int, total: int, sheet: Sheet) ->
     _draw_caps(d, (sheet.width - _caps_width(runs)) / 2, y + 24, runs)
 
 
-def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: list[int], total: int,
-           sheet: Sheet) -> tuple[list[Placement], Cuts]:
+def _front(
+    page: Image.Image, photos: list[Image.Image], story: Story, indices: list[int], total: int, sheet: Sheet
+) -> tuple[list[Placement], Cuts]:
     """Masthead, dateline and headline across the page, then the lead photo, a row of up to two plates and the
     story in ruled columns: stacked on an upright page, side by side on a landscape one."""
     d = ImageDraw.Draw(page)
@@ -357,9 +397,16 @@ def _front(page: Image.Image, photos: list[Image.Image], story: Story, indices: 
     return placements, {**cut, **cut_below}
 
 
-def draw_head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet, masthead: str = MASTHEAD,
-              tagline: str = TAGLINE, dateline: str | None = None, edition: str = EDITION,
-              price: str = PRICE) -> tuple[int, Cuts]:
+def draw_head(
+    d: ImageDraw.ImageDraw,
+    story: Story,
+    sheet: Sheet,
+    masthead: str = MASTHEAD,
+    tagline: str = TAGLINE,
+    dateline: str | None = None,
+    edition: str = EDITION,
+    price: str = PRICE,
+) -> tuple[int, Cuts]:
     """Masthead, tagline, dateline, kicker, headline and byline across the page; returns (y below, cut).
 
     The photo gazette uses the module constants; a text-first gazette passes its own masthead and date lines
@@ -370,8 +417,9 @@ def draw_head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet, masthead: str 
     y = sheet.margin
     _rule(d, y, sheet)
     y += 18
-    size = next(s for s in range(sheet.masthead_max, 40, -4)
-                if fonts.face("masthead", s).getlength(masthead) <= width - 80)
+    size = next(
+        s for s in range(sheet.masthead_max, 40, -4) if fonts.face("masthead", s).getlength(masthead) <= width - 80
+    )
     mast = fonts.face("masthead", size)
     top, bottom = mast.getbbox(masthead)[1::2]
     d.text(((sheet.width - mast.getlength(masthead)) / 2, y - top), masthead, font=mast, fill=INK)
@@ -398,8 +446,9 @@ def draw_head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet, masthead: str 
         y += ks + 18
         if cut_kicker:
             cut["kicker"] = cut_kicker
-    y, cut_headline = _centred(d, y, story.headline, "display-black", 64, 36, sheet.headline_lines, left, width,
-                                caps=True)
+    y, cut_headline = _centred(
+        d, y, story.headline, "display-black", 64, 36, sheet.headline_lines, left, width, caps=True
+    )
     if cut_headline:
         cut["headline"] = cut_headline
     _rule(d, y + 4, sheet)
@@ -416,8 +465,15 @@ def _head(d: ImageDraw.ImageDraw, story: Story, sheet: Sheet) -> tuple[int, Cuts
     return draw_head(d, story, sheet)
 
 
-def _tall_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Image], story: Story,
-                indices: list[int], y: int, sheet: Sheet) -> tuple[list[Placement], Cuts]:
+def _tall_front(
+    page: Image.Image,
+    d: ImageDraw.ImageDraw,
+    photos: list[Image.Image],
+    story: Story,
+    indices: list[int],
+    y: int,
+    sheet: Sheet,
+) -> tuple[list[Placement], Cuts]:
     """Upright: the lead photo, a row of up to two plates under it, then the story in two ruled columns."""
     left, width, right = sheet.margin, sheet.content_w, sheet.width - sheet.margin
     cut: Cuts = {}
@@ -462,8 +518,15 @@ def _tall_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Im
     return placements, cut
 
 
-def _wide_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Image], story: Story,
-                indices: list[int], y: int, sheet: Sheet) -> tuple[list[Placement], Cuts]:
+def _wide_front(
+    page: Image.Image,
+    d: ImageDraw.ImageDraw,
+    photos: list[Image.Image],
+    story: Story,
+    indices: list[int],
+    y: int,
+    sheet: Sheet,
+) -> tuple[list[Placement], Cuts]:
     """Landscape: the lead photo down the left with its caption, the story in ruled columns on the right, and
     the row of up to two plates under the story."""
     left, right = sheet.margin, sheet.width - sheet.margin
@@ -473,8 +536,9 @@ def _wide_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Im
     lead, plates = photos[indices[0]], indices[1:]
     # Two caption lines are kept whatever the lead's width turns out to be, so the lead is sized in one pass.
     caption_room = 2 * _lead(22)
-    x0, top, x1, bottom = _contain(lead, 0, 0, round(sheet.content_w * LEAD_SHARE) - 2 * FRAME,
-                                   story_bottom - y - 2 * FRAME - 6 - caption_room)
+    x0, top, x1, bottom = _contain(
+        lead, 0, 0, round(sheet.content_w * LEAD_SHARE) - 2 * FRAME, story_bottom - y - 2 * FRAME - 6 - caption_room
+    )
     # The whole photo, never cropped; a narrow lead narrows its column and leaves the story more room.
     col_w = max(x1 - x0 + 2 * FRAME, LEAD_COL_MIN)
     bx = left + (col_w - (x1 - x0)) // 2
@@ -515,8 +579,9 @@ def _wide_front(page: Image.Image, d: ImageDraw.ImageDraw, photos: list[Image.Im
     return placements, cut
 
 
-def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], number: int, total: int,
-            sheet: Sheet) -> list[Placement]:
+def _plates(
+    page: Image.Image, photos: list[Image.Image], indices: list[int], number: int, total: int, sheet: Sheet
+) -> list[Placement]:
     """Running head with the page mark, a section title, then up to six plates in a ruled grid (2 × 3 upright,
     3 × 2 landscape), each with its figure number."""
     d = ImageDraw.Draw(page)
@@ -528,8 +593,9 @@ def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], nu
     _draw_caps(d, sheet.width - left - _caps_width(mark), sheet.margin + bottom - top, mark)
     y = _double(d, sheet.margin + bottom - top + 14, sheet) + 14
     first, last = indices[0] + 1, indices[-1] + 1
-    y, _ = _centred(d, y, f"PLATES {first}–{last}" if last > first else f"PLATE {first}", "display-bold", 32, 32, 1,
-                    left, width)
+    y, _ = _centred(
+        d, y, f"PLATES {first}–{last}" if last > first else f"PLATE {first}", "display-bold", 32, 32, 1, left, width
+    )
     _rule(d, y + 2, sheet)
     y += 22
 
@@ -542,7 +608,7 @@ def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], nu
     box_h = min(cell_h - 32 - 2 * FRAME - label, PLATE_LIMIT)
     placements = []
     for row in range(rows):
-        pair = indices[cols * row:cols * row + cols]
+        pair = indices[cols * row : cols * row + cols]
         # A short last row is centred, so a lone last plate sits in the middle, as on the front page.
         start = left + (cols - len(pair)) * (cell_w + GUTTER) // 2
         xs = [start + i * (cell_w + GUTTER) for i in range(len(pair))]
@@ -563,14 +629,14 @@ def _plates(page: Image.Image, photos: list[Image.Image], indices: list[int], nu
             d.line([(rx, y), (rx, y + full * cell_h)], fill=INK, width=RULE)
     if len(pair) > 1 and full < rows:  # between the plates of a short, centred last row
         for x in xs[1:]:
-            d.line([(x - GUTTER // 2, y + full * cell_h), (x - GUTTER // 2, y + rows * cell_h)], fill=INK,
-                   width=RULE)
+            d.line([(x - GUTTER // 2, y + full * cell_h), (x - GUTTER // 2, y + rows * cell_h)], fill=INK, width=RULE)
     _double(d, sheet.bottom - 7, sheet)
     return placements
 
 
-def compose_pages(photos: list[Image.Image], story: Story | None = None, landscape: bool = False
-                  ) -> tuple[list[Image.Image], list[list[Placement]], Cuts]:
+def compose_pages(
+    photos: list[Image.Image], story: Story | None = None, landscape: bool = False
+) -> tuple[list[Image.Image], list[list[Placement]], Cuts]:
     """Lay the photos out over the pages ``plan_pages`` gives (with the default story if none is given), on
     upright A4 or, with ``landscape``, A4 on its side.
 
@@ -583,8 +649,9 @@ def compose_pages(photos: list[Image.Image], story: Story | None = None, landsca
     pages, placements, cut = [], [], {}
     for number, indices in enumerate(plan, start=1):
         page = Image.new("RGB", (sheet.width, sheet.height), "white")
-        ImageDraw.Draw(page).rectangle([sheet.inset, sheet.inset, sheet.width - sheet.inset - 1,
-                                        sheet.height - sheet.inset - 1], fill=PAPER)
+        ImageDraw.Draw(page).rectangle(
+            [sheet.inset, sheet.inset, sheet.width - sheet.inset - 1, sheet.height - sheet.inset - 1], fill=PAPER
+        )
         if number == 1:
             placed, cut = _front(page, photos, story, indices, len(plan), sheet)
         else:

@@ -46,14 +46,20 @@ def check_caption(text: str, limit: int, exit_code: int = 2) -> str:
     script the handwriting font cannot print."""
     value = _clean(text, keep_newlines=False)
     if len(value) > limit:
-        raise PrinterError(f"caption is too long ({len(value)} characters, max {limit})",
-                           hint="shorten the caption", exit_code=exit_code)
+        raise PrinterError(
+            f"caption is too long ({len(value)} characters, max {limit})",
+            hint="shorten the caption",
+            exit_code=exit_code,
+        )
     face = fonts.face("hand", 40)
     unprintable = sorted({c for c in value if c != "?" and _char_in(face, c) == "?"})
     if unprintable:
         shown = ", ".join(f"{c} (U+{ord(c):04X})" for c in unprintable[:10])
-        raise PrinterError(f"caption has characters the handwriting font cannot print: {shown}",
-                           hint="write it in Latin, Greek or Cyrillic letters (no emoji)", exit_code=exit_code)
+        raise PrinterError(
+            f"caption has characters the handwriting font cannot print: {shown}",
+            hint="write it in Latin, Greek or Cyrillic letters (no emoji)",
+            exit_code=exit_code,
+        )
     return value
 
 
@@ -65,13 +71,23 @@ def load_photos(paths: Sequence[Path]) -> list[Image.Image]:
 def check_count(n: int) -> None:
     """A strip takes exactly ``FRAMES`` photos (exit code 2 otherwise)."""
     if n != FRAMES:
-        raise PrinterError(f"a photo-booth strip takes {FRAMES} photos, got {n}",
-                           hint=f"give {FRAMES} photos, in the order of the frames from the top (repeat one to "
-                                "use it twice)", exit_code=2)
+        raise PrinterError(
+            f"a photo-booth strip takes {FRAMES} photos, got {n}",
+            hint=f"give {FRAMES} photos, in the order of the frames from the top (repeat one to use it twice)",
+            exit_code=2,
+        )
 
 
-def _caption(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], size: int, min_size: int,
-             fill, cut: Cuts, role: str = "hand") -> None:
+def _caption(
+    d: ImageDraw.ImageDraw,
+    text: str,
+    box: tuple[int, int, int, int],
+    size: int,
+    min_size: int,
+    fill,
+    cut: Cuts,
+    role: str = "hand",
+) -> None:
     """``text`` in handwriting, on up to two lines centred in ``box``; a caption that does not fit at
     ``min_size`` is cut with "…" and named in ``cut``."""
     if not text:
@@ -104,8 +120,10 @@ CUT_LINE = (175, 175, 175)
 def frame_boxes(x0: int = 0) -> list[tuple[int, int, int, int]]:
     """The four photo frames of the strip that starts at ``x0``, from the top."""
     left = x0 + STRIP_SIDE
-    return [(left, STRIP_TOP + i * (FRAME_H + FRAME_GAP), left + FRAME_W, STRIP_TOP + i * (FRAME_H + FRAME_GAP)
-             + FRAME_H) for i in range(FRAMES)]
+    return [
+        (left, STRIP_TOP + i * (FRAME_H + FRAME_GAP), left + FRAME_W, STRIP_TOP + i * (FRAME_H + FRAME_GAP) + FRAME_H)
+        for i in range(FRAMES)
+    ]
 
 
 def _dashed(d: ImageDraw.ImageDraw, x: int, dash: int = 22, gap: int = 18) -> None:

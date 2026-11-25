@@ -95,8 +95,9 @@ class Driver(ABC):
         """One job, active or finished; None when the printer no longer (or never) knew it."""
         return next((j for j in self.jobs(include_completed=True) if j.id == job_id), None)
 
-    def wait_for_job(self, job_id: int, timeout: float, interval: float | None = None,
-                     on_state: Callable[[Job], None] | None = None) -> Job:
+    def wait_for_job(
+        self, job_id: int, timeout: float, interval: float | None = None, on_state: Callable[[Job], None] | None = None
+    ) -> Job:
         """Poll a job until it reaches a final state (completed, canceled or aborted) and return it.
 
         The job is returned whatever its final state; the caller decides whether that is a failure.
@@ -111,8 +112,11 @@ class Driver(ABC):
         while True:
             job = self.job(job_id) if job_id > 0 else None
             if job is None:
-                raise PrinterError(f"printer '{self.target.name}' has no job {job_id}",
-                                   hint="see `prt jobs --all` for the jobs it knows", kind="job_not_found")
+                raise PrinterError(
+                    f"printer '{self.target.name}' has no job {job_id}",
+                    hint="see `prt jobs --all` for the jobs it knows",
+                    kind="job_not_found",
+                )
             if job.state != last:
                 last = job.state
                 if on_state:
@@ -121,9 +125,12 @@ class Driver(ABC):
                 return job
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise PrinterError(f"job {job_id} is still {job.state} after {timeout:g} s",
-                                   hint=f"check the printer, wait again with `prt jobs wait {job_id}`, or "
-                                        "allow longer with --wait-timeout", kind="timeout")
+                raise PrinterError(
+                    f"job {job_id} is still {job.state} after {timeout:g} s",
+                    hint=f"check the printer, wait again with `prt jobs wait {job_id}`, or "
+                    "allow longer with --wait-timeout",
+                    kind="timeout",
+                )
             time.sleep(min(interval, remaining))
 
     # --- act ---------------------------------------------------------------

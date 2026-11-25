@@ -49,17 +49,24 @@ def _page_file(folder, page, name="page.json"):
     return path
 
 
-EVERY_BLOCK = {"title": "Everything", "blocks": [
-    {"type": "heading", "text": "Title", "level": 1, "align": "center"},
-    {"type": "text", "text": "One.\nTwo.", "size": "small", "align": "right"},
-    {"type": "image", "path": "photo.jpg", "height": 50, "caption": "A photo", "align": "left"},
-    {"type": "qr", "data": "https://example.com/", "size": 30, "caption": "Scan me", "align": "right"},
-    {"type": "rule", "weight": "thick"},
-    {"type": "columns", "columns": [
-        [{"type": "heading", "text": "Left", "level": 3}, {"type": "text", "text": "Left text."}],
-        [{"type": "image", "path": "photo.jpg"}, {"type": "rule"}],
-        [{"type": "qr", "data": "WIFI:S:home;T:WPA;P:secret;;"}]]},
-]}
+EVERY_BLOCK = {
+    "title": "Everything",
+    "blocks": [
+        {"type": "heading", "text": "Title", "level": 1, "align": "center"},
+        {"type": "text", "text": "One.\nTwo.", "size": "small", "align": "right"},
+        {"type": "image", "path": "photo.jpg", "height": 50, "caption": "A photo", "align": "left"},
+        {"type": "qr", "data": "https://example.com/", "size": 30, "caption": "Scan me", "align": "right"},
+        {"type": "rule", "weight": "thick"},
+        {
+            "type": "columns",
+            "columns": [
+                [{"type": "heading", "text": "Left", "level": 3}, {"type": "text", "text": "Left text."}],
+                [{"type": "image", "path": "photo.jpg"}, {"type": "rule"}],
+                [{"type": "qr", "data": "WIFI:S:home;T:WPA;P:secret;;"}],
+            ],
+        },
+    ],
+}
 
 
 def _parse(page, folder=None):
@@ -97,6 +104,7 @@ def test_every_keyword_of_the_schema_is_checked():
                 elif key == "oneOf":
                     for sub in value:
                         yield from keywords(sub)
+
     assert set(keywords(compose.page_schema())) <= compose.KEYWORDS
 
 
@@ -176,19 +184,24 @@ def test_checker_agrees_with_the_schema(page):
     assert (compose.problem(page) is None) == valid
 
 
-@pytest.mark.parametrize("page, message", [
-    ({"blocks": [{"type": "text"}]}, "blocks[0].text is missing"),
-    ({"blocks": [{"type": "video"}]}, 'blocks[0] has an unknown type "video" (use one of heading, text, image'),
-    ({"blocks": [{"type": "heading", "text": "H", "level": 4}]}, "blocks[0].level must be one of 1, 2, 3, not 4"),
-    ({"blocks": [{"type": "text", "text": "T", "font": "x"}]}, 'blocks[0] has unknown field "font"'),
-    ({"blocks": [{"type": "image", "path": "http://x/a.jpg"}]}, "blocks[0].path is a web link"),
-    ({"blocks": [{"type": "columns", "columns": [[{"type": "text", "text": " "}], []]}]},
-     "blocks[0].columns[0][0].text has only spaces in it"),
-    ({"blocks": [{"type": "qr", "data": "d", "size": 200}]}, "blocks[0].size is 200, more than 150"),
-    ({"blocks": []}, "blocks needs at least 1 item"),
-    ({"pages": []}, "blocks is missing"),
-    ([], "the page must be a JSON object"),
-])
+@pytest.mark.parametrize(
+    "page, message",
+    [
+        ({"blocks": [{"type": "text"}]}, "blocks[0].text is missing"),
+        ({"blocks": [{"type": "video"}]}, 'blocks[0] has an unknown type "video" (use one of heading, text, image'),
+        ({"blocks": [{"type": "heading", "text": "H", "level": 4}]}, "blocks[0].level must be one of 1, 2, 3, not 4"),
+        ({"blocks": [{"type": "text", "text": "T", "font": "x"}]}, 'blocks[0] has unknown field "font"'),
+        ({"blocks": [{"type": "image", "path": "http://x/a.jpg"}]}, "blocks[0].path is a web link"),
+        (
+            {"blocks": [{"type": "columns", "columns": [[{"type": "text", "text": " "}], []]}]},
+            "blocks[0].columns[0][0].text has only spaces in it",
+        ),
+        ({"blocks": [{"type": "qr", "data": "d", "size": 200}]}, "blocks[0].size is 200, more than 150"),
+        ({"blocks": []}, "blocks needs at least 1 item"),
+        ({"pages": []}, "blocks is missing"),
+        ([], "the page must be a JSON object"),
+    ],
+)
 def test_checker_says_where_the_page_file_is_wrong(page, message):
     with pytest.raises(PrinterError) as exc:
         _parse(page)
@@ -202,9 +215,16 @@ def test_checker_says_where_the_page_file_is_wrong(page, message):
 
 def test_parse_reads_images_from_the_page_folder_and_cleans_text(tmp_path):
     _photo(tmp_path)
-    page = _parse({"blocks": [{"type": "heading", "text": "  Café\tcrème  "},
-                              {"type": "image", "path": "photo.jpg"}, {"type": "image", "path": "photo.jpg"}]},
-                  tmp_path)
+    page = _parse(
+        {
+            "blocks": [
+                {"type": "heading", "text": "  Café\tcrème  "},
+                {"type": "image", "path": "photo.jpg"},
+                {"type": "image", "path": "photo.jpg"},
+            ]
+        },
+        tmp_path,
+    )
     assert page.title == "Café crème" and page.blocks[0]["text"] == "Café crème"
     assert page.inputs == [tmp_path / "photo.jpg"]  # read once, however often it is used
     assert page.blocks[1]["image"] is page.blocks[2]["image"] and page.blocks[1]["image"].mode == "RGB"
@@ -337,22 +357,32 @@ def test_transparent_image_prints_on_white(tmp_path):
     assert img.getpixel((5, 5)) == (255, 255, 255)
 
 
-@pytest.mark.parametrize("content, message", [
-    (b"{", "is not valid JSON"),
-    (b'{"blocks": [{"type": "qr", "data": "d", "size": NaN}]}', "is not valid JSON"),
-    ("{}".encode("utf-16"), "is not UTF-8 text"),
-    (b"[" * 100000 + b"]" * 100000, "is not valid JSON: nested too deeply"),
-])
+@pytest.mark.parametrize(
+    "content, message",
+    [
+        (b"{", "is not valid JSON"),
+        (b'{"blocks": [{"type": "qr", "data": "d", "size": NaN}]}', "is not valid JSON"),
+        ("{}".encode("utf-16"), "is not UTF-8 text"),
+        (b"[" * 100000 + b"]" * 100000, "is not valid JSON: nested too deeply"),
+    ],
+)
 def test_unreadable_page_files_are_refused(content, message):
     with pytest.raises(PrinterError, match=message) as exc:
         compose.parse(content, "page.json")
     assert exc.value.exit_code == 3
 
 
-@pytest.mark.parametrize("template", ['{"blocks": %s}', '{"title": %s, "blocks": []}',
-                                      '{"blocks": [{"type": %s}]}', '{"blocks": [{"type": "text", "text": %s}]}',
-                                      '{"blocks": [{"type": "heading", "text": "H", "level": %s}]}',
-                                      '{"blocks": [{"type": "columns", "columns": [[%s], []]}]}'])
+@pytest.mark.parametrize(
+    "template",
+    [
+        '{"blocks": %s}',
+        '{"title": %s, "blocks": []}',
+        '{"blocks": [{"type": %s}]}',
+        '{"blocks": [{"type": "text", "text": %s}]}',
+        '{"blocks": [{"type": "heading", "text": "H", "level": %s}]}',
+        '{"blocks": [{"type": "columns", "columns": [[%s], []]}]}',
+    ],
+)
 def test_deeply_nested_values_are_refused_by_the_schema(template):
     nested = "[" * 5000 + "]" * 5000
     with pytest.raises(PrinterError) as exc:
@@ -360,8 +390,10 @@ def test_deeply_nested_values_are_refused_by_the_schema(template):
     assert exc.value.exit_code == 3
 
 
-@pytest.mark.parametrize("template", ['{"title": %s, "blocks": []}', '{"blocks": [{"type": %s}]}',
-                                      '{"blocks": [{"type": "text", "text": %s}]}'])
+@pytest.mark.parametrize(
+    "template",
+    ['{"title": %s, "blocks": []}', '{"blocks": [{"type": %s}]}', '{"blocks": [{"type": "text", "text": %s}]}'],
+)
 def test_nesting_near_the_recursion_limit_is_refused_cleanly(template):
     limit = sys.getrecursionlimit()
     for depth in range(limit - 60, limit + 1):
@@ -377,16 +409,23 @@ def test_checker_names_a_nested_value_without_printing_it(monkeypatch):
     for _ in range(100_000):
         deep = [deep]
     assert compose.problem({"blocks": [{"type": "text", "text": deep}]}) == "blocks[0].text must be text, not a list"
-    assert compose.problem({"blocks": [{"type": {"a": deep}}]}) == "blocks[0] has an unknown type an object (use one " \
+    assert (
+        compose.problem({"blocks": [{"type": {"a": deep}}]}) == "blocks[0] has an unknown type an object (use one "
         "of heading, text, image, qr, columns, rule)"
+    )
 
 
-@pytest.mark.parametrize("page, where", [
-    (b'{"blocks": [{"type": "qr", "data": "\\ud800"}]}', "blocks[0].data"),
-    (b'{"blocks": [{"type": "columns", "columns": [[{"type": "qr", "data": "a\\udfffb"}], []]}]}',
-     "blocks[0].columns[0][0].data"),
-    (b'{"title": "\\ud800", "blocks": [{"type": "rule"}]}', "title"),
-])
+@pytest.mark.parametrize(
+    "page, where",
+    [
+        (b'{"blocks": [{"type": "qr", "data": "\\ud800"}]}', "blocks[0].data"),
+        (
+            b'{"blocks": [{"type": "columns", "columns": [[{"type": "qr", "data": "a\\udfffb"}], []]}]}',
+            "blocks[0].columns[0][0].data",
+        ),
+        (b'{"title": "\\ud800", "blocks": [{"type": "rule"}]}', "title"),
+    ],
+)
 def test_a_lone_surrogate_is_refused_before_layout(page, where):
     with pytest.raises(PrinterError) as exc:
         compose.parse(page, "page.json")
@@ -448,8 +487,15 @@ def test_paragraph_gap_is_dropped_at_the_top_of_a_page():
 def test_a_heading_is_kept_with_what_follows_it():
     moved = 0
     for n in range(45, 70):  # some of these fillers leave room for the heading but not for the text after it
-        page = _parse({"blocks": [{"type": "text", "text": " ".join(["filler"] * 12 * n)},
-                                  {"type": "heading", "text": "Next"}, {"type": "text", "text": "After it."}]})
+        page = _parse(
+            {
+                "blocks": [
+                    {"type": "text", "text": " ".join(["filler"] * 12 * n)},
+                    {"type": "heading", "text": "Next"},
+                    {"type": "text", "text": "After it."},
+                ]
+            }
+        )
         sheets = compose.layout(page)
         assert not sheets[0][-1][1].keep_with_next, "a heading ended a page"
         if len(sheets) == 2 and sheets[1][0][1].keep_with_next and len(sheets[1]) == 2:
@@ -499,12 +545,19 @@ def test_a_long_heading_that_fits_a_page_still_prints():
     assert compose.TOP + sheet[0][1].height <= compose.BOTTOM
 
 
-@pytest.mark.parametrize("blocks", [
-    [{"type": "columns", "columns": [[], []]}],
-    [{"type": "text", "text": "\u0301"}],  # a combining mark alone prints nothing
-    [{"type": "text", "text": "\u0007\n\u0301"}],  # a control character is dropped
-    [{"type": "heading", "text": "\u0301"}, {"type": "columns", "columns": [[{"type": "text", "text": "\u0301"}], []]}],
-], ids=["empty columns", "combining mark", "control character", "heading and columns"])
+@pytest.mark.parametrize(
+    "blocks",
+    [
+        [{"type": "columns", "columns": [[], []]}],
+        [{"type": "text", "text": "\u0301"}],  # a combining mark alone prints nothing
+        [{"type": "text", "text": "\u0007\n\u0301"}],  # a control character is dropped
+        [
+            {"type": "heading", "text": "\u0301"},
+            {"type": "columns", "columns": [[{"type": "text", "text": "\u0301"}], []]},
+        ],
+    ],
+    ids=["empty columns", "combining mark", "control character", "heading and columns"],
+)
 def test_a_page_file_with_nothing_to_print_is_refused(blocks):
     page = _parse({"blocks": blocks})
     with pytest.raises(PrinterError, match="the page file has nothing to print") as exc:
@@ -515,8 +568,9 @@ def test_a_page_file_with_nothing_to_print_is_refused(blocks):
 def test_empty_columns_never_start_a_blank_page():
     lead = compose._lead(compose.TEXT_SIZES["normal"])
     for n in range(compose.CONTENT_H // lead - 3, compose.CONTENT_H // lead + 1):  # text filling page 1 to the foot
-        page = _parse({"blocks": [{"type": "text", "text": "\n".join(["line"] * n)},
-                                  {"type": "columns", "columns": [[], []]}]})
+        page = _parse(
+            {"blocks": [{"type": "text", "text": "\n".join(["line"] * n)}, {"type": "columns", "columns": [[], []]}]}
+        )
         sheets = compose.layout(page)
         assert all(sheet and sheet[0][1].ink for sheet in sheets)
         assert all(piece.height for sheet in sheets for _, piece in sheet)  # the empty columns are left out
@@ -546,6 +600,7 @@ def test_columns_sit_side_by_side():
 
 def test_qr_code_has_whole_modules_and_a_quiet_zone():
     import segno
+
     img = compose.qr_image("https://example.com/", 300, "blocks[0]")
     modules = segno.make("https://example.com/", error="m", micro=False).symbol_size(scale=1, border=4)[0]
     scale = img.width // modules
@@ -556,8 +611,18 @@ def test_qr_code_has_whole_modules_and_a_quiet_zone():
 
 def test_qr_code_too_dense_for_its_room_is_refused():
     with pytest.raises(PrinterError, match="too much data for a QR code") as exc:
-        compose.layout(_parse({"blocks": [{"type": "columns", "columns": [
-            [{"type": "qr", "data": "🎉" * compose.MAX_QR_DATA}], [], [], []]}]}))
+        compose.layout(
+            _parse(
+                {
+                    "blocks": [
+                        {
+                            "type": "columns",
+                            "columns": [[{"type": "qr", "data": "🎉" * compose.MAX_QR_DATA}], [], [], []],
+                        }
+                    ]
+                }
+            )
+        )
     assert exc.value.exit_code == 3
 
 
@@ -570,6 +635,7 @@ def test_longest_qr_data_fits_a_full_width_code():
 def _count_bitmaps(monkeypatch):
     """Count image resizes and QR codes made and rasterised, from here on."""
     import segno
+
     made = SimpleNamespace(resized=0, codes=0, qr_bitmaps=0)
     real_resize, real_make, real_bitmap = Image.Image.resize, segno.make, compose._qr_bitmap
 
@@ -584,6 +650,7 @@ def _count_bitmaps(monkeypatch):
     def bitmap(*args):
         made.qr_bitmaps += 1
         return real_bitmap(*args)
+
     monkeypatch.setattr(Image.Image, "resize", resize)
     monkeypatch.setattr(segno, "make", make)
     monkeypatch.setattr(compose, "_qr_bitmap", bitmap)
@@ -600,8 +667,14 @@ def test_many_images_needing_too_many_pages_are_refused_without_resizing_them(tm
 
 
 def test_many_qr_codes_needing_too_many_pages_are_refused_without_drawing_them(monkeypatch):
-    page = _parse({"blocks": [{"type": "qr", "data": "x" * (compose.MAX_QR_DATA - 3) + f"{n:03}", "size": 150}
-                              for n in range(compose.MAX_BLOCKS)]})
+    page = _parse(
+        {
+            "blocks": [
+                {"type": "qr", "data": "x" * (compose.MAX_QR_DATA - 3) + f"{n:03}", "size": 150}
+                for n in range(compose.MAX_BLOCKS)
+            ]
+        }
+    )
     made = _count_bitmaps(monkeypatch)
     with pytest.raises(PrinterError, match=f"needs more than {compose.MAX_PAGES} pages"):
         compose.compose_pages(page)
@@ -635,7 +708,10 @@ def test_bitmaps_are_made_only_when_a_page_is_drawn(tmp_path, monkeypatch):
     (img,) = compose.compose_pages(page)
     assert img.size == (1240, 1754) and made.qr_bitmaps == 2 and made.resized >= 4  # 2 photos, 2 QR codes
     for y, piece in sheets[0]:  # every block left ink where it was laid out
-        assert piece.space or _ink(img, (compose.MARGIN, y, compose.MARGIN + compose.CONTENT_W, y + max(piece.height, 1))) > 0
+        assert (
+            piece.space
+            or _ink(img, (compose.MARGIN, y, compose.MARGIN + compose.CONTENT_W, y + max(piece.height, 1))) > 0
+        )
 
 
 # --- prt compose ---------------------------------------------------------------------------------------
@@ -648,14 +724,18 @@ def _every_block_file(tmp_path):
 
 def test_preview_writes_the_pages_and_prints_nothing(capsys, tmp_path, printer):
     out_file = tmp_path / "out.png"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "compose", str(_every_block_file(tmp_path)),
-                         "--preview", str(out_file))
+    code, out, err = run(
+        capsys, "-p", "demo", "-f", "json", "compose", str(_every_block_file(tmp_path)), "--preview", str(out_file)
+    )
     assert code == 0, err
     data = json.loads(out)
     assert data["estimate"]["pages"] == 1 and data["estimate"]["colour"] is True
-    assert without_estimate(out) == {"action": "compose", "title": "Everything", "pages": 1,
-                                     "files": [{"file": str(out_file), "format": "png",
-                                                "bytes": out_file.stat().st_size}]}
+    assert without_estimate(out) == {
+        "action": "compose",
+        "title": "Everything",
+        "pages": 1,
+        "files": [{"file": str(out_file), "format": "png", "bytes": out_file.stat().st_size}],
+    }
     assert Image.open(out_file).size == (1240, 1754)
     assert printer.made == [] and printer.jobs() == []
 
@@ -671,15 +751,20 @@ def test_preview_of_several_pages_numbers_the_files(capsys, tmp_path, printer):
 
 def test_print_sends_one_job_per_page_after_saving_copies(capsys, tmp_path, printer):
     from prt.booth import to_jpeg
+
     page_file = _every_block_file(tmp_path)
     copy = tmp_path / "copy.pdf"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "compose", str(page_file), "--save", str(copy),
-                         "--yes")
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "compose", str(page_file), "--save", str(copy), "--yes")
     assert code == 0, err
     expected = [to_jpeg(p) for p in compose.compose_pages(compose.load(page_file))]
     assert printer.jobs() == expected
-    assert without_estimate(out) == {"action": "compose", "title": "Everything", "pages": 1, "job_ids": [101],
-                                     "saved": [{"file": str(copy), "format": "pdf", "bytes": copy.stat().st_size}]}
+    assert without_estimate(out) == {
+        "action": "compose",
+        "title": "Everything",
+        "pages": 1,
+        "job_ids": [101],
+        "saved": [{"file": str(copy), "format": "pdf", "bytes": copy.stat().st_size}],
+    }
     assert copy.read_bytes().startswith(b"%PDF") and "1 page queued as job 101" in err
 
 
@@ -706,17 +791,19 @@ def test_page_from_stdin_reads_images_from_the_current_folder(capsys, tmp_path, 
     assert json.loads(out)["job_ids"] == [101] and len(printer.jobs()) == 1
 
 
-@pytest.mark.parametrize("page, kind_of_problem", [
-    ({"blocks": [{"type": "text", "text": "T", "colour": "red"}]}, 'unknown field "colour"'),
-    ({"blocks": [{"type": "image", "path": "missing.png"}]}, "image not found"),
-    ({"blocks": [{"type": "image", "path": "https://example.com/a.png"}]}, "is a web link"),
-    ({"blocks": [{"type": "heading", "text": "Party 🎉"}]}, "cannot print"),
-    ({"blocks": [{"type": "heading", "text": TALL_HEADING}]}, "blocks[0]: the heading is taller than a page"),
-    ({"blocks": [{"type": "columns", "columns": [[], []]}]}, "has nothing to print"),
-    ({"blocks": [{"type": "text", "text": "\u0301"}]}, "has nothing to print"),
-])
-def test_an_invalid_page_file_is_refused_before_anything_is_printed(capsys, tmp_path, printer, page,
-                                                                    kind_of_problem):
+@pytest.mark.parametrize(
+    "page, kind_of_problem",
+    [
+        ({"blocks": [{"type": "text", "text": "T", "colour": "red"}]}, 'unknown field "colour"'),
+        ({"blocks": [{"type": "image", "path": "missing.png"}]}, "image not found"),
+        ({"blocks": [{"type": "image", "path": "https://example.com/a.png"}]}, "is a web link"),
+        ({"blocks": [{"type": "heading", "text": "Party 🎉"}]}, "cannot print"),
+        ({"blocks": [{"type": "heading", "text": TALL_HEADING}]}, "blocks[0]: the heading is taller than a page"),
+        ({"blocks": [{"type": "columns", "columns": [[], []]}]}, "has nothing to print"),
+        ({"blocks": [{"type": "text", "text": "\u0301"}]}, "has nothing to print"),
+    ],
+)
+def test_an_invalid_page_file_is_refused_before_anything_is_printed(capsys, tmp_path, printer, page, kind_of_problem):
     copy, preview = tmp_path / "copy.pdf", tmp_path / "preview.png"
     for extra in (["--yes", "--save", str(copy)], ["--preview", str(preview)]):
         code, out, err = run(capsys, "-p", "demo", "-f", "json", "compose", str(_page_file(tmp_path, page)), *extra)
@@ -743,8 +830,9 @@ def test_output_that_would_overwrite_an_input_is_refused(capsys, tmp_path, print
     page_file = _page_file(tmp_path, EVERY_BLOCK, name="layout.png")  # any name will do for a page file
     before = (tmp_path / "photo.jpg").read_bytes()
     for args in (["-o", "photo.jpg"], ["-o", "layout.png"], ["--save", "photo.jpg", "--yes"]):
-        code, _, err = run(capsys, "-f", "json", "compose", str(page_file), *[str(tmp_path / a) if "." in a else a
-                                                                             for a in args])
+        code, _, err = run(
+            capsys, "-f", "json", "compose", str(page_file), *[str(tmp_path / a) if "." in a else a for a in args]
+        )
         assert code == 2 and "would overwrite input" in _error(err)["message"]
     assert (tmp_path / "photo.jpg").read_bytes() == before and json.loads(page_file.read_text()) == EVERY_BLOCK
     assert printer.jobs() == []

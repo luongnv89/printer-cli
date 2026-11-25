@@ -44,8 +44,18 @@ def test_schema_example_is_valid_and_prints(capsys, tmp_path):
     example = catalog.schema("morning")["examples"][0]
     assert Draft202012Validator(catalog.schema("morning")).is_valid(example)
     out_file = tmp_path / "morning.png"
-    code, out, err = run(capsys, "gazette", "--edition", "morning", "--edition-file", str(_file(tmp_path, example)),
-                         "-f", "json", "-o", str(out_file))
+    code, out, err = run(
+        capsys,
+        "gazette",
+        "--edition",
+        "morning",
+        "--edition-file",
+        str(_file(tmp_path, example)),
+        "-f",
+        "json",
+        "-o",
+        str(out_file),
+    )
     assert code == 0, err
     report = json.loads(out)
     assert report["action"] == "gazette" and report["edition"] == "morning" and report["photos"] == 0
@@ -53,22 +63,26 @@ def test_schema_example_is_valid_and_prints(capsys, tmp_path):
     assert out_file.is_file() and out_file.stat().st_size > 10_000
 
 
-@pytest.mark.parametrize("data", [
-    EXAMPLE,
-    {**EXAMPLE, "title": "x" * morning.LIMITS["title"]},
-    {**EXAMPLE, "extra": True},
-    {k: v for k, v in EXAMPLE.items() if k != "weather"},
-    {**EXAMPLE, "weather": {"summary": "Fair", "extra": "x"}},
-    {**EXAMPLE, "weather": {"details": []}},
-    {**EXAMPLE, "calendar": {"items": "09:00 Standup"}},
-    {**EXAMPLE, "todos": {"items": [""]}},
-    {**EXAMPLE, "todos": {"items": ["   "]}},
-    {**EXAMPLE, "title": "   "},
-    {**EXAMPLE, "weather": {"summary": " \t "}},
-    {**EXAMPLE, "headlines": {"items": [{"summary": "No title"}]}},
-    {**EXAMPLE, "headlines": {"items": [{"title": "x" * (morning.LIMITS["headlines.items[].title"] + 1)}]}},
-    [], "morning",
-])
+@pytest.mark.parametrize(
+    "data",
+    [
+        EXAMPLE,
+        {**EXAMPLE, "title": "x" * morning.LIMITS["title"]},
+        {**EXAMPLE, "extra": True},
+        {k: v for k, v in EXAMPLE.items() if k != "weather"},
+        {**EXAMPLE, "weather": {"summary": "Fair", "extra": "x"}},
+        {**EXAMPLE, "weather": {"details": []}},
+        {**EXAMPLE, "calendar": {"items": "09:00 Standup"}},
+        {**EXAMPLE, "todos": {"items": [""]}},
+        {**EXAMPLE, "todos": {"items": ["   "]}},
+        {**EXAMPLE, "title": "   "},
+        {**EXAMPLE, "weather": {"summary": " \t "}},
+        {**EXAMPLE, "headlines": {"items": [{"summary": "No title"}]}},
+        {**EXAMPLE, "headlines": {"items": [{"title": "x" * (morning.LIMITS["headlines.items[].title"] + 1)}]}},
+        [],
+        "morning",
+    ],
+)
 def test_morning_schema_agrees_with_the_parser(data):
     assert Draft202012Validator(catalog.schema("morning")).is_valid(data) == _accepted(data)
 
@@ -106,7 +120,9 @@ def test_edition_usage_errors(capsys, tmp_path):
     path = _file(tmp_path)
     code, _, err = run(capsys, "gazette", "--edition", "morning")
     assert code == 2 and "needs --edition-file" in err
-    code, _, err = run(capsys, "gazette", str(tmp_path / "photo.jpg"), "--edition", "morning", "--edition-file", str(path))
+    code, _, err = run(
+        capsys, "gazette", str(tmp_path / "photo.jpg"), "--edition", "morning", "--edition-file", str(path)
+    )
     assert code == 2 and "takes no photos" in err
     code, _, err = run(capsys, "gazette", "--edition-file", str(path))
     assert code == 2 and "needs --edition morning" in err

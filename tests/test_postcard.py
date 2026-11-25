@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -62,10 +63,12 @@ def printer(monkeypatch):
     def cups_print(queue, path, options):
         cups.append(SimpleNamespace(queue=queue, pdf=path.read_bytes(), options=options))
         return 77
+
     monkeypatch.setattr("prt.printing.cups_print", cups_print)
     requests = lambda: [r for r in fake.client.requests if r[0] == ipp.OP_PRINT_JOB]  # noqa: E731
-    return SimpleNamespace(driver=fake, made=made, cups=cups, requests=requests,
-                           jobs=lambda: [data for _, _, _, data in requests()])
+    return SimpleNamespace(
+        driver=fake, made=made, cups=cups, requests=requests, jobs=lambda: [data for _, _, _, data in requests()]
+    )
 
 
 @pytest.fixture
@@ -77,6 +80,7 @@ def terminal(monkeypatch):
     def confirm(question, **kw):
         state.asked.append(question)
         return state.answers.pop(0) if state.answers else True
+
     monkeypatch.setattr("typer.confirm", confirm)
     return state
 
@@ -88,10 +92,12 @@ def no_terminal(monkeypatch):
 
 def _sides(photo_path, card=None):
     from prt import booth
+
     return postcard.compose(booth.load_photo(photo_path), card)[0]
 
 
 # --- the layout ----------------------------------------------------------------------------------
+
 
 def test_both_sides_are_landscape_4x6_at_300dpi():
     pages, cut = postcard.compose(Image.new("RGB", (600, 400), RED))
@@ -142,10 +148,18 @@ def test_message_goes_left_of_the_divider_and_the_address_on_the_lines_right_of_
     full = postcard.back(Postcard(message="Hello", address="Jo Smith\n12 High Street"), {})
     message_area = (postcard.MARGIN, 180, postcard.DIVIDER_X - 10, 400)
     assert _inked(blank, message_area)
-    first_line = (postcard.ADDRESS_LEFT, postcard.ADDRESS_BASELINES[0] - 90, postcard.ADDRESS_RIGHT,
-                  postcard.ADDRESS_BASELINES[0] - 4)
-    third_line = (postcard.ADDRESS_LEFT, postcard.ADDRESS_BASELINES[2] - 90, postcard.ADDRESS_RIGHT,
-                  postcard.ADDRESS_BASELINES[2] - 4)
+    first_line = (
+        postcard.ADDRESS_LEFT,
+        postcard.ADDRESS_BASELINES[0] - 90,
+        postcard.ADDRESS_RIGHT,
+        postcard.ADDRESS_BASELINES[0] - 4,
+    )
+    third_line = (
+        postcard.ADDRESS_LEFT,
+        postcard.ADDRESS_BASELINES[2] - 90,
+        postcard.ADDRESS_RIGHT,
+        postcard.ADDRESS_BASELINES[2] - 4,
+    )
     assert not _inked(blank, first_line) and _inked(full, first_line) and not _inked(full, third_line)
 
 
@@ -158,12 +172,16 @@ def test_a_message_too_long_for_its_box_is_cut_and_the_cut_part_fits():
     text = " ".join(["Words that go on and on"] * 21)[:500]
     _, _, _, cut = postcard.fit_message(text, 780, 300)
     assert cut is not None and cut.given == len(text) and 0 < cut.max_fit < len(text)
-    assert postcard.fit_message(text[:cut.max_fit], 780, 300)[3] is None
+    assert postcard.fit_message(text[: cut.max_fit], 780, 300)[3] is None
 
 
 def test_cut_fields_are_reported_in_reading_order_and_counted_in_the_address_given():
-    card = Postcard(greeting="W" * 60, message=" ".join(["Words that go on"] * 100), signature="S" * 60,
-                    address="Jo Smith\n" + "W" * 40)
+    card = Postcard(
+        greeting="W" * 60,
+        message=" ".join(["Words that go on"] * 100),
+        signature="S" * 60,
+        address="Jo Smith\n" + "W" * 40,
+    )
     _, cut = postcard.compose(Image.new("RGB", (60, 40), RED), card)
     assert list(cut) == ["message", "signature", "address"]  # a greeting of 60 characters always fits
     address = cut["address"]
@@ -178,19 +196,25 @@ def test_flipped_back_is_a_half_turn():
 
 def test_side_paths_are_one_pdf_or_a_front_and_a_back_image(tmp_path):
     assert postcard.side_paths(tmp_path / "card.pdf", "pdf") == [tmp_path / "card.pdf"]
-    assert postcard.side_paths(tmp_path / "card.png", "png") == [tmp_path / "card-front.png",
-                                                                 tmp_path / "card-back.png"]
+    assert postcard.side_paths(tmp_path / "card.png", "png") == [
+        tmp_path / "card-front.png",
+        tmp_path / "card-back.png",
+    ]
 
 
 # --- the postcard text ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("changes, message", [
-    ({"message": ""}, "empty message"),
-    ({"message": "x" * 501}, "message is too long"),
-    ({"greeting": "x" * 61}, "greeting is too long"),
-    ({"address": "a\nb\nc\nd\ne"}, "the address has 5 lines, max 4"),
-    ({"signature": "Love 🎉"}, "cannot print"),
-])
+
+@pytest.mark.parametrize(
+    "changes, message",
+    [
+        ({"message": ""}, "empty message"),
+        ({"message": "x" * 501}, "message is too long"),
+        ({"greeting": "x" * 61}, "greeting is too long"),
+        ({"address": "a\nb\nc\nd\ne"}, "the address has 5 lines, max 4"),
+        ({"signature": "Love 🎉"}, "cannot print"),
+    ],
+)
 def test_overrides_are_checked_as_usage_errors(changes, message):
     with pytest.raises(PrinterError) as exc:
         postcard.with_overrides(postcard.DEFAULT_POSTCARD, **changes)
@@ -198,18 +222,20 @@ def test_overrides_are_checked_as_usage_errors(changes, message):
 
 
 def test_text_is_cleaned_and_blank_lines_dropped():
-    card = postcard.with_overrides(Postcard(message="  Hello \n\n\n  there  "), address="Jo\n\n Smith ",
-                                   greeting=None)
+    card = postcard.with_overrides(Postcard(message="  Hello \n\n\n  there  "), address="Jo\n\n Smith ", greeting=None)
     assert card.message == "Hello\nthere" and card.address == "Jo\nSmith"
 
 
-@pytest.mark.parametrize("content, message", [
-    ("{", "not valid JSON"),
-    ("[]", "must hold a JSON object"),
-    ('{"greeting": "Hi"}', "missing message"),
-    ('{"message": "Hi", "to": "Jo"}', "unknown field(s) in postcard file: to"),
-    ('{"message": "Hi", "address": ["Jo"]}', "fields must be text: address"),
-])
+@pytest.mark.parametrize(
+    "content, message",
+    [
+        ("{", "not valid JSON"),
+        ("[]", "must hold a JSON object"),
+        ('{"greeting": "Hi"}', "missing message"),
+        ('{"message": "Hi", "to": "Jo"}', "unknown field(s) in postcard file: to"),
+        ('{"message": "Hi", "address": ["Jo"]}', "fields must be text: address"),
+    ],
+)
 def test_bad_postcard_file_is_refused_with_exit_code_3(tmp_path, content, message):
     path = tmp_path / "postcard.json"
     path.write_text(content)
@@ -228,6 +254,7 @@ def test_missing_and_oversized_postcard_files(tmp_path):
 
 
 # --- prt styles and prt schema postcard --------------------------------------------------------------
+
 
 def test_postcard_style_is_two_sides_on_4x6():
     style = next(s for s in catalog.styles() if s["name"] == "postcard")
@@ -252,19 +279,22 @@ def _accepted(data) -> bool:
     return True
 
 
-@pytest.mark.parametrize("data", [
-    {"message": "Hi"},
-    {"message": "Hi", "greeting": "", "signature": "", "address": ""},
-    {"message": "m" * 500, "greeting": "g" * 60, "signature": "s" * 60, "address": "a" * 160},
-    {"message": "Hi", "address": "Jo\n1 Road\nTown\nLand"},
-    {"message": "Hi", "address": "Jo\n1 Road\nTown\nLand\nEarth"},
-    {"message": "m" * 501},
-    {"message": "Hi", "address": "a" * 161},
-    {"message": " "},
-    {"greeting": "Hi"},
-    {"message": "Hi", "stamp": "x"},
-    {"message": 1},
-])
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"message": "Hi"},
+        {"message": "Hi", "greeting": "", "signature": "", "address": ""},
+        {"message": "m" * 500, "greeting": "g" * 60, "signature": "s" * 60, "address": "a" * 160},
+        {"message": "Hi", "address": "Jo\n1 Road\nTown\nLand"},
+        {"message": "Hi", "address": "Jo\n1 Road\nTown\nLand\nEarth"},
+        {"message": "m" * 501},
+        {"message": "Hi", "address": "a" * 161},
+        {"message": " "},
+        {"greeting": "Hi"},
+        {"message": "Hi", "stamp": "x"},
+        {"message": 1},
+    ],
+)
 def test_postcard_schema_agrees_with_the_postcard_file_check(data):
     assert _schema_valid(data) == _accepted(data)
 
@@ -278,6 +308,7 @@ def test_postcard_schema_examples_are_accepted():
 
 
 # --- how the sides are printed ---------------------------------------------------------------------
+
 
 def _never():
     raise AssertionError("asked the printer when it did not need to")
@@ -304,8 +335,10 @@ def test_a_duplex_capable_paper_goes_two_sided_when_the_printer_can():
 
 def test_duplex_asked_for_needs_two_sided_printing_and_a_cups_queue():
     assert postcard.print_method("both", True, PHOTO_4X6, lambda: True, lambda: "q", False) == ("duplex", "q")
-    for two_sided, queue, says in ((lambda: False, _never, "does not report two-sided"),
-                                   (lambda: True, lambda: None, "CUPS queue")):
+    for two_sided, queue, says in (
+        (lambda: False, _never, "does not report two-sided"),
+        (lambda: True, lambda: None, "CUPS queue"),
+    ):
         with pytest.raises(PrinterError) as exc:
             postcard.print_method("both", True, PHOTO_4X6, two_sided, queue, True)
         assert exc.value.kind == "duplex_unavailable" and exc.value.exit_code == 1 and says in str(exc.value)
@@ -323,18 +356,24 @@ def test_sides_option_is_sent_over_ipp_and_cups(monkeypatch, tmp_path):
     sent = {a.name: a.value for a in fake.client.requests[-1][2]}
     assert sent["sides"] == "two-sided-short-edge"
     commands = []
-    monkeypatch.setattr("subprocess.run", lambda cmd, **kw: commands.append(cmd) or SimpleNamespace(
-        returncode=0, stdout="request id is q-12 (1 file(s))", stderr=""))
-    job = printing.cups_print("q", tmp_path / "a.pdf", PrintOptions(sides="two-sided-short-edge",
-                                                                    media_type="photographic", tray="photo"))
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda cmd, **kw: (
+            commands.append(cmd) or SimpleNamespace(returncode=0, stdout="request id is q-12 (1 file(s))", stderr="")
+        ),
+    )
+    job = printing.cups_print(
+        "q", tmp_path / "a.pdf", PrintOptions(sides="two-sided-short-edge", media_type="photographic", tray="photo")
+    )
     assert job == 12
     assert {"sides=two-sided-short-edge", "media-type=photographic", "media-source=photo"} <= set(commands[0])
 
 
 def test_send_two_sided_hands_cups_one_upright_two_page_pdf(tmp_path, monkeypatch):
     calls = []
-    monkeypatch.setattr("prt.printing.cups_print",
-                        lambda queue, path, options: calls.append((queue, path.read_bytes(), options)) or 5)
+    monkeypatch.setattr(
+        "prt.printing.cups_print", lambda queue, path, options: calls.append((queue, path.read_bytes(), options)) or 5
+    )
     pages, _ = postcard.compose(Image.new("RGB", (60, 40), RED))
     ticket = guard.Ticket(2)
     assert render.send_two_sided("q", pages, "prt postcard x", ticket, PHOTO_4X6) == 5
@@ -347,6 +386,7 @@ def test_send_two_sided_hands_cups_one_upright_two_page_pdf(tmp_path, monkeypatc
 
 # --- prt postcard ----------------------------------------------------------------------------------
 
+
 def test_preview_saves_both_sides_and_prints_nothing(capsys, tmp_path, printer):
     photo = _photo(tmp_path)
     out_file = tmp_path / "card.png"
@@ -357,10 +397,16 @@ def test_preview_saves_both_sides_and_prints_nothing(capsys, tmp_path, printer):
     data = json.loads(out)
     assert data["estimate"]["summary"].startswith("~2 pages (4×6)")
     assert without_estimate(out) == {
-        "action": "postcard", "pages": 2, "paper": {"size": "4x6", "media": "4x6", "tray": "photo"},
-        "fits": True, "cut": {},
-        "files": [{"file": str(front), "format": "png", "bytes": front.stat().st_size},
-                  {"file": str(back), "format": "png", "bytes": back.stat().st_size}]}
+        "action": "postcard",
+        "pages": 2,
+        "paper": {"size": "4x6", "media": "4x6", "tray": "photo"},
+        "fits": True,
+        "cut": {},
+        "files": [
+            {"file": str(front), "format": "png", "bytes": front.stat().st_size},
+            {"file": str(back), "format": "png", "bytes": back.stat().st_size},
+        ],
+    }
     expected = _sides(photo)
     assert [Image.open(f).convert("RGB").tobytes() for f in (front, back)] == [p.tobytes() for p in expected]
     assert not out_file.exists()
@@ -415,8 +461,9 @@ def test_at_a_terminal_the_front_prints_then_the_back_once_the_card_is_turned(ca
     front, back = _sides(photo)
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "postcard", str(photo))
     assert code == 0, err
-    assert terminal.asked[0] == ("Print photo.jpg as a postcard, front then back on demo? (load 4×6 paper in the "
-                                 "photo tray)")
+    assert terminal.asked[0] == (
+        "Print photo.jpg as a postcard, front then back on demo? (load 4×6 paper in the photo tray)"
+    )
     assert postcard.FLIP in terminal.asked[1] and terminal.asked[1].endswith("Print the back now?")
     assert printer.jobs() == [PHOTO_4X6.to_jpeg(front), PHOTO_4X6.to_jpeg(postcard.flipped(back))]
     data = without_estimate(out)
@@ -458,14 +505,27 @@ def test_duplex_is_refused_without_a_cups_queue_or_two_sided_printing(capsys, tm
 
 def test_duplex_with_one_side_is_a_usage_error_before_anything_else(capsys, tmp_path, printer):
     out_file = tmp_path / "card.png"
-    code, _, err = run(capsys, "-p", "demo", "-f", "json", "postcard", str(_photo(tmp_path)), "--duplex", "--side",
-                       "back", "-o", str(out_file))
+    code, _, err = run(
+        capsys,
+        "-p",
+        "demo",
+        "-f",
+        "json",
+        "postcard",
+        str(_photo(tmp_path)),
+        "--duplex",
+        "--side",
+        "back",
+        "-o",
+        str(out_file),
+    )
     assert code == 2 and "--duplex" in _error(err)["message"]
     assert printer.made == [] and not (tmp_path / "card-front.png").exists()
 
 
 def test_a_page_cap_counts_both_sides(capsys, tmp_path, printer, terminal):
     from prt.config import Config
+
     cfg = Config.load()
     cfg.max_pages_per_run = 1
     cfg.save()
@@ -475,37 +535,72 @@ def test_a_page_cap_counts_both_sides(capsys, tmp_path, printer, terminal):
     assert run(capsys, "-p", "demo", "postcard", str(_photo(tmp_path)), "--side", "front")[0] == 0
 
 
+def _undated(pdf: bytes) -> bytes:
+    """A PDF without the creation and modification dates Pillow stamps to the second,
+    so two renders of the same pages compare equal whichever second each ran in."""
+    return re.sub(rb"/(CreationDate|ModDate) \(D:\d+Z?\)", b"", pdf)
+
+
 def test_postcard_file_and_flags_override_it(capsys, tmp_path, printer):
     from prt import booth
+
     photo = _photo(tmp_path)
     path = _postcard_file(tmp_path, {"message": "From the file", "greeting": "Hello", "address": "Old\nAddress"})
     out_file = tmp_path / "card.pdf"
-    code, out, err = run(capsys, "-f", "json", "postcard", str(photo), "--postcard-file", str(path), "--greeting",
-                         "", "--address", "Jo Smith", "--address", "12 High Street", "--signature", "Love, Sam",
-                         "-o", str(out_file))
+    code, out, err = run(
+        capsys,
+        "-f",
+        "json",
+        "postcard",
+        str(photo),
+        "--postcard-file",
+        str(path),
+        "--greeting",
+        "",
+        "--address",
+        "Jo Smith",
+        "--address",
+        "12 High Street",
+        "--signature",
+        "Love, Sam",
+        "-o",
+        str(out_file),
+    )
     assert code == 0, err
-    expected = Postcard(greeting="", message="From the file", signature="Love, Sam",
-                        address="Jo Smith\n12 High Street")
+    expected = Postcard(greeting="", message="From the file", signature="Love, Sam", address="Jo Smith\n12 High Street")
     pages, _ = postcard.compose(booth.load_photo(photo), expected)
     from prt.article import page_files
-    assert out_file.read_bytes() == page_files(pages, out_file, "pdf", PHOTO_4X6)[0][1]
+
+    assert _undated(out_file.read_bytes()) == _undated(page_files(pages, out_file, "pdf", PHOTO_4X6)[0][1])
 
 
 def test_postcard_file_dash_reads_stdin_and_bad_input_sends_nothing(capsys, tmp_path, printer, stdin, no_terminal):
     stdin(json.dumps({"message": "Hello from stdin"}).encode())
-    code, _, err = run(capsys, "postcard", str(_photo(tmp_path)), "--postcard-file", "-", "-o",
-                       str(tmp_path / "c.jpg"))
+    code, _, err = run(capsys, "postcard", str(_photo(tmp_path)), "--postcard-file", "-", "-o", str(tmp_path / "c.jpg"))
     assert code == 0, err and (tmp_path / "c-front.jpg").is_file() and (tmp_path / "c-back.jpg").is_file()
     stdin(b'{"greeting": "Hi"}')
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "postcard", str(_photo(tmp_path)), "--postcard-file",
-                         "-", "--side", "front", "--yes")
+    code, out, err = run(
+        capsys,
+        "-p",
+        "demo",
+        "-f",
+        "json",
+        "postcard",
+        str(_photo(tmp_path)),
+        "--postcard-file",
+        "-",
+        "--side",
+        "front",
+        "--yes",
+    )
     assert code == 3 and _error(err)["kind"] == "invalid_input" and "missing message" in _error(err)["message"]
     assert out == "" and printer.made == [] and guard.used_today() == 0
 
 
 def test_cut_text_is_warned_and_reported(capsys, tmp_path, printer):
-    code, out, err = run(capsys, "-f", "json", "postcard", str(_photo(tmp_path)), "--signature", "S" * 60, "-o",
-                         str(tmp_path / "c.png"))
+    code, out, err = run(
+        capsys, "-f", "json", "postcard", str(_photo(tmp_path)), "--signature", "S" * 60, "-o", str(tmp_path / "c.png")
+    )
     assert code == 0 and "signature cut to fit the postcard" in err
     data = json.loads(out)
     assert data["fits"] is False and set(data["cut"]) == {"signature"} and data["cut"]["signature"]["given"] == 60
@@ -517,8 +612,7 @@ def test_outputs_over_the_photo_or_postcard_file_and_bad_input_are_refused(capsy
     code, _, err = run(capsys, "-f", "json", "postcard", str(photo), "-o", str(tmp_path / "card.png"))
     assert code == 2 and "overwrite" in _error(err)["message"] and not (tmp_path / "card-back.png").exists()
     path = _postcard_file(tmp_path, {"message": "Hi"}, name="text.pdf")
-    code, _, err = run(capsys, "-f", "json", "postcard", str(photo), "--postcard-file", str(path), "--save",
-                       str(path))
+    code, _, err = run(capsys, "-f", "json", "postcard", str(photo), "--postcard-file", str(path), "--save", str(path))
     assert code == 2 and "overwrite" in _error(err)["message"]
     code, _, err = run(capsys, "-f", "json", "postcard", str(photo), "--message", "🎉", "-o", str(tmp_path / "x.png"))
     assert code == 2 and "cannot print" in _error(err)["message"]
@@ -532,8 +626,20 @@ def test_outputs_over_the_photo_or_postcard_file_and_bad_input_are_refused(capsy
 
 def test_save_keeps_both_sides_and_prints(capsys, tmp_path, printer, no_terminal):
     copy = tmp_path / "copy.jpg"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "postcard", str(_photo(tmp_path)), "--save", str(copy),
-                         "--side", "front", "--yes")
+    code, out, err = run(
+        capsys,
+        "-p",
+        "demo",
+        "-f",
+        "json",
+        "postcard",
+        str(_photo(tmp_path)),
+        "--save",
+        str(copy),
+        "--side",
+        "front",
+        "--yes",
+    )
     assert code == 0, err
     saved = json.loads(out)["saved"]
     assert [entry["file"] for entry in saved] == [str(tmp_path / "copy-front.jpg"), str(tmp_path / "copy-back.jpg")]
@@ -542,8 +648,7 @@ def test_save_keeps_both_sides_and_prints(capsys, tmp_path, printer, no_terminal
 
 
 def test_estimate_counts_only_the_sides_printed(capsys, tmp_path, printer, no_terminal):
-    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "postcard", str(_photo(tmp_path)), "--side", "back",
-                       "--yes")
+    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "postcard", str(_photo(tmp_path)), "--side", "back", "--yes")
     assert code == 0 and json.loads(out)["estimate"]["pages"] == 1
 
 

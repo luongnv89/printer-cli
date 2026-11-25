@@ -46,7 +46,10 @@ def test_collect_reads_the_day_log_with_fixed_git_argv(tmp_path):
     commit(repo, "a.txt", "Add the morning edition", now.replace(hour=9))
     commit(repo, "b.txt", "Fix the receipt layout", now.replace(hour=11))
     data = receipt.collect(repo, "day", now)
-    assert data.total == 2 and [c.subject for c in data.commits] == ["Fix the receipt layout", "Add the morning edition"]
+    assert data.total == 2 and [c.subject for c in data.commits] == [
+        "Fix the receipt layout",
+        "Add the morning edition",
+    ]
     assert data.commits[0].author == "Ada Example" and len(data.commits[0].sha) == 40
 
 

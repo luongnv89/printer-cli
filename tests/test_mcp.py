@@ -36,6 +36,7 @@ def printer(monkeypatch):
 
     def sent():
         return [data for op, _, _, data in fake.client.requests if op == ipp.OP_PRINT_JOB]
+
     return SimpleNamespace(driver=fake, sent=sent)
 
 
@@ -108,12 +109,15 @@ def test_preview_booth_reports_text_that_does_not_fit(tools, tmp_path):
     assert data["fits"] is False and "headline" in data["cut"]
 
 
-@pytest.mark.parametrize("story, kind", [
-    ({"headline": "Hi", "colour": "red"}, "invalid_input"),  # unknown field
-    ({"headline": 3}, "invalid_input"),  # not text
-    ({"headline": "x" * 500}, "invalid_input"),  # over the limit
-    ("not an object", "invalid_input"),
-])
+@pytest.mark.parametrize(
+    "story, kind",
+    [
+        ({"headline": "Hi", "colour": "red"}, "invalid_input"),  # unknown field
+        ({"headline": 3}, "invalid_input"),  # not text
+        ({"headline": "x" * 500}, "invalid_input"),  # over the limit
+        ("not an object", "invalid_input"),
+    ],
+)
 def test_preview_booth_checks_the_story_as_a_story_file(tools, tmp_path, story, kind):
     assert _kind(lambda: tools.preview_booth(str(_photo(tmp_path)), "metro", story)) == kind
 
@@ -123,12 +127,15 @@ def test_preview_booth_refuses_a_bad_style_or_photo(tools, tmp_path):
     assert _kind(lambda: tools.preview_booth(str(tmp_path / "missing.jpg"))) == "invalid_input"
 
 
-@pytest.mark.parametrize("content, content_type", [
-    (ARTICLE, None),
-    (json.dumps(ARTICLE), None),
-    ("<html><body><article><h1>Paper</h1><p>" + "Words on paper. " * 60 + "</p></article></body></html>", None),
-    ("Paper\n\n" + "Words on paper. " * 60, "text"),
-])
+@pytest.mark.parametrize(
+    "content, content_type",
+    [
+        (ARTICLE, None),
+        (json.dumps(ARTICLE), None),
+        ("<html><body><article><h1>Paper</h1><p>" + "Words on paper. " * 60 + "</p></article></body></html>", None),
+        ("Paper\n\n" + "Words on paper. " * 60, "text"),
+    ],
+)
 def test_preview_article_takes_the_article_as_content(tools, printer, content, content_type):
     result = tools.preview_article(content=content, content_type=content_type, style="classic-magazine")
     assert not printer.sent()
@@ -150,15 +157,18 @@ def test_preview_article_shows_as_many_pages_as_asked(tools):
     assert result.data["pages"] > 1 and len(result.images) == 1
 
 
-@pytest.mark.parametrize("kwargs", [
-    {},  # neither source nor content
-    {"source": "a.json", "content": "text"},  # both
-    {"source": "-"},  # stdin is the MCP protocol stream
-    {"content": ARTICLE, "content_type": "html"},
-    {"content": "text", "content_type": "pdf"},
-    {"content": ARTICLE, "style": "tabloid"},
-    {"content": ARTICLE, "max_images": 0},
-])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},  # neither source nor content
+        {"source": "a.json", "content": "text"},  # both
+        {"source": "-"},  # stdin is the MCP protocol stream
+        {"content": ARTICLE, "content_type": "html"},
+        {"content": "text", "content_type": "pdf"},
+        {"content": ARTICLE, "style": "tabloid"},
+        {"content": ARTICLE, "max_images": 0},
+    ],
+)
 def test_preview_article_refuses_bad_arguments(tools, kwargs):
     assert _kind(lambda: tools.preview_article(**kwargs)) == "usage"
 
@@ -256,6 +266,7 @@ def test_a_failure_part_way_names_the_pages_already_queued(tools, printer, monke
         if len(calls) == 2:
             raise PrinterError("printer went away", kind="unreachable")
         return real(*args, **kwargs)
+
     monkeypatch.setattr(printer.driver, "submit", second_fails)
     with pytest.raises(PrinterError) as info:
         tools.print_file(token=token)
@@ -275,8 +286,11 @@ async def test_the_server_lists_the_six_tools(client):
     async with client as c:
         listed = {t.name: t for t in (await c.list_tools()).tools}
     assert set(listed) == TOOLS
-    assert listed["preview_booth"].input_schema["properties"]["style"]["enum"] == list(booth.STYLES) == [
-        "metro", "daily", "wizard", "wanted", "certificate", "sports", "missing", "movie"]
+    assert (
+        listed["preview_booth"].input_schema["properties"]["style"]["enum"]
+        == list(booth.STYLES)
+        == ["metro", "daily", "wizard", "wanted", "certificate", "sports", "missing", "movie"]
+    )
     assert listed["status"].annotations.read_only_hint is True
     assert listed["print_file"].annotations.read_only_hint is False
 
@@ -284,8 +298,9 @@ async def test_the_server_lists_the_six_tools(client):
 @needs_sdk
 async def test_a_preview_returns_the_page_image_in_the_tool_result(client, printer, tmp_path):
     async with client as c:
-        result = await c.call_tool("preview_booth", {"photo": str(_photo(tmp_path)), "style": "wanted",
-                                                     "story": {"headline": "Long John"}})
+        result = await c.call_tool(
+            "preview_booth", {"photo": str(_photo(tmp_path)), "style": "wanted", "story": {"headline": "Long John"}}
+        )
         assert not result.is_error
         text, image = result.content
         assert text.type == "text" and json.loads(text.text) == result.structured_content
@@ -308,10 +323,12 @@ async def test_a_refusal_is_a_tool_error_with_the_error_object(client, printer, 
 
 @needs_sdk
 async def test_prt_mcp_serves_over_stdio(tmp_path):
-    params = mcp.StdioServerParameters(command=PRT[0], args=[*PRT[1:], "-p", "demo", "mcp"],
-                                       env=clean_env(XDG_CONFIG_HOME=tmp_path / "config",
-                                                     XDG_CACHE_HOME=tmp_path / "cache"),
-                                       cwd=str(Path(__file__).resolve().parents[1]))
+    params = mcp.StdioServerParameters(
+        command=PRT[0],
+        args=[*PRT[1:], "-p", "demo", "mcp"],
+        env=clean_env(XDG_CONFIG_HOME=tmp_path / "config", XDG_CACHE_HOME=tmp_path / "cache"),
+        cwd=str(Path(__file__).resolve().parents[1]),
+    )
     async with mcp.Client(params) as c:
         assert {t.name for t in (await c.list_tools()).tools} == TOOLS
         ink = await c.call_tool("ink", {})

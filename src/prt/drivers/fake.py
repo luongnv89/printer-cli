@@ -21,10 +21,12 @@ from prt.transport import ipp
 FIXTURE = "epson-xp6000.json"
 
 # A tiny valid one-page PDF used as the fake scan result.
-_PDF = (b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
-        b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
-        b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]>>endobj\n"
-        b"trailer<</Root 1 0 R>>\n%%EOF\n")
+_PDF = (
+    b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]>>endobj\n"
+    b"trailer<</Root 1 0 R>>\n%%EOF\n"
+)
 
 # The demo JPEG scan: a short handwritten-style letter on a sheet of A4, so the scan-a-letter workflow
 # (`prt scan --format jpeg`, transcribe it, `prt gazette`) can be tried with `-p demo`.
@@ -33,8 +35,7 @@ DEMO_LETTER = (
     "Dear Editor,",
     "Our street held its first bake sale last Saturday. Mrs. Alder's lemon cake was gone before ten, "
     "the twins ran the lemonade stand, and the brass band from the school played until it rained.",
-    "Together we raised 212 euros for the new library roof. Thank you to everyone who came, baked or "
-    "carried tables.",
+    "Together we raised 212 euros for the new library roof. Thank you to everyone who came, baked or carried tables.",
     "Please tell your readers, so next year is even bigger.",
     "Yours sincerely,",
     "Margot Lane",
@@ -114,8 +115,12 @@ class FakeIPPClient:
         elif operation == ipp.OP_PRINT_JOB:
             self.next_job_id += 1
             name = next((a.value for a in operation_attrs or [] if a.name == "job-name"), "prt job")
-            self.submitted[self.next_job_id] = {"job-id": self.next_job_id, "job-name": name, "job-state": 3,
-                                                "job-originating-user-name": "prt"}
+            self.submitted[self.next_job_id] = {
+                "job-id": self.next_job_id,
+                "job-name": name,
+                "job-state": 3,
+                "job-originating-user-name": "prt",
+            }
             resp.groups.append((ipp.TAG_JOB, {"job-id": self.next_job_id, "job-state": 3}))
         elif operation == ipp.OP_CANCEL_JOB:
             job_id = next((a.value for a in operation_attrs or [] if a.name == "job-id"), None)

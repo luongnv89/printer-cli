@@ -23,11 +23,15 @@ def head_clean_preflight(status: Status) -> Preflight:
         if ink.level is None:
             blockers.append(f"{ink.name} level is unknown")
         elif ink.level <= ink.low:
-            blockers.append(f"{ink.name} is at {ink.level}% (low level {ink.low}%) — "
-                            "cleaning may empty it; replace the cartridge first")
+            blockers.append(
+                f"{ink.name} is at {ink.level}% (low level {ink.low}%) — "
+                "cleaning may empty it; replace the cartridge first"
+            )
     if status.waste in ("almost-full", "full"):
-        blockers.append(f"waste ink pad is {status.waste.replace('-', ' ')} — "
-                        "each cleaning adds to it; the printer may lock up when it is full")
+        blockers.append(
+            f"waste ink pad is {status.waste.replace('-', ' ')} — "
+            "each cleaning adds to it; the printer may lock up when it is full"
+        )
     if status.state == "processing":
         blockers.append("printer is busy printing — wait for the job to finish")
     if status.state == "offline":

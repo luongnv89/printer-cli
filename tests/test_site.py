@@ -28,11 +28,22 @@ SLIDES = json.loads(SLIDES_BLOCK.search(INDEX).group(1))
 IMAGE_SLIDES = [s for s in SLIDES if s["kind"] == "image"]
 TERMINAL_SLIDES = {s["id"]: s for s in SLIDES if s["kind"] == "terminal"}
 
-EXPECTED_TERMINAL = {"quick-start", "ink", "status-watch", "overview", "maintenance", "printing", "scanning", "jobs",
-                     "letter-gazette", "compose"}
+EXPECTED_TERMINAL = {
+    "quick-start",
+    "ink",
+    "status-watch",
+    "overview",
+    "maintenance",
+    "printing",
+    "scanning",
+    "jobs",
+    "letter-gazette",
+    "compose",
+}
 
-GAZETTE_LANDSCAPE = ("prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file story.json --landscape "
-                     "-o gazette-landscape.png")
+GAZETTE_LANDSCAPE = (
+    "prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file story.json --landscape -o gazette-landscape.png"
+)
 
 USAGE = "usage variants; the result has its own image slide with the command that made its sample"
 SETUP = "setup or scripting reference, not an example of what prt makes"
@@ -75,8 +86,11 @@ EXCLUDED = {
     "uv sync": "development; " + SETUP,
 }
 
-ALLOWED_LINKS = ("https://github.com/luongnv89/printer-cli", "https://pypi.org/project/printer-cli/",
-                 "https://commons.wikimedia.org/")
+ALLOWED_LINKS = (
+    "https://github.com/luongnv89/printer-cli",
+    "https://pypi.org/project/printer-cli/",
+    "https://commons.wikimedia.org/",
+)
 SKILLS = {p.name for p in (ROOT / "skills").iterdir() if (p / "SKILL.md").is_file()}
 
 
@@ -88,7 +102,7 @@ def readme_fences() -> list[str]:
             j = i + 1
             while not lines[j].startswith("```"):
                 j += 1
-            bodies.append("\n".join(lines[i + 1:j]))
+            bodies.append("\n".join(lines[i + 1 : j]))
             i = j
         i += 1
     return bodies
@@ -153,8 +167,9 @@ def test_image_slide_commands_are_the_commands_that_made_the_samples():
         if name == "gazette-landscape.jpg":
             assert rows[name] == "the same with `--landscape`"
             assert s["command"] == GAZETTE_LANDSCAPE
-            assert s["command"] == first_prt(rows["gazette.jpg"]).replace(" -o gazette.png",
-                                                                          " --landscape -o gazette-landscape.png")
+            assert s["command"] == first_prt(rows["gazette.jpg"]).replace(
+                " -o gazette.png", " --landscape -o gazette-landscape.png"
+            )
         else:
             assert s["command"] == first_prt(rows[name]), name
 
@@ -163,9 +178,9 @@ def jpeg_size(data: bytes) -> tuple[int, int]:
     """(width, height) from a JPEG's start-of-frame segment."""
     i = 2
     while i < len(data):
-        marker, length = data[i + 1], int.from_bytes(data[i + 2:i + 4], "big")
+        marker, length = data[i + 1], int.from_bytes(data[i + 2 : i + 4], "big")
         if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
-            return int.from_bytes(data[i + 7:i + 9], "big"), int.from_bytes(data[i + 5:i + 7], "big")
+            return int.from_bytes(data[i + 7 : i + 9], "big"), int.from_bytes(data[i + 5 : i + 7], "big")
         i += 2 + length
     raise ValueError("no start-of-frame segment")
 
@@ -242,8 +257,13 @@ def test_site_copies_are_byte_identical():
         assert (SITE / logo).read_bytes() == (ROOT / "assets" / "logo" / logo).read_bytes(), logo
     assert (SITE / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes()
     fonts = {p.name for p in (SITE / "fonts").iterdir()}
-    assert fonts == {"PlayfairDisplay-Variable.ttf", "OldStandard-Regular.ttf", "OldStandard-Bold.ttf",
-                     "OFL-PlayfairDisplay.txt", "OFL-OldStandardTT.txt"}
+    assert fonts == {
+        "PlayfairDisplay-Variable.ttf",
+        "OldStandard-Regular.ttf",
+        "OldStandard-Bold.ttf",
+        "OFL-PlayfairDisplay.txt",
+        "OFL-OldStandardTT.txt",
+    }
     for font in fonts:
         assert (SITE / "fonts" / font).read_bytes() == (ROOT / "src" / "prt" / "fonts" / font).read_bytes(), font
 
@@ -255,7 +275,8 @@ def test_pyproject_keeps_site_out_of_the_sdist_but_not_the_skills():
 
 # --- grey only ---------------------------------------------------------------------------------------
 
-NAMED_COLOURS = set("""
+NAMED_COLOURS = set(
+    """
 aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood
 cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray
 darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen
@@ -275,9 +296,9 @@ highlight highlighttext linktext mark marktext selecteditem selecteditemtext vis
 appworkspace background buttonhighlight buttonshadow captiontext inactiveborder inactivecaption inactivecaptiontext
 infobackground infotext menu menutext scrollbar threeddarkshadow threedface threedhighlight threedlightshadow
 threedshadow window windowframe windowtext
-""".split())
-GREY_KEYWORDS = {"black", "white", "gray", "grey", "transparent", "currentcolor", "inherit", "initial", "unset",
-                 "none"}
+""".split()
+)
+GREY_KEYWORDS = {"black", "white", "gray", "grey", "transparent", "currentcolor", "inherit", "initial", "unset", "none"}
 HUE_FUNCTIONS = re.compile(r"(?<![\w-])(hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\(", re.I)
 
 
@@ -327,8 +348,11 @@ def colour_sources() -> list[tuple[str, str]]:
     for style in re.findall(r"<style[^>]*>(.*?)</style>", html, re.S):
         sources += [("index.html <style>", v) for v in css_values(style)]
     sources += [("index.html style=", v) for v in re.findall(r'\sstyle="([^"]*)"', html)]
-    sources += [("theme-color", attrs["content"]) for tag, attrs in tags()
-                if tag == "meta" and attrs.get("name") == "theme-color"]
+    sources += [
+        ("theme-color", attrs["content"])
+        for tag, attrs in tags()
+        if tag == "meta" and attrs.get("name") == "theme-color"
+    ]
     for svg in SITE.rglob("*.svg"):
         text = svg.read_text(encoding="utf-8")
         attrs = r'\s(?:fill|stroke|stop-color|color|flood-color|lighting-color|style)="([^"]*)"'
@@ -336,8 +360,11 @@ def colour_sources() -> list[tuple[str, str]]:
         for style in re.findall(r"<style[^>]*>(.*?)</style>", text, re.S):
             sources += [(svg.name, v) for v in css_values(style)]
     # In app.js a colour arrives as a string literal, so the quotes go before the value is read.
-    for pattern in (r"\.style\.\w+\s*=\s*([^;\n]+)", r"style\.setProperty\(([^;\n]+)",
-                    r"\.style\.cssText\s*\+?=\s*([^;\n]+)"):
+    for pattern in (
+        r"\.style\.\w+\s*=\s*([^;\n]+)",
+        r"style\.setProperty\(([^;\n]+)",
+        r"\.style\.cssText\s*\+?=\s*([^;\n]+)",
+    ):
         sources += [("app.js", re.sub(r"[\"'`]", " ", v)) for v in re.findall(pattern, JS)]
     # A colour set as an attribute: a presentation attribute's value, or each declaration of a style attribute.
     attribute = rf"""setAttribute\(\s*["'`](?:{PRESENTATION})["'`]\s*,\s*([^;\n]+)"""
@@ -360,17 +387,35 @@ def colour_failures() -> list[tuple[str, str]]:
     return [(name, value) for name, value in colour_sources() if colour_problems(value)]
 
 
-@pytest.mark.parametrize("name, old, new, source, bad", [
-    ("INDEX", 'fill="currentColor"', 'fill="#00FF41"', "index.html attribute", True),
-    ("INDEX", 'stroke="currentColor"', 'stroke="tomato"', "index.html attribute", True),
-    ("INDEX", 'fill="currentColor"', 'fill="#0a0a0a"', "index.html attribute", False),
-    ("JS", 'glyph.setAttribute("aria-hidden", "true");',
-     'glyph.setAttribute("style", "background:#00FF41");', "app.js setAttribute style", True),
-    ("JS", 'glyph.setAttribute("aria-hidden", "true");',
-     'glyph.setAttribute("style", "background:#eeeeee");', "app.js setAttribute style", False),
-    ("JS", 'glyph.setAttribute("aria-hidden", "true");',
-     'glyph.setAttribute("fill", "#00FF41");', "app.js setAttribute", True),
-])
+@pytest.mark.parametrize(
+    "name, old, new, source, bad",
+    [
+        ("INDEX", 'fill="currentColor"', 'fill="#00FF41"', "index.html attribute", True),
+        ("INDEX", 'stroke="currentColor"', 'stroke="tomato"', "index.html attribute", True),
+        ("INDEX", 'fill="currentColor"', 'fill="#0a0a0a"', "index.html attribute", False),
+        (
+            "JS",
+            'glyph.setAttribute("aria-hidden", "true");',
+            'glyph.setAttribute("style", "background:#00FF41");',
+            "app.js setAttribute style",
+            True,
+        ),
+        (
+            "JS",
+            'glyph.setAttribute("aria-hidden", "true");',
+            'glyph.setAttribute("style", "background:#eeeeee");',
+            "app.js setAttribute style",
+            False,
+        ),
+        (
+            "JS",
+            'glyph.setAttribute("aria-hidden", "true");',
+            'glyph.setAttribute("fill", "#00FF41");',
+            "app.js setAttribute",
+            True,
+        ),
+    ],
+)
 def test_colour_scan_reads_svg_attributes_and_attributes_set_from_the_script(monkeypatch, name, old, new, source, bad):
     module = sys.modules[__name__]
     text = getattr(module, name)
@@ -380,21 +425,41 @@ def test_colour_scan_reads_svg_attributes_and_attributes_set_from_the_script(mon
     assert [found for found, _ in colour_failures()] == ([source] if bad else [])
 
 
-@pytest.mark.parametrize("value, bad", [
-    ("#22D3EE", True), ("#0A0A0B", True), ("#0a0a0a29", False), ("#ccc", False), ("#cdc", True),
-    ("rgb(10, 10, 10)", False), ("rgba(0 0 0 / 0.4)", False), ("rgb(0, 255, 65)", True), ("hsl(0 0% 50%)", True),
-    ("color-mix(in srgb, #000000, #ffffff)", True), ("oklch(0.5 0 0)", True), ("lime", True), ("Highlight", True),
-    ("LinkText", True), ("silver", True), ("white", False), ("currentColor", False), ("transparent", False),
-    ('"Old Standard TT", Georgia, serif', False), ("var(--mark)", False),
-])
+@pytest.mark.parametrize(
+    "value, bad",
+    [
+        ("#22D3EE", True),
+        ("#0A0A0B", True),
+        ("#0a0a0a29", False),
+        ("#ccc", False),
+        ("#cdc", True),
+        ("rgb(10, 10, 10)", False),
+        ("rgba(0 0 0 / 0.4)", False),
+        ("rgb(0, 255, 65)", True),
+        ("hsl(0 0% 50%)", True),
+        ("color-mix(in srgb, #000000, #ffffff)", True),
+        ("oklch(0.5 0 0)", True),
+        ("lime", True),
+        ("Highlight", True),
+        ("LinkText", True),
+        ("silver", True),
+        ("white", False),
+        ("currentColor", False),
+        ("transparent", False),
+        ('"Old Standard TT", Georgia, serif', False),
+        ("var(--mark)", False),
+    ],
+)
 def test_colour_check_tells_grey_from_hue(value, bad):
     assert bool(colour_problems(value)) is bad
 
 
 def test_styles_set_link_focus_selection_and_accent_colours():
     css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
-    rules = [({sel.strip() for sel in selectors.split(",")}, body) for selectors, body in
-             re.findall(r"([^{}]+)\{([^{}]*)\}", css)]
+    rules = [
+        ({sel.strip() for sel in selectors.split(",")}, body)
+        for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css)
+    ]
 
     def body_of(selector):
         return " ".join(body for selectors, body in rules if selector in selectors)
@@ -411,8 +476,16 @@ def test_styles_set_link_focus_selection_and_accent_colours():
 
 def test_no_network_or_module_loading():
     for name, text in (("index.html", INDEX), ("styles.css", CSS), ("app.js", JS)):
-        for needle in ("fetch(", "XMLHttpRequest", "import(", "@import", "sendBeacon", "WebSocket", "EventSource",
-                       "new Worker"):
+        for needle in (
+            "fetch(",
+            "XMLHttpRequest",
+            "import(",
+            "@import",
+            "sendBeacon",
+            "WebSocket",
+            "EventSource",
+            "new Worker",
+        ):
             assert needle not in text, (name, needle)
         assert not re.search(r"^\s*import\s.*\sfrom\s|^\s*import\s*[\"']", text, re.M), name
 
@@ -447,8 +520,13 @@ def test_every_reference_is_a_local_file_or_an_allowed_link():
 
 
 def test_reference_check_refuses_remote_and_escaping_paths():
-    for bad in ("https://cdn.example.com/x.js", "/samples/card.jpg", "../README.md", "samples/missing.jpg",
-                "data:image/png;base64,AA"):
+    for bad in (
+        "https://cdn.example.com/x.js",
+        "/samples/card.jpg",
+        "../README.md",
+        "samples/missing.jpg",
+        "data:image/png;base64,AA",
+    ):
         with pytest.raises(AssertionError):
             assert_local(bad, "test")
     assert_local("samples/card.jpg?v=1#top", "test")
@@ -462,8 +540,11 @@ def test_page_outline_and_logo():
     assert [tag for tag, _ in found].count("h1") == 1
     assert re.search(r"<title>[^<]+</title>", INDEX)
     assert any(tag == "meta" and attrs.get("name") == "description" and attrs.get("content") for tag, attrs in found)
-    logos = [attrs.get("src") or attrs.get("srcset") for tag, attrs in found
-             if tag in ("img", "source") and "logo" in (attrs.get("src") or attrs.get("srcset") or "")]
+    logos = [
+        attrs.get("src") or attrs.get("srcset")
+        for tag, attrs in found
+        if tag in ("img", "source") and "logo" in (attrs.get("src") or attrs.get("srcset") or "")
+    ]
     assert sorted(logos) == ["logo-black.svg", "logo-white.svg"]
     source = next(attrs for tag, attrs in found if tag == "source")
     assert source == {"media": "(prefers-color-scheme: dark)", "srcset": "logo-white.svg"}
@@ -496,7 +577,8 @@ def js_listener(target: str, event: str) -> list[str]:
 def test_playing_stops_for_every_pause():
     assert re.findall(r"^  const playing = .*$", JS, re.M) == [
         "  const playing = (now) => !(userPaused || hoverPaused || focusPaused() || credits.open || "
-        "now < touchUntil || hidden);"]
+        "now < touchUntil || hidden);"
+    ]
 
 
 def test_a_manual_step_stops_autoplay_and_only_the_clock_steps_without_stopping_it():
@@ -535,10 +617,14 @@ def test_a_hidden_tab_and_a_mouse_over_the_text_pause_only_while_they_last():
     assert js_listener("document", "visibilitychange") == ["hidden = document.hidden;", "last = null;"]
     assert "let hidden = document.hidden;" in JS
     assert js_listener("stage", "pointerover") == [
-        'if (event.pointerType === "mouse") hoverPaused = Boolean(event.target.closest(".panel"));']
+        'if (event.pointerType === "mouse") hoverPaused = Boolean(event.target.closest(".panel"));'
+    ]
     assert js_listener("stage", "pointerleave") == ['if (event.pointerType === "mouse") hoverPaused = false;']
     assert sorted(re.findall(r"\bhoverPaused\s*=(?!=)\s*([^;]+);", JS)) == [
-        'Boolean(event.target.closest(".panel"))', "false", "false"]  # the declaration, then the two listeners
+        'Boolean(event.target.closest(".panel"))',
+        "false",
+        "false",
+    ]  # the declaration, then the two listeners
 
 
 def test_text_reaches_the_page_as_text_never_as_markup():
@@ -548,18 +634,30 @@ def test_text_reaches_the_page_as_text_never_as_markup():
         "if (text !== undefined) node.textContent = text;",
         "return node;",
     ]
-    for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "createContextualFragment",
-                 "DOMParser", "srcdoc", "setHTML", "eval(", "new Function"):
+    for sink in (
+        "innerHTML",
+        "outerHTML",
+        "insertAdjacentHTML",
+        "document.write",
+        "createContextualFragment",
+        "DOMParser",
+        "srcdoc",
+        "setHTML",
+        "eval(",
+        "new Function",
+    ):
         assert sink not in JS, sink
 
 
 def test_the_heading_a_slide_change_focuses_does_not_pause_the_show():
     # After an arrow key the new slide's heading has focus; Space must then really start the show again.
     assert re.findall(r"^  const holdsFocus = .*$", JS, re.M) == [
-        "  const holdsFocus = (node) => (stage.contains(node) && node.tabIndex >= 0) || dots.contains(node);"]
+        "  const holdsFocus = (node) => (stage.contains(node) && node.tabIndex >= 0) || dots.contains(node);"
+    ]
     assert re.findall(r"^  const focusPaused = .*$", JS, re.M) == [
         "  const focusPaused = () => holdsFocus(document.activeElement) && "
-        'document.activeElement.matches(":focus-visible");']
+        'document.activeElement.matches(":focus-visible");'
+    ]
     render = "\n".join(js_function("render"))
     assert "heading.tabIndex = -1;\nheading.focus({ preventScroll: true });" in render
     assert js_function("toggleAutoplay") == ["userPaused = !userPaused;", "sync();"]
@@ -573,7 +671,9 @@ def test_the_ticks_are_one_tab_stop_moved_with_the_arrow_keys():
     keydown = re.search(r'document\.addEventListener\("keydown", \(event\) => \{(.*?)\n  \}\);', JS, re.S).group(1)
     assert "const onDots = dots.contains(target);" in keydown
     assert re.findall(r"(?<![\w.])go\((.*)\);", keydown) == [
-        'key === "Home" ? 0 : slides.length - 1, true', 'index + (key === "ArrowRight" ? 1 : -1), true']
+        'key === "Home" ? 0 : slides.length - 1, true',
+        'index + (key === "ArrowRight" ? 1 : -1), true',
+    ]
     assert '} else if (onDots && (key === "Home" || key === "End")) {' in keydown
     assert keydown.count("dots.children[index].focus()") == 2
     assert "if (onDots) dots.children[index].focus();" in keydown
@@ -581,13 +681,20 @@ def test_the_ticks_are_one_tab_stop_moved_with_the_arrow_keys():
 
 
 def test_autoplay_pauses_and_only_the_toggle_resumes_it():
-    for needle in ("prefers-reduced-motion", "visibilitychange", "let userPaused = reduceMotion.matches",
-                   "hoverPaused", "focusPaused"):
+    for needle in (
+        "prefers-reduced-motion",
+        "visibilitychange",
+        "let userPaused = reduceMotion.matches",
+        "hoverPaused",
+        "focusPaused",
+    ):
         assert needle in JS, needle
     writes = set(re.findall(r"\buserPaused\s*=(?!=)\s*([^;]+);", JS))
     assert writes == {"reduceMotion.matches", "true", "!userPaused"}
     space = re.search(r'key === " "\)(.*?)\} else', JS, re.S).group(1)
-    assert re.search(r"target\.closest\(\"button, a, input", space) and space.index("return") < space.index("toggleAutoplay()")
+    assert re.search(r"target\.closest\(\"button, a, input", space) and space.index("return") < space.index(
+        "toggleAutoplay()"
+    )
 
 
 def test_keyboard_shortcuts_have_no_single_letter_key():
@@ -633,15 +740,19 @@ def test_arrow_keys_leave_the_slide_alone_behind_the_credits_and_with_a_modifier
     keydown = re.search(r'document\.addEventListener\("keydown", \(event\) => \{(.*?)\n  \}\);', JS, re.S).group(1)
     statements = [line.strip() for line in keydown.split("\n") if line.strip() and not line.strip().startswith("//")]
     # Shift+arrow extends a text selection; no modified key is a shortcut here.
-    assert statements[0] == ("if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) "
-                             "return;")
+    assert statements[0] == (
+        "if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;"
+    )
     arrows = keydown.split('} else if (key === "ArrowLeft" || key === "ArrowRight") {')[1]
     guard = 'if (credits.open || target.closest(".sheet, input, textarea, select, .credits")) return;'
     assert guard in arrows and arrows.index(guard) < arrows.index("go(")
     ends = keydown.split('} else if (onDots && (key === "Home" || key === "End")) {')[1].split("} else if")[0]
     assert [line.split("//")[0].strip() for line in ends.strip().split("\n")] == [
-        "if (credits.open) return;", "event.preventDefault();", 'go(key === "Home" ? 0 : slides.length - 1, true);',
-        "dots.children[index].focus();"]
+        "if (credits.open) return;",
+        "event.preventDefault();",
+        'go(key === "Home" ? 0 : slides.length - 1, true);',
+        "dots.children[index].focus();",
+    ]
     assert '<details id="credits" class="credits">' in INDEX  # .credits holds the summary and the panel
 
 
@@ -663,22 +774,31 @@ def test_every_footer_link_is_a_sized_target_and_the_credit_sentences_stay_inlin
     foot = re.search(r'<footer class="foot">(.*?)</footer>', INDEX, re.S).group(1)
     # The three links and the summary are the footer's own children, so one rule sizes them all; the licence
     # link takes the whole "MIT © Luong NGUYEN", not the three letters alone.
-    assert re.search(r'^\s*<a href="LICENSE">MIT © Luong NGUYEN</a>\s*<a href="[^"]+">GitHub</a>\s*'
-                     r'<a href="[^"]+">PyPI</a>\s*<details id="credits" class="credits">\s*<summary>', foot)
+    assert re.search(
+        r'^\s*<a href="LICENSE">MIT © Luong NGUYEN</a>\s*<a href="[^"]+">GitHub</a>\s*'
+        r'<a href="[^"]+">PyPI</a>\s*<details id="credits" class="credits">\s*<summary>',
+        foot,
+    )
     assert "<p" not in foot.split("<details")[0]
     targets = ".foot > a, .credits summary"
     assert re.findall(rf"{re.escape(targets)} \{{ ([^}}]*) \}}", css) == [
         "display: flex; align-items: center; min-width: 24px; min-height: 24px;",
-        "min-width: 44px; min-height: 44px;", "min-width: 44px; min-height: 44px;",
-        "min-width: 32px; min-height: 32px;"]
+        "min-width: 44px; min-height: 44px;",
+        "min-width: 44px; min-height: 44px;",
+        "min-width: 32px; min-height: 32px;",
+    ]
     assert not re.search(r"\.credits-panel a\b|\.foot a\b", css)
 
 
 def test_touch_targets_follow_the_pointer_as_well_as_the_width():
     coarse = re.search(r"@media \(any-pointer: coarse\) \{(.*?)\n\}", CSS, re.S).group(1)
     narrow = re.search(r"@media \(max-width: 767px\) \{(.*?)\n\}", CSS, re.S).group(1)
-    for rule in (".ctl { width: 44px; height: 44px; }", ".copy { min-height: 44px; }", ".dot { height: 44px; }",
-                 ".foot > a, .credits summary { min-width: 44px; min-height: 44px; }"):
+    for rule in (
+        ".ctl { width: 44px; height: 44px; }",
+        ".copy { min-height: 44px; }",
+        ".dot { height: 44px; }",
+        ".foot > a, .credits summary { min-width: 44px; min-height: 44px; }",
+    ):
         assert rule in coarse and rule in narrow, rule
     assert CSS.index("@media (any-pointer: coarse)") < CSS.index("@media (max-height: 500px)")
     assert "(pointer: coarse)" not in CSS  # the main pointer alone would miss a touch laptop
@@ -695,8 +815,11 @@ def test_footer_is_a_short_line_and_the_credits_open_from_it():
     hrefs = r'<a href="([^"]+)"'
 
     assert strip_tags(line) == "MIT © Luong NGUYEN GitHub PyPI"
-    assert re.findall(hrefs, line) == ["LICENSE", "https://github.com/luongnv89/printer-cli",
-                                       "https://pypi.org/project/printer-cli/"]
+    assert re.findall(hrefs, line) == [
+        "LICENSE",
+        "https://github.com/luongnv89/printer-cli",
+        "https://pypi.org/project/printer-cli/",
+    ]
 
     # Every credit the licences need, in the static page (no script needed to read them).
     assert re.search(r"^\s*<summary>Credits</summary>", credits)
@@ -704,10 +827,14 @@ def test_footer_is_a_short_line_and_the_credits_open_from_it():
         "printer-cli and this site are under the MIT licence, © Luong NGUYEN. "
         "The photos in the sample pages are public-domain NASA images from Apollo 8, Apollo 11 and Apollo 17, "
         "via Wikimedia Commons. "
-        "The fonts are under the SIL OFL 1.1: Playfair Display and Old Standard TT.")
+        "The fonts are under the SIL OFL 1.1: Playfair Display and Old Standard TT."
+    )
     assert re.findall(hrefs, credits) == [
-        "LICENSE", "https://github.com/luongnv89/printer-cli/tree/main/assets/samples",
-        "fonts/OFL-PlayfairDisplay.txt", "fonts/OFL-OldStandardTT.txt"]
+        "LICENSE",
+        "https://github.com/luongnv89/printer-cli/tree/main/assets/samples",
+        "fonts/OFL-PlayfairDisplay.txt",
+        "fonts/OFL-OldStandardTT.txt",
+    ]
     assert '<div class="credits-panel" role="group" aria-label="Credits" tabindex="0">' in credits
 
 
@@ -719,8 +846,13 @@ def test_credits_need_no_sideways_scrolling_and_stay_inside_the_page():
         assert "nowrap" not in rule and "overflow" not in rule, rule
     assert "flex-wrap: wrap" in foot_rules[0] and "position: relative" in foot_rules[0]
     panel = re.search(r"\.credits-panel \{([^}]*)\}", css).group(1)
-    for declaration in ("position: absolute;", "bottom: 100%;", "width: min(34em, 100% - 2 * var(--gutter));",
-                        "max-height: calc(100dvh - 100% - 8px);", "overflow-y: auto;"):
+    for declaration in (
+        "position: absolute;",
+        "bottom: 100%;",
+        "width: min(34em, 100% - 2 * var(--gutter));",
+        "max-height: calc(100dvh - 100% - 8px);",
+        "overflow-y: auto;",
+    ):
         assert declaration in panel, declaration
     assert "white-space" not in panel and "overflow-x" not in panel
 
@@ -737,14 +869,17 @@ def test_open_credits_pause_the_show_and_close_on_escape_or_a_click_outside():
     ]
     # The panel never stays open over a control the keyboard has moved to.
     assert js_listener("credits", "focusout") == [
-        "if (event.relatedTarget instanceof Node && !credits.contains(event.relatedTarget)) credits.open = false;"]
+        "if (event.relatedTarget instanceof Node && !credits.contains(event.relatedTarget)) credits.open = false;"
+    ]
     # Nor over one that focus reaches without leaving the credits first: Tab from the last link goes out of the
     # page and comes back round to the first control.
     assert js_listener("document", "focusin") == [
-        "if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;"]
+        "if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;"
+    ]
     assert 'addEventListener("blur"' not in JS  # a window blur closes nothing
     assert js_listener("document", "click") == [
-        "if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;"]
+        "if (credits.open && !(event.target instanceof Node && credits.contains(event.target))) credits.open = false;"
+    ]
     # Space on the summary opens the credits and in the panel scrolls them; it must not also toggle Autoplay.
     keeps_space = re.search(r'target\.closest\("(button, a, [^"]*)"\)', JS).group(1).split(", ")
     assert {"summary", ".credits-panel", ".sheet", "button", "a"} <= set(keeps_space)

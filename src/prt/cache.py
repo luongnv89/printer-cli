@@ -30,14 +30,27 @@ def load(name: str, base: Path | None = None) -> Status | None:
         return None
     try:
         return Status(
-            state="offline", accepting=False,
-            inks=[Ink(name=i["name"], color=i["color"], level=i["level"], low=i.get("low", 15),
-                      high=i.get("high", 100), kind=i.get("kind", "ink-cartridge")) for i in data["inks"]],
+            state="offline",
+            accepting=False,
+            inks=[
+                Ink(
+                    name=i["name"],
+                    color=i["color"],
+                    level=i["level"],
+                    low=i.get("low", 15),
+                    high=i.get("high", 100),
+                    kind=i.get("kind", "ink-cartridge"),
+                )
+                for i in data["inks"]
+            ],
             trays=[Tray(**t) for t in data.get("trays", [])],
             alerts=[Alert(a["code"], Severity(a["severity"]), a["message"]) for a in data.get("alerts", [])],
-            reasons=data.get("reasons", []), waste=data.get("waste"),
-            waste_level=data.get("waste_level"), queued_jobs=data.get("queued_jobs", 0),
-            checked_at=data.get("checked_at", 0), stale=True,
+            reasons=data.get("reasons", []),
+            waste=data.get("waste"),
+            waste_level=data.get("waste_level"),
+            queued_jobs=data.get("queued_jobs", 0),
+            checked_at=data.get("checked_at", 0),
+            stale=True,
         )
     except (KeyError, TypeError, ValueError):
         return None

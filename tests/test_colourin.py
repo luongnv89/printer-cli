@@ -65,6 +65,7 @@ def _black_inside(page):
 
 # --- the page ------------------------------------------------------------------------------------
 
+
 def test_a_shape_becomes_a_black_outline_on_white():
     page, cut = colourin.compose(_circle())
     assert cut == {} and page.mode == "RGB" and page.size == A4.size
@@ -104,8 +105,9 @@ def test_outlines_that_reach_the_edge_meet_the_frame(split):
     no white between them, so the two sides do not join round the end of the line."""
     img = Image.new("RGB", (400, 600), WHITE)
     w, h = img.size
-    ImageDraw.Draw(img).rectangle((0, h // 2, w - 1, h - 1) if split == "across" else (w // 2, 0, w - 1, h - 1),
-                                  fill=BLACK)
+    ImageDraw.Draw(img).rectangle(
+        (0, h // 2, w - 1, h - 1) if split == "across" else (w // 2, 0, w - 1, h - 1), fill=BLACK
+    )
     page, _ = colourin.compose(img)
     grey = page.convert("L")
     x0, y0, x1, y1 = Image.eval(grey, lambda v: 255 - v).getbbox()  # the frame's outer edge
@@ -145,6 +147,7 @@ def test_styles_list_colour_in_on_a4_with_no_text():
 
 # --- prt colour-in ---------------------------------------------------------------------------------
 
+
 def test_preview_saves_the_page_and_prints_nothing(capsys, tmp_path, printer):
     photo, out_file = _photo(tmp_path), tmp_path / "page.png"
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "colour-in", str(photo), "--preview", str(out_file))
@@ -153,8 +156,14 @@ def test_preview_saves_the_page_and_prints_nothing(capsys, tmp_path, printer):
     assert printer.made == [] and printer.jobs() == [] and guard.used_today() == 0
     data = json.loads(out)
     assert data["estimate"]["colour"] is False and data["estimate"]["summary"].startswith("~1 page, black and white")
-    assert without_estimate(out) == {"action": "colour-in", "file": str(out_file), "bytes": out_file.stat().st_size,
-                                     "paper": {"size": "a4", "media": "a4", "tray": None}, "fits": True, "cut": {}}
+    assert without_estimate(out) == {
+        "action": "colour-in",
+        "file": str(out_file),
+        "bytes": out_file.stat().st_size,
+        "paper": {"size": "a4", "media": "a4", "tray": None},
+        "fits": True,
+        "cut": {},
+    }
     saved = Image.open(out_file).convert("RGB")
     expected, _ = colourin.compose(photocard.load_photos([photo])[0])
     assert saved.size == A4.size and saved.tobytes() == expected.tobytes()

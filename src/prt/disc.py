@@ -66,8 +66,16 @@ EXPECTED = 'expected {"title": "...", "tracks": ["...", "..."]}'
 DEFAULT_DISC = Disc(
     title="Road Trip Mix",
     subtitle="Summer 2026",
-    tracks=("1. Open Road", "2. Windows Down", "3. Static on the Radio", "4. Gas Station Coffee",
-            "5. Sunset Exit", "6. Coast Highway", "7. Back Seat Singalong", "8. Last Mile Home"),
+    tracks=(
+        "1. Open Road",
+        "2. Windows Down",
+        "3. Static on the Radio",
+        "4. Gas Station Coffee",
+        "5. Sunset Exit",
+        "6. Coast Highway",
+        "7. Back Seat Singalong",
+        "8. Last Mile Home",
+    ),
     footer="For Sam, from Jo",
 )
 
@@ -77,8 +85,11 @@ def _printable_check(name: str, value: str, exit_code: int) -> None:
     unprintable = sorted({c for c in value if c != "?" and _char_in(face, c) == "?"})
     if unprintable:
         shown = ", ".join(f"{c} (U+{ord(c):04X})" for c in unprintable[:10])
-        raise PrinterError(f"{name} has characters the handwriting font cannot print: {shown}",
-                           hint="write it in Latin or Cyrillic letters (no emoji)", exit_code=exit_code)
+        raise PrinterError(
+            f"{name} has characters the handwriting font cannot print: {shown}",
+            hint="write it in Latin or Cyrillic letters (no emoji)",
+            exit_code=exit_code,
+        )
 
 
 def check_disc(disc: Disc, exit_code: int) -> Disc:
@@ -88,21 +99,31 @@ def check_disc(disc: Disc, exit_code: int) -> Disc:
     for name in LIMITS:
         value = _clean(getattr(disc, name), keep_newlines=False)
         if name in REQUIRED and not value:
-            raise PrinterError(f"the disc label has an empty {name}", hint=f"give the {name} some text",
-                               exit_code=exit_code)
+            raise PrinterError(
+                f"the disc label has an empty {name}", hint=f"give the {name} some text", exit_code=exit_code
+            )
         if len(value) > LIMITS[name]:
-            raise PrinterError(f"{name} is too long ({len(value)} characters, max {LIMITS[name]})",
-                               hint=f"shorten the {name} so it fits on the disc", exit_code=exit_code)
+            raise PrinterError(
+                f"{name} is too long ({len(value)} characters, max {LIMITS[name]})",
+                hint=f"shorten the {name} so it fits on the disc",
+                exit_code=exit_code,
+            )
         _printable_check(name, value, exit_code)
         clean[name] = value
     tracks = [track for track in (_clean(t, keep_newlines=False) for t in disc.tracks) if track]
     if len(tracks) > MAX_TRACKS:
-        raise PrinterError(f"the disc label has {len(tracks)} tracks, more than {MAX_TRACKS}",
-                           hint=f"list at most {MAX_TRACKS} tracks", exit_code=exit_code)
+        raise PrinterError(
+            f"the disc label has {len(tracks)} tracks, more than {MAX_TRACKS}",
+            hint=f"list at most {MAX_TRACKS} tracks",
+            exit_code=exit_code,
+        )
     for number, track in enumerate(tracks, 1):
         if len(track) > MAX_TRACK:
-            raise PrinterError(f"track {number} is too long ({len(track)} characters, max {MAX_TRACK})",
-                               hint="shorten the track so it fits on the disc", exit_code=exit_code)
+            raise PrinterError(
+                f"track {number} is too long ({len(track)} characters, max {MAX_TRACK})",
+                hint="shorten the track so it fits on the disc",
+                exit_code=exit_code,
+            )
         _printable_check(f"track {number}", track, exit_code)
     return Disc(tracks=tuple(tracks), **clean)
 
@@ -120,8 +141,11 @@ def load_disc(path: Path) -> Disc:
         too_big = path.stat().st_size > MAX_DISC_FILE
         content = b"" if too_big else path.read_bytes()
     if too_big:
-        raise PrinterError(f"{name} is larger than {MAX_DISC_FILE // 1024} KiB",
-                           hint="a disc label holds a title and a track list", exit_code=3)
+        raise PrinterError(
+            f"{name} is larger than {MAX_DISC_FILE // 1024} KiB",
+            hint="a disc label holds a title and a track list",
+            exit_code=3,
+        )
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -136,36 +160,53 @@ def parse_disc(text: str, name: str = "disc label", kind: str = "disc label") ->
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=EXPECTED,
-                           exit_code=3) from exc
+        raise PrinterError(
+            f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=EXPECTED, exit_code=3
+        ) from exc
     if not isinstance(data, dict):
         raise PrinterError(f"{name} must hold a JSON object", hint=EXPECTED, exit_code=3)
     unknown = sorted(set(data) - set(FIELDS))
     if unknown:
-        raise PrinterError(f"unknown field(s) in {kind}: {', '.join(unknown)}",
-                           hint="allowed fields: " + ", ".join(FIELDS), exit_code=3)
+        raise PrinterError(
+            f"unknown field(s) in {kind}: {', '.join(unknown)}",
+            hint="allowed fields: " + ", ".join(FIELDS),
+            exit_code=3,
+        )
     missing = [field for field in REQUIRED if field not in data]
     if missing:
         raise PrinterError(f"{name} is missing {' and '.join(missing)}", hint=EXPECTED, exit_code=3)
 
     def is_tracks(value: Any) -> bool:
         return isinstance(value, str) or (isinstance(value, list) and all(isinstance(v, str) for v in value))
-    wrong = sorted(field for field, value in data.items()
-                   if not (is_tracks(value) if field == "tracks" else isinstance(value, str)))
+
+    wrong = sorted(
+        field
+        for field, value in data.items()
+        if not (is_tracks(value) if field == "tracks" else isinstance(value, str))
+    )
     if wrong:
-        raise PrinterError(f"{kind} fields must be text: {', '.join(wrong)}",
-                           hint="tracks is a list of texts (or one text, a newline between tracks)", exit_code=3)
+        raise PrinterError(
+            f"{kind} fields must be text: {', '.join(wrong)}",
+            hint="tracks is a list of texts (or one text, a newline between tracks)",
+            exit_code=3,
+        )
     tracks = data.pop("tracks", ())
     tracks = tuple(tracks.split("\n") if isinstance(tracks, str) else tracks)
     return check_disc(Disc(tracks=tracks, **data), exit_code=3)
 
 
-def with_overrides(base: Disc, title: str | None = None, subtitle: str | None = None, footer: str | None = None,
-                   tracks: list[str] | None = None) -> Disc:
+def with_overrides(
+    base: Disc,
+    title: str | None = None,
+    subtitle: str | None = None,
+    footer: str | None = None,
+    tracks: list[str] | None = None,
+) -> Disc:
     """Apply command-line text over a disc label; ``None`` keeps the base value, and ``tracks`` replaces the whole
     list."""
-    changes: dict[str, Any] = {k: v for k, v in (("title", title), ("subtitle", subtitle), ("footer", footer))
-                               if v is not None}
+    changes: dict[str, Any] = {
+        k: v for k, v in (("title", title), ("subtitle", subtitle), ("footer", footer)) if v is not None
+    }
     if tracks is not None:
         changes["tracks"] = tuple(tracks)
     return check_disc(replace(base, **changes), exit_code=2)
@@ -237,7 +278,7 @@ def _fit_upward(text: str, role: str, size: int, min_size: int, max_lines: int, 
         font, s, lines, cut = _fit_face(text, role, s, s, round(width), max_lines)
         if cut is None:
             break
-    return font, s, baselines[max_lines - len(lines):], lines, cut
+    return font, s, baselines[max_lines - len(lines) :], lines, cut
 
 
 def _head(d: ImageDraw.ImageDraw, disc: Disc, cut: Cuts) -> None:
@@ -278,6 +319,7 @@ def _footer(d: ImageDraw.ImageDraw, footer: str, cut: Cuts) -> float:
 @dataclass(frozen=True)
 class Slot:
     """Where one track is written: centred on ``x`` at ``baseline``, at most ``width`` wide."""
+
     x: float
     baseline: float
     width: float
@@ -318,8 +360,10 @@ def _tracks(d: ImageDraw.ImageDraw, tracks: tuple[str, ...], top: float, bottom:
         return
     for size in range(TRACK_SIZE, TRACK_MIN - 1, -2):
         slots = _slots(len(tracks), top, bottom, size)
-        fitted = [None if slot is None else _fit_face(track, "hand", size, size, round(slot.width), 1)
-                  for track, slot in zip(tracks, slots)]
+        fitted = [
+            None if slot is None else _fit_face(track, "hand", size, size, round(slot.width), 1)
+            for track, slot in zip(tracks, slots)
+        ]
         if all(f is not None and f[3] is None for f in fitted):
             break
     given = len("\n".join(tracks))

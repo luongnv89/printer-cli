@@ -26,22 +26,35 @@ LD = {
     "@context": "https://schema.org",
     "@graph": [
         {"@type": "WebPage", "name": "Lemon cake page"},
-        {"@type": ["Recipe"], "name": "Lemon Drizzle Cake", "recipeYield": ["8", "8 slices"],
-         "prepTime": "PT15M", "cookTime": "PT45M",
-         "recipeIngredient": ["225 g butter", "225 g caster sugar", "4 eggs", "Juice of 1&frac12; lemons"],
-         "recipeInstructions": [
-             {"@type": "HowToSection", "name": "Cake", "itemListElement": [
-                 {"@type": "HowToStep", "text": "Heat the oven to 180&deg;C."},
-                 {"@type": "HowToStep", "text": "Beat the <b>butter</b> and sugar."}]},
-             {"@type": "HowToStep", "text": "Bake for 45 minutes."}]},
+        {
+            "@type": ["Recipe"],
+            "name": "Lemon Drizzle Cake",
+            "recipeYield": ["8", "8 slices"],
+            "prepTime": "PT15M",
+            "cookTime": "PT45M",
+            "recipeIngredient": ["225 g butter", "225 g caster sugar", "4 eggs", "Juice of 1&frac12; lemons"],
+            "recipeInstructions": [
+                {
+                    "@type": "HowToSection",
+                    "name": "Cake",
+                    "itemListElement": [
+                        {"@type": "HowToStep", "text": "Heat the oven to 180&deg;C."},
+                        {"@type": "HowToStep", "text": "Beat the <b>butter</b> and sugar."},
+                    ],
+                },
+                {"@type": "HowToStep", "text": "Bake for 45 minutes."},
+            ],
+        },
     ],
 }
 
 
 def _page(ld=LD, body="<p>A long story about cake.</p>", head=""):
     script = f'<script type="application/ld+json">{json.dumps(ld)}</script>' if ld is not None else ""
-    return (f'<html><head><title>Lemon Drizzle Cake | Kitchen</title><meta property="og:site_name" '
-            f'content="Kitchen">{script}{head}</head><body>{body}</body></html>')
+    return (
+        f'<html><head><title>Lemon Drizzle Cake | Kitchen</title><meta property="og:site_name" '
+        f'content="Kitchen">{script}{head}</head><body>{body}</body></html>'
+    )
 
 
 HEADINGS_PAGE = """
@@ -79,8 +92,11 @@ def web(monkeypatch):
             raise AssertionError(f"unexpected request to {request.url}")
         return reply
 
-    monkeypatch.setattr(article, "fetch", lambda url, timeout, transport=None:
-                        REAL_FETCH(url, timeout, transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(
+        article,
+        "fetch",
+        lambda url, timeout, transport=None: REAL_FETCH(url, timeout, transport=httpx.MockTransport(handler)),
+    )
     return SimpleNamespace(routes=routes)
 
 
@@ -90,8 +106,9 @@ def printer(monkeypatch):
     made = []
     monkeypatch.setattr("prt.cli.make_driver", lambda target, timeout=5.0: made.append(target) or fake)
     requests = lambda: [r for r in fake.client.requests if r[0] == ipp.OP_PRINT_JOB]  # noqa: E731
-    return SimpleNamespace(driver=fake, made=made, requests=requests,
-                           jobs=lambda: [data for _, _, _, data in requests()])
+    return SimpleNamespace(
+        driver=fake, made=made, requests=requests, jobs=lambda: [data for _, _, _, data in requests()]
+    )
 
 
 def _html_response(text):
@@ -99,24 +116,38 @@ def _html_response(text):
 
 
 def _long(steps=12):
-    return Recipe("Long stew", tuple(f"Ingredient number {n}" for n in range(20)),
-                  tuple(f"Step {n}: " + "stir the pot slowly and keep tasting it as it cooks. " * 3
-                        for n in range(steps)))
+    return Recipe(
+        "Long stew",
+        tuple(f"Ingredient number {n}" for n in range(20)),
+        tuple(f"Step {n}: " + "stir the pot slowly and keep tasting it as it cooks. " * 3 for n in range(steps)),
+    )
 
 
 # --- reading a recipe ----------------------------------------------------------------------------
 
+
 def test_schema_org_recipe_data_is_read_first():
     found = recipe.normalise(recipe.from_html(_page(), URL, "kitchen.example"))
-    assert found == Recipe("Lemon Drizzle Cake", ("225 g butter", "225 g caster sugar", "4 eggs",
-                                                  "Juice of 1 1/2 lemons"),
-                           ("Heat the oven to 180°C.", "Beat the butter and sugar.", "Bake for 45 minutes."),
-                           servings="8 slices", time="Prep 15 min · Cook 45 min", source="Kitchen", url=URL)
+    assert found == Recipe(
+        "Lemon Drizzle Cake",
+        ("225 g butter", "225 g caster sugar", "4 eggs", "Juice of 1 1/2 lemons"),
+        ("Heat the oven to 180°C.", "Beat the butter and sugar.", "Bake for 45 minutes."),
+        servings="8 slices",
+        time="Prep 15 min · Cook 45 min",
+        source="Kitchen",
+        url=URL,
+    )
 
 
 def test_instructions_as_text_and_a_bare_yield():
-    ld = {"@type": "Recipe", "name": "Tea", "recipeYield": 2, "totalTime": "PT1H5M",
-          "recipeIngredient": "Tea leaves\nWater", "recipeInstructions": "Boil the water.\nSteep the tea."}
+    ld = {
+        "@type": "Recipe",
+        "name": "Tea",
+        "recipeYield": 2,
+        "totalTime": "PT1H5M",
+        "recipeIngredient": "Tea leaves\nWater",
+        "recipeInstructions": "Boil the water.\nSteep the tea.",
+    }
     found = recipe.from_html(_page(ld))
     assert found.ingredients == ("Tea leaves", "Water") and found.steps == ("Boil the water.", "Steep the tea.")
     assert found.servings == "Serves 2" and found.time == "Total 1 h 5 min"
@@ -148,9 +179,19 @@ def test_a_recipe_nested_in_another_object_is_found():
     assert recipe.from_html(page).steps[-1] == "Bake for 45 minutes."
 
 
-@pytest.mark.parametrize("value, shown", [("PT15M", "15 min"), ("PT1H30M", "1 h 30 min"), ("PT90M", "1 h 30 min"),
-                                          ("P0DT2H", "2 h"), ("P1D", "24 h"), ("PT0M", ""), ("soon", ""),
-                                          (None, "")])
+@pytest.mark.parametrize(
+    "value, shown",
+    [
+        ("PT15M", "15 min"),
+        ("PT1H30M", "1 h 30 min"),
+        ("PT90M", "1 h 30 min"),
+        ("P0DT2H", "2 h"),
+        ("P1D", "24 h"),
+        ("PT0M", ""),
+        ("soon", ""),
+        (None, ""),
+    ],
+)
 def test_durations_read_as_people_write_them(value, shown):
     assert recipe.duration(value) == shown
 
@@ -175,19 +216,31 @@ def test_plain_text_recipe():
 
 def test_recipe_json_file(tmp_path):
     path = tmp_path / "r.json"
-    path.write_text(json.dumps({"title": "Toast", "ingredients": "Bread\nButter",
-                                "steps": ["Toast the bread.", "Spread the butter."], "servings": "Serves 1"}))
-    assert recipe.load(str(path), 5) == Recipe("Toast", ("Bread", "Butter"), ("Toast the bread.", "Spread the butter."),
-                                               servings="Serves 1")
+    path.write_text(
+        json.dumps(
+            {
+                "title": "Toast",
+                "ingredients": "Bread\nButter",
+                "steps": ["Toast the bread.", "Spread the butter."],
+                "servings": "Serves 1",
+            }
+        )
+    )
+    assert recipe.load(str(path), 5) == Recipe(
+        "Toast", ("Bread", "Butter"), ("Toast the bread.", "Spread the butter."), servings="Serves 1"
+    )
 
 
-@pytest.mark.parametrize("data, message", [
-    ({"title": "T", "ingredients": ["a"]}, "missing steps"),
-    ({"title": "T", "ingredients": ["a"], "steps": ["b"], "photo": "x"}, "unknown field"),
-    ({"title": "T", "ingredients": [1], "steps": ["b"]}, "must be text"),
-    ({"title": "T", "ingredients": ["  "], "steps": ["b"]}, "no ingredients"),
-    ([1], "JSON object"),
-])
+@pytest.mark.parametrize(
+    "data, message",
+    [
+        ({"title": "T", "ingredients": ["a"]}, "missing steps"),
+        ({"title": "T", "ingredients": ["a"], "steps": ["b"], "photo": "x"}, "unknown field"),
+        ({"title": "T", "ingredients": [1], "steps": ["b"]}, "must be text"),
+        ({"title": "T", "ingredients": ["  "], "steps": ["b"]}, "no ingredients"),
+        ([1], "JSON object"),
+    ],
+)
 def test_bad_recipe_files_are_refused(data, message):
     with pytest.raises(PrinterError, match=message) as err:
         recipe.normalise(recipe.parse_json(json.dumps(data)))
@@ -200,6 +253,7 @@ def test_too_many_items_are_refused():
 
 
 # --- the cards -----------------------------------------------------------------------------------
+
 
 def test_a_short_recipe_fits_one_card_at_the_largest_type():
     size, cards = recipe.plan(recipe.normalise(SHORT))
@@ -224,13 +278,19 @@ def test_a_recipe_too_long_for_six_cards_is_refused():
 
 
 def test_a_heading_never_ends_a_column_and_a_gap_never_starts_one():
-    rows = [recipe.Row("item", "a", "•"), recipe.Row("gap"), recipe.Row("head", "Method"), recipe.Row("item", "b", "1.")]
+    rows = [
+        recipe.Row("item", "a", "•"),
+        recipe.Row("gap"),
+        recipe.Row("head", "Method"),
+        recipe.Row("item", "b", "1."),
+    ]
     cards = recipe.flow(rows, 3)
     assert cards == [[[rows[0], rows[1]], [rows[2], rows[3]]]]
     assert recipe.flow(rows, 1) == [[[rows[0]], [rows[2]]], [[rows[3]]]]
 
 
 # --- the catalog and schema -----------------------------------------------------------------------
+
 
 def test_recipe_style_and_schema():
     style = next(s for s in catalog.styles() if s["name"] == "recipe")
@@ -240,15 +300,18 @@ def test_recipe_style_and_schema():
     Draft202012Validator.check_schema(catalog.schema("recipe"))
 
 
-@pytest.mark.parametrize("data", [
-    {"title": "T", "ingredients": ["a"], "steps": ["b"]},
-    {"title": "T", "ingredients": "a\nb", "steps": "c"},
-    {"title": "T", "ingredients": ["a"]},
-    {"title": "T", "ingredients": ["a"], "steps": ["b"], "extra": "x"},
-    {"title": "T", "ingredients": [], "steps": ["b"]},
-    {"title": "T", "ingredients": ["a"], "steps": [2]},
-    {"title": "T" * 201, "ingredients": ["a"], "steps": ["b"]},
-])
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"title": "T", "ingredients": ["a"], "steps": ["b"]},
+        {"title": "T", "ingredients": "a\nb", "steps": "c"},
+        {"title": "T", "ingredients": ["a"]},
+        {"title": "T", "ingredients": ["a"], "steps": ["b"], "extra": "x"},
+        {"title": "T", "ingredients": [], "steps": ["b"]},
+        {"title": "T", "ingredients": ["a"], "steps": [2]},
+        {"title": "T" * 201, "ingredients": ["a"], "steps": ["b"]},
+    ],
+)
 def test_recipe_schema_agrees_with_the_recipe_file_check(data):
     try:
         recipe.normalise(recipe.parse_json(json.dumps(data)))
@@ -262,6 +325,7 @@ def test_recipe_schema_agrees_with_the_recipe_file_check(data):
 
 # --- prt recipe ------------------------------------------------------------------------------------
 
+
 def test_recipe_link_preview_saves_the_card_and_prints_nothing(capsys, tmp_path, printer, web):
     web.routes[URL] = _html_response(_page())
     out_file = tmp_path / "card.png"
@@ -269,17 +333,22 @@ def test_recipe_link_preview_saves_the_card_and_prints_nothing(capsys, tmp_path,
     assert code == 0, err
     assert "not printed" in err and printer.made == [] and guard.used_today() == 0
     data = without_estimate(out)
-    assert data == {"action": "recipe", "title": "Lemon Drizzle Cake", "pages": 1,
-                    "paper": {"size": "4x6", "media": "4x6", "tray": "photo"}, "fits": True, "cut": {},
-                    "files": [{"file": str(out_file), "format": "png", "bytes": out_file.stat().st_size}]}
+    assert data == {
+        "action": "recipe",
+        "title": "Lemon Drizzle Cake",
+        "pages": 1,
+        "paper": {"size": "4x6", "media": "4x6", "tray": "photo"},
+        "fits": True,
+        "cut": {},
+        "files": [{"file": str(out_file), "format": "png", "bytes": out_file.stat().st_size}],
+    }
     assert Image.open(out_file).size == (1800, 1200)
 
 
 def test_recipe_prints_every_card_upright_from_the_photo_tray(capsys, tmp_path, printer):
     path = tmp_path / "stew.json"
     long = _long()
-    path.write_text(json.dumps({"title": long.title, "ingredients": list(long.ingredients),
-                                "steps": list(long.steps)}))
+    path.write_text(json.dumps({"title": long.title, "ingredients": list(long.ingredients), "steps": list(long.steps)}))
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "recipe", str(path), "--yes")
     assert code == 0, err
     data = json.loads(out)

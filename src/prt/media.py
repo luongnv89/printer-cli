@@ -3,25 +3,52 @@
 from __future__ import annotations
 
 FRIENDLY = {
-    "a3": "A3", "a4": "A4", "a5": "A5", "a6": "A6", "b5": "B5", "letter": "Letter",
-    "legal": "Legal", "govt-letter": "8×10", "index-4x6": "4×6", "index-5x8": "5×8",
-    "5x7": "5×7", "photo-l": "L (3.5×5)", "hagaki": "Hagaki", "number-10": "#10 env",
-    "dl": "DL env", "c6": "C6 env", "foolscap": "Foolscap", "hivision": "HiVision",
+    "a3": "A3",
+    "a4": "A4",
+    "a5": "A5",
+    "a6": "A6",
+    "b5": "B5",
+    "letter": "Letter",
+    "legal": "Legal",
+    "govt-letter": "8×10",
+    "index-4x6": "4×6",
+    "index-5x8": "5×8",
+    "5x7": "5×7",
+    "photo-l": "L (3.5×5)",
+    "hagaki": "Hagaki",
+    "number-10": "#10 env",
+    "dl": "DL env",
+    "c6": "C6 env",
+    "foolscap": "Foolscap",
+    "hivision": "HiVision",
     "16k": "16K",
 }
 
 # User-facing shortcuts accepted by `prt print --media` and `--area`.
 ALIASES = {
-    "a4": "iso_a4_210x297mm", "a5": "iso_a5_148x210mm", "a6": "iso_a6_105x148mm",
-    "letter": "na_letter_8.5x11in", "legal": "na_legal_8.5x14in", "4x6": "na_index-4x6_4x6in",
-    "5x7": "na_5x7_5x7in", "8x10": "na_govt-letter_8x10in", "disc": "disc_12cm_18x120mm",
+    "a4": "iso_a4_210x297mm",
+    "a5": "iso_a5_148x210mm",
+    "a6": "iso_a6_105x148mm",
+    "letter": "na_letter_8.5x11in",
+    "legal": "na_legal_8.5x14in",
+    "4x6": "na_index-4x6_4x6in",
+    "5x7": "na_5x7_5x7in",
+    "8x10": "na_govt-letter_8x10in",
+    "disc": "disc_12cm_18x120mm",
 }
 
 # Sizes in hundredths of a millimetre, used to match media-col-ready collections.
 SIZES = {
-    (21000, 29700): "A4", (14800, 21000): "A5", (10500, 14800): "A6", (21590, 27940): "Letter",
-    (21590, 35560): "Legal", (10160, 15240): "4×6", (12700, 17780): "5×7", (20320, 25400): "8×10",
-    (12000, 12000): "Disc", (8890, 12700): "L (3.5×5)",
+    (21000, 29700): "A4",
+    (14800, 21000): "A5",
+    (10500, 14800): "A6",
+    (21590, 27940): "Letter",
+    (21590, 35560): "Legal",
+    (10160, 15240): "4×6",
+    (12700, 17780): "5×7",
+    (20320, 25400): "8×10",
+    (12000, 12000): "Disc",
+    (8890, 12700): "L (3.5×5)",
 }
 
 

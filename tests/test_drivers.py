@@ -18,7 +18,12 @@ def test_status_from_real_capture(fake):
     st = fake.status()
     assert st.state == "idle"
     assert [(i.short, i.level, i.state) for i in st.inks] == [
-        ("PB", 92, "ok"), ("C", 1, "replace"), ("M", 1, "replace"), ("Y", 12, "low"), ("BK", 89, "ok")]
+        ("PB", 92, "ok"),
+        ("C", 1, "replace"),
+        ("M", 1, "replace"),
+        ("Y", 12, "low"),
+        ("BK", 89, "ok"),
+    ]
     assert st.waste == "almost-full"
     assert [(t.source, t.media) for t in st.trays] == [("main", "A4"), ("photo", "4×6"), ("disc", "Disc")]
     assert all(t.level is None for t in st.trays)  # printer reports -2 = unknown
@@ -75,6 +80,7 @@ def test_head_clean_preflight_blocks_on_low_ink_and_waste(fake):
     assert not pf.ok
     assert any("Cyan" in b for b in pf.blockers) and any("waste" in b for b in pf.blockers)
     from prt.models import Ink
+
     assert head_clean_preflight(Status(state="idle", inks=[Ink("Black ink", "#000000", 80)])).ok
     assert not head_clean_preflight(Status(state="unknown")).ok  # fails closed without data
     assert not head_clean_preflight(Status(state="idle", inks=[Ink("Black ink", "#000000", None)])).ok
@@ -82,8 +88,9 @@ def test_head_clean_preflight_blocks_on_low_ink_and_waste(fake):
 
 
 def test_submit_builds_print_job(fake):
-    job = fake.submit(b"\xff\xd8jpeg", "image/jpeg", PrintOptions(copies=2, media="4x6", tray="photo",
-                                                               quality="high", mono=True))
+    job = fake.submit(
+        b"\xff\xd8jpeg", "image/jpeg", PrintOptions(copies=2, media="4x6", tray="photo", quality="high", mono=True)
+    )
     assert job == 101
     op, op_attrs, job_attrs, data = fake.client.requests[-1]
     names = {a.name: a.value for a in job_attrs}
@@ -139,10 +146,18 @@ def test_test_page_renders_jpeg(fake):
 
 def test_trays_dedupe_margin_variants():
     """HP DeskJet 3630 reports one A4 tray three times, differing only in margins."""
+
     def col(m):
-        return {"media-size": {"x-dimension": 21000, "y-dimension": 29700}, "media-source": "main",
-                "media-type": "stationery", **{f"media-{s}-margin": m for s in ("top", "bottom", "left", "right")}}
-    a = {"media-col-ready": [col(296), col(0), col(296)],
-         "printer-input-tray": ["type=sheetFeedAutoNonRemovable;maxcapacity=100;level=40;name=InputTray1"]}
+        return {
+            "media-size": {"x-dimension": 21000, "y-dimension": 29700},
+            "media-source": "main",
+            "media-type": "stationery",
+            **{f"media-{s}-margin": m for s in ("top", "bottom", "left", "right")},
+        }
+
+    a = {
+        "media-col-ready": [col(296), col(0), col(296)],
+        "printer-input-tray": ["type=sheetFeedAutoNonRemovable;maxcapacity=100;level=40;name=InputTray1"],
+    }
     trays = IPPDriver(Target("x", "x")).parse_trays(a)
     assert [(t.source, t.media, t.media_type, t.level) for t in trays] == [("main", "A4", "stationery", 40)]

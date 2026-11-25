@@ -8,8 +8,10 @@ from prt.testpage import _font
 
 FONT = _font(24)
 COL_W = 300
-WORDS = ("Printing a long article means the text has to keep going on the next page, "
-         "word for word, without dropping or repeating anything along the way.").split()
+WORDS = (
+    "Printing a long article means the text has to keep going on the next page, "
+    "word for word, without dropping or repeating anything along the way."
+).split()
 
 
 def _article(paragraphs=12, words=60):
@@ -55,7 +57,7 @@ def test_a_paragraph_split_by_the_page_continues_mid_paragraph():
     cols, left = layout.flow_columns([para], FONT, COL_W, 5, 1)
     printed = " ".join(cols[0]).split()
     assert len(cols[0]) == 5
-    assert left == [" ".join(para.split()[len(printed):])]
+    assert left == [" ".join(para.split()[len(printed) :])]
 
 
 def test_a_word_wider_than_the_column_is_carried_over_by_characters():
@@ -108,8 +110,9 @@ def test_paginate_with_no_room_on_the_first_page_starts_the_text_on_page_two():
 def test_draw_columns_draws_inside_the_columns():
     page = Image.new("RGB", (800, 400), "white")
     cols = [["left column"], ["right column"]]
-    layout.draw_columns(ImageDraw.Draw(page), cols, 20, 20, 300, 40, FONT, 24, (0, 0, 0), rule=(255, 0, 0),
-                        indent=(1, 50))
+    layout.draw_columns(
+        ImageDraw.Draw(page), cols, 20, 20, 300, 40, FONT, 24, (0, 0, 0), rule=(255, 0, 0), indent=(1, 50)
+    )
     left = page.crop((20, 20, 70, 60))
     assert left.getextrema() == ((255, 255),) * 3  # the indent leaves the drop-cap corner empty
     assert page.crop((70, 20, 320, 60)).getextrema() != ((255, 255),) * 3
@@ -132,6 +135,7 @@ def test_paginate_measures_only_the_pages_it_is_asked_for():
 
 # --- how much of a cut text was printed ----------------------------------------------------------
 
+
 def _printed(lines):
     """The text that ``lines`` print, without the "…" at the end."""
     return " ".join(line for line in lines if line).removesuffix(layout.ELLIPSIS).rstrip()
@@ -145,10 +149,10 @@ def test_text_that_fits_reports_no_cut():
 def test_fit_reports_how_many_characters_were_printed_and_given(text):
     _, _, lines, cut = layout._fit(text, 40, 40, 400, 2)
     assert cut is not None and cut.given == len(text) and 0 < cut.max_fit < cut.given
-    if " " in text[:cut.max_fit]:  # a line split between words prints exactly the text up to max_fit
-        assert _printed(lines) == text[:cut.max_fit]
+    if " " in text[: cut.max_fit]:  # a line split between words prints exactly the text up to max_fit
+        assert _printed(lines) == text[: cut.max_fit]
     # The printed part always fits, so the text cut to max_fit characters fits as it is.
-    assert layout._fit(text[:cut.max_fit], 40, 40, 400, 2)[3] is None
+    assert layout._fit(text[: cut.max_fit], 40, 40, 400, 2)[3] is None
 
 
 def test_fit_counts_a_word_split_over_lines_once():
@@ -163,7 +167,7 @@ def test_columns_report_how_much_of_the_paragraphs_was_printed():
     page = Image.new("RGB", (600, 400), "white")
     cut = layout._columns(ImageDraw.Draw(page), text, (0, 0, 600, 300), 2, 20, 20, 20, "black")
     assert cut is not None and cut.given == len(text) and 0 < cut.max_fit < cut.given
-    assert layout._columns(ImageDraw.Draw(page), text[:cut.max_fit], (0, 0, 600, 300), 2, 20, 20, 20, "black") is None
+    assert layout._columns(ImageDraw.Draw(page), text[: cut.max_fit], (0, 0, 600, 300), 2, 20, 20, 20, "black") is None
     assert layout._columns(ImageDraw.Draw(page), "A short story.", (0, 0, 600, 300), 2, 20, 20, 20, "black") is None
 
 
@@ -181,6 +185,7 @@ def test_cut_reports_as_json_fields():
 def test_in_source_recounts_a_cut_in_the_characters_given():
     def expand(c):
         return {"€": "EUR", "ß": "ss", "\u0301": ""}.get(c, c)
+
     # "a € b" prints as "a EUR b": 5 of those 7 printed characters cover "a €" (3 given), not 5 given.
     assert layout._in_source(layout.Cut(5, 7), "a € b", expand) == layout.Cut(3, 5)
     # A stand-in only part of which fitted is left out; an accent mark costs nothing.

@@ -43,11 +43,22 @@ def _bad(message: str, hint: str | None = None) -> PrinterError:
 def _run_git(repo: Path, args: list[str]) -> subprocess.CompletedProcess:
     """Run git with a fixed argument vector — never a shell — and turn environment failures into PrinterError."""
     try:
-        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", timeout=GIT_TIMEOUT, check=False)
+        return subprocess.run(
+            ["git", "-C", str(repo), *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=GIT_TIMEOUT,
+            check=False,
+        )
     except FileNotFoundError as e:
-        raise PrinterError("git is not installed or not on PATH", hint="install git to print a commit receipt",
-                           exit_code=1, kind="git_unavailable") from e
+        raise PrinterError(
+            "git is not installed or not on PATH",
+            hint="install git to print a commit receipt",
+            exit_code=1,
+            kind="git_unavailable",
+        ) from e
     except subprocess.TimeoutExpired as e:
         raise PrinterError(f"git did not answer within {GIT_TIMEOUT} seconds", exit_code=1, kind="git_timeout") from e
 
@@ -56,8 +67,9 @@ def _git_ok(repo: Path, args: list[str], what: str) -> str:
     proc = _run_git(repo, args)
     if proc.returncode:
         detail = (proc.stderr or proc.stdout).strip().splitlines()
-        raise PrinterError(f"git could not {what}: {detail[-1] if detail else 'unknown error'}", exit_code=1,
-                           kind="git_failed")
+        raise PrinterError(
+            f"git could not {what}: {detail[-1] if detail else 'unknown error'}", exit_code=1, kind="git_failed"
+        )
     return proc.stdout
 
 
@@ -98,8 +110,11 @@ def collect(repo: Path, period: str = "day", now: datetime | None = None) -> Rec
     except ValueError:
         total = 0
     fmt = "%H%x1f%h%x1f%aI%x1f%an%x1f%s"
-    out = _git_ok(repo, ["log", "--no-merges", since_arg, f"--max-count={MAX_COMMITS}", f"--pretty=format:{fmt}"],
-                  "read the commit log")
+    out = _git_ok(
+        repo,
+        ["log", "--no-merges", since_arg, f"--max-count={MAX_COMMITS}", f"--pretty=format:{fmt}"],
+        "read the commit log",
+    )
     commits: list[Commit] = []
     for line in out.splitlines():
         parts = line.split("\x1f", 4)
@@ -153,7 +168,12 @@ def document(receipt: Receipt) -> TextGazette:
     start = receipt.since.strftime("%Y-%m-%d")
     dateline = start if start == end else f"{start} — {end}"
     return TextGazette(
-        masthead="The Commit Receipt", headline="Today in commits" if receipt.period == "day" else "The week in commits",
-        kicker="Git log", byline=f"Repository: {name}", dateline=dateline,
+        masthead="The Commit Receipt",
+        headline="Today in commits" if receipt.period == "day" else "The week in commits",
+        kicker="Git log",
+        byline=f"Repository: {name}",
+        dateline=dateline,
         edition="Day edition" if receipt.period == "day" else "Week edition",
-        tagline="A printed record of work committed", sections=tuple(sections))
+        tagline="A printed record of work committed",
+        sections=tuple(sections),
+    )

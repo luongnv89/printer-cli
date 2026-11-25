@@ -54,12 +54,52 @@ class Mode:
 
 PLAIN = Mode(styled=False, tier="none", unicode=False, width=80)
 
-UNI = {"tl": "╭", "tr": "╮", "bl": "╰", "br": "╯", "h": "─", "v": "│", "nl": "┐", "nr": "┌",
-       "fl": "┘", "fr": "└", "lt": "├", "rt": "┤", "cell": "■", "ok": "●", "warn": "▲",
-       "err": "✗", "info": "◆", "off": "○", "ell": "…", "dot": "·", "check": "✓"}
-ASC = {"tl": "+", "tr": "+", "bl": "+", "br": "+", "h": "-", "v": "|", "nl": "[", "nr": "]",
-       "fl": "[", "fr": "]", "lt": "+", "rt": "+", "cell": "#", "ok": "+", "warn": "!",
-       "err": "x", "info": "i", "off": "o", "ell": "...", "dot": "-", "check": "v"}
+UNI = {
+    "tl": "╭",
+    "tr": "╮",
+    "bl": "╰",
+    "br": "╯",
+    "h": "─",
+    "v": "│",
+    "nl": "┐",
+    "nr": "┌",
+    "fl": "┘",
+    "fr": "└",
+    "lt": "├",
+    "rt": "┤",
+    "cell": "■",
+    "ok": "●",
+    "warn": "▲",
+    "err": "✗",
+    "info": "◆",
+    "off": "○",
+    "ell": "…",
+    "dot": "·",
+    "check": "✓",
+}
+ASC = {
+    "tl": "+",
+    "tr": "+",
+    "bl": "+",
+    "br": "+",
+    "h": "-",
+    "v": "|",
+    "nl": "[",
+    "nr": "]",
+    "fl": "[",
+    "fr": "]",
+    "lt": "+",
+    "rt": "+",
+    "cell": "#",
+    "ok": "+",
+    "warn": "!",
+    "err": "x",
+    "info": "i",
+    "off": "o",
+    "ell": "...",
+    "dot": "-",
+    "check": "v",
+}
 
 
 def glyphs(mode: Mode) -> dict[str, str]:
@@ -68,12 +108,12 @@ def glyphs(mode: Mode) -> dict[str, str]:
 
 # --- Section 2: the three decisions per stream ---------------------------------
 
+
 def _truthy(name: str) -> bool:
     return os.environ.get(name, "") not in ("", "0")
 
 
-def decide(stream: TextIO, *, machine: bool = False, no_color: bool = False,
-           is_stdout: bool = True) -> Mode:
+def decide(stream: TextIO, *, machine: bool = False, no_color: bool = False, is_stdout: bool = True) -> Mode:
     """Styled-or-plain, colour tier and glyph set for one output stream."""
     width = _width(stream)
     term = os.environ.get("TERM", "")
@@ -105,6 +145,7 @@ def _width(stream: TextIO) -> int:
 
 
 # --- Text safety ---------------------------------------------------------------
+
 
 def escape(value: object, plain: bool = False) -> str:
     """Make printer-supplied text safe: control characters become visible escapes."""
@@ -142,20 +183,45 @@ def t(value: object, role: str | None = None) -> Text:
 
 # --- Rendering helpers ---------------------------------------------------------
 
+
 def render(mode: Mode, *items: Text | str) -> str:
     """Render rich Text objects to a string with exactly the escapes this mode allows."""
     buf = io.StringIO()
-    console = Console(file=buf, force_terminal=mode.styled, color_system=TIERS[mode.tier] if mode.styled else None,
-                      highlight=False, emoji=False, markup=False, width=max(mode.width, 20),
-                      no_color=False, legacy_windows=False)
+    console = Console(
+        file=buf,
+        force_terminal=mode.styled,
+        color_system=TIERS[mode.tier] if mode.styled else None,
+        highlight=False,
+        emoji=False,
+        markup=False,
+        width=max(mode.width, 20),
+        no_color=False,
+        legacy_windows=False,
+    )
     for item in items:
         console.print(item, end="", soft_wrap=True, crop=False)
     out = buf.getvalue()
     return out if mode.unicode else to_ascii(out)
 
 
-ASCII_MAP = str.maketrans({"×": "x", "—": "-", "–": "-", "…": "...", "·": "-", "✓": "v", "✗": "x",
-                           "●": "+", "▲": "!", "◆": "i", "○": "o", "■": "#", "→": "->", "°": "o"})
+ASCII_MAP = str.maketrans(
+    {
+        "×": "x",
+        "—": "-",
+        "–": "-",
+        "…": "...",
+        "·": "-",
+        "✓": "v",
+        "✗": "x",
+        "●": "+",
+        "▲": "!",
+        "◆": "i",
+        "○": "o",
+        "■": "#",
+        "→": "->",
+        "°": "o",
+    }
+)
 
 
 def to_ascii(s: str) -> str:
@@ -224,10 +290,24 @@ def meter(value: int | None, width: int, mode: Mode, fill_style: str = "bold") -
     return out
 
 
-SEVERITY_ROLE = {"ok": "ok", "info": "info", "warning": "warn", "warn": "warn", "error": "err", "err": "err",
-                 "offline": "dim"}
-SEVERITY_GLYPH = {"ok": "ok", "info": "info", "warning": "warn", "warn": "warn", "error": "err",
-                  "err": "err", "offline": "off"}
+SEVERITY_ROLE = {
+    "ok": "ok",
+    "info": "info",
+    "warning": "warn",
+    "warn": "warn",
+    "error": "err",
+    "err": "err",
+    "offline": "dim",
+}
+SEVERITY_GLYPH = {
+    "ok": "ok",
+    "info": "info",
+    "warning": "warn",
+    "warn": "warn",
+    "error": "err",
+    "err": "err",
+    "offline": "off",
+}
 
 
 def status(level: str, word: str, mode: Mode) -> Text:
@@ -239,8 +319,7 @@ def status(level: str, word: str, mode: Mode) -> Text:
     return out
 
 
-def box(title: str, rows: list[Text | str | None], mode: Mode, footer: str | None = None,
-        max_width: int = 100) -> str:
+def box(title: str, rows: list[Text | str | None], mode: Mode, footer: str | None = None, max_width: int = 100) -> str:
     """Rounded box with the title notched into the top border. ``None`` rows are dividers."""
     g = glyphs(mode)
     width = max(30, min(mode.width, max_width))
@@ -271,8 +350,9 @@ def box(title: str, rows: list[Text | str | None], mode: Mode, footer: str | Non
     return "\n".join(render(mode, ln) for ln in lines) + "\n"
 
 
-def table_rows(header: list[str], rows: list[list[Text | str]], mode: Mode,
-               right: set[int] | None = None, gap: int = 2) -> list[Text]:
+def table_rows(
+    header: list[str], rows: list[list[Text | str]], mode: Mode, right: set[int] | None = None, gap: int = 2
+) -> list[Text]:
     """Column-aligned rows (header in the title role, no rule under it — like btop's proc list)."""
     right = right or set()
     cells = [[c if isinstance(c, Text) else Text(escape(c)) for c in r] for r in rows]

@@ -21,8 +21,22 @@ from PIL import Image, ImageDraw
 
 from prt.booth import STDIN, _grow, _photo, _star, read_stdin
 from prt.drivers.base import PrinterError
-from prt.layout import (Cut, Cuts, _clean, _columns, _columns_height, _consumed, _ellipsize, _fit, _glyphs,
-                        _in_source, _lead, _printable, _text_block, _wrap)
+from prt.layout import (
+    Cut,
+    Cuts,
+    _clean,
+    _columns,
+    _columns_height,
+    _consumed,
+    _ellipsize,
+    _fit,
+    _glyphs,
+    _in_source,
+    _lead,
+    _printable,
+    _text_block,
+    _wrap,
+)
 from prt.testpage import H, W, _font
 
 # --- the card text -----------------------------------------------------------------------------
@@ -47,16 +61,20 @@ MAX_CARD_FILE = 64 * 1024
 # and each line of the message starts a paragraph.
 MULTILINE = ("verse", "message")
 KIND = "greeting card"
-FOLD = ("Fold the sheet in half from top to bottom with the printed side out, then in half again with the photo "
-        "on the front.")
+FOLD = (
+    "Fold the sheet in half from top to bottom with the printed side out, then in half again with the photo "
+    "on the front."
+)
 EXPECTED = 'expected {"greeting": "...", "verse": "..."}'
 
 DEFAULT_CARD = Card(
     greeting="Best Wishes",
-    verse=("A smile caught in a single frame,\n"
-           "a moment no one else can claim.\n\n"
-           "May all the days ahead be bright,\n"
-           "and full of friends, and warm, and light."),
+    verse=(
+        "A smile caught in a single frame,\n"
+        "a moment no one else can claim.\n\n"
+        "May all the days ahead be bright,\n"
+        "and full of friends, and warm, and light."
+    ),
     signature="With love",
     back="Made at the prt photo booth",
 )
@@ -81,17 +99,21 @@ def check_card(card: Card, exit_code: int) -> Card:
         raw = getattr(card, name)
         value = _clean_verse(raw) if name == "verse" else _clean(raw, keep_newlines=name in MULTILINE)
         if name in REQUIRED and not value:
-            raise PrinterError(f"the card has an empty {name}", hint=f"give the {name} some text",
-                               exit_code=exit_code)
+            raise PrinterError(f"the card has an empty {name}", hint=f"give the {name} some text", exit_code=exit_code)
         if len(value) > LIMITS[name]:
-            raise PrinterError(f"{name} is too long ({len(value)} characters, max {LIMITS[name]})",
-                               hint=f"shorten the {name} so it fits on the card", exit_code=exit_code)
+            raise PrinterError(
+                f"{name} is too long ({len(value)} characters, max {LIMITS[name]})",
+                hint=f"shorten the {name} so it fits on the card",
+                exit_code=exit_code,
+            )
         unprintable = sorted({c for c in value if _glyphs(c) is None})
         if unprintable:
             shown = ", ".join(f"{c} (U+{ord(c):04X})" for c in unprintable[:10])
-            raise PrinterError(f"{name} has characters the card font cannot print: {shown}",
-                               hint="write it in Latin letters (accents are printed without their marks)",
-                               exit_code=exit_code)
+            raise PrinterError(
+                f"{name} has characters the card font cannot print: {shown}",
+                hint="write it in Latin letters (accents are printed without their marks)",
+                exit_code=exit_code,
+            )
         clean[name] = value
     return Card(**clean)
 
@@ -109,8 +131,11 @@ def load_card(path: Path) -> Card:
         too_big = path.stat().st_size > MAX_CARD_FILE
         content = b"" if too_big else path.read_bytes()
     if too_big:
-        raise PrinterError(f"{name} is larger than {MAX_CARD_FILE // 1024} KiB",
-                           hint="a greeting card holds a greeting and a short verse", exit_code=3)
+        raise PrinterError(
+            f"{name} is larger than {MAX_CARD_FILE // 1024} KiB",
+            hint="a greeting card holds a greeting and a short verse",
+            exit_code=3,
+        )
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -124,21 +149,28 @@ def parse_card(text: str, name: str = "card", kind: str = "card") -> Card:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=EXPECTED,
-                           exit_code=3) from exc
+        raise PrinterError(
+            f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=EXPECTED, exit_code=3
+        ) from exc
     if not isinstance(data, dict):
         raise PrinterError(f"{name} must hold a JSON object", hint=EXPECTED, exit_code=3)
     unknown = sorted(set(data) - set(FIELDS))
     if unknown:
-        raise PrinterError(f"unknown field(s) in {kind}: {', '.join(unknown)}",
-                           hint="allowed fields: " + ", ".join(FIELDS), exit_code=3)
+        raise PrinterError(
+            f"unknown field(s) in {kind}: {', '.join(unknown)}",
+            hint="allowed fields: " + ", ".join(FIELDS),
+            exit_code=3,
+        )
     missing = [field for field in REQUIRED if field not in data]
     if missing:
         raise PrinterError(f"{name} is missing {' and '.join(missing)}", hint=EXPECTED, exit_code=3)
     wrong = [field for field, value in data.items() if not isinstance(value, str)]
     if wrong:
-        raise PrinterError(f"{kind} fields must be text: {', '.join(sorted(wrong))}",
-                           hint='quote the values, e.g. "signature": "With love, Jo"', exit_code=3)
+        raise PrinterError(
+            f"{kind} fields must be text: {', '.join(sorted(wrong))}",
+            hint='quote the values, e.g. "signature": "With love, Jo"',
+            exit_code=3,
+        )
     return check_card(Card(**data), exit_code=3)
 
 
@@ -178,11 +210,14 @@ def impose(panels: dict[str, Image.Image]) -> Image.Image:
         panel = panels[name]
         if panel.size != (PANEL_W, PANEL_H):
             raise ValueError(f"panel {name} is {panel.size}, not {(PANEL_W, PANEL_H)}")
-        sheet.paste(panel.transpose(Image.Transpose.ROTATE_180) if flipped else panel,
-                    (col * PANEL_W, row * PANEL_H))
+        sheet.paste(panel.transpose(Image.Transpose.ROTATE_180) if flipped else panel, (col * PANEL_W, row * PANEL_H))
     d = ImageDraw.Draw(sheet)
-    for x0, y0, x1, y1 in ((0, PANEL_H, TICK, PANEL_H), (W - TICK, PANEL_H, W, PANEL_H),
-                           (PANEL_W, 0, PANEL_W, TICK), (PANEL_W, H - TICK, PANEL_W, H)):
+    for x0, y0, x1, y1 in (
+        (0, PANEL_H, TICK, PANEL_H),
+        (W - TICK, PANEL_H, W, PANEL_H),
+        (PANEL_W, 0, PANEL_W, TICK),
+        (PANEL_W, H - TICK, PANEL_W, H),
+    ):
         d.line([(x0, y0), (x1, y1)], fill=GUIDE, width=2)
     return sheet
 
@@ -213,8 +248,9 @@ def _fitted(text: str, size: int, min_size: int, width: int, max_lines: int):
     return font, size, lines, (_in_source(cut, text, _printable) if cut else None)
 
 
-def _centred_block(d: ImageDraw.ImageDraw, top: int, bottom: int, lines: list[str], font, size: int, fill,
-                   bold: int = 0) -> None:
+def _centred_block(
+    d: ImageDraw.ImageDraw, top: int, bottom: int, lines: list[str], font, size: int, fill, bold: int = 0
+) -> None:
     """Draw ``lines`` centred on the panel, and centred between ``top`` and ``bottom``."""
     y = top + max(0, (bottom - top - len(lines) * _lead(size)) // 2)
     _text_block(d, (PANEL_W - TEXT_W) // 2, y, lines, font, size, fill, width=TEXT_W, bold=bold)
@@ -352,8 +388,12 @@ def panels(photo: Image.Image, card: Card | None = None) -> tuple[dict[str, Imag
     card is read: front, inside left, inside right, back."""
     card = DEFAULT_CARD if card is None else card
     cut: Cuts = {}
-    drawn = {"front": _front(photo, card, cut), "inside_left": _inside_left(card, cut),
-             "inside_right": _inside_right(card, cut), "back": _back(card, cut)}
+    drawn = {
+        "front": _front(photo, card, cut),
+        "inside_left": _inside_left(card, cut),
+        "inside_right": _inside_right(card, cut),
+        "back": _back(card, cut),
+    }
     return drawn, cut
 
 

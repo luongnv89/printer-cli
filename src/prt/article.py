@@ -26,8 +26,20 @@ from PIL import Image, ImageDraw
 from prt import __version__
 from prt.booth import INK, RUST, SEPIA, SEPIA_DARK, STDIN, _centred, read_stdin
 from prt.drivers.base import PrinterError
-from prt.layout import (BOTTOM, CONTENT_W, _clean, _col_width, _ellipsize, _fit, _glyphs, _lead, _text_block,
-                        _wrapped, draw_columns, paginate)
+from prt.layout import (
+    BOTTOM,
+    CONTENT_W,
+    _clean,
+    _col_width,
+    _ellipsize,
+    _fit,
+    _glyphs,
+    _lead,
+    _text_block,
+    _wrapped,
+    draw_columns,
+    paginate,
+)
 from prt.paper import A4, Paper
 from prt.testpage import H, MARGIN, W, _font
 
@@ -78,8 +90,11 @@ def check_link(url: str) -> None:
     except ValueError as exc:  # e.g. an unclosed [IPv6] host
         raise PrinterError(f"cannot fetch {url}: {exc}", hint="check the link", exit_code=3) from exc
     if parts.scheme.lower() not in ("http", "https"):
-        raise PrinterError(f"cannot fetch {url}: only http:// and https:// links are supported",
-                           hint="give the article's web link, or the path of a saved file", exit_code=3)
+        raise PrinterError(
+            f"cannot fetch {url}: only http:// and https:// links are supported",
+            hint="give the article's web link, or the path of a saved file",
+            exit_code=3,
+        )
     if not host:
         raise PrinterError(f"cannot fetch {url}: the link has no host name", hint="check the link", exit_code=3)
 
@@ -88,12 +103,23 @@ def fetch(url: str, timeout: float, transport: httpx.BaseTransport | None = None
     """GET ``url`` with certificate checks, at most MAX_REDIRECTS redirects and MAX_BYTES of (decoded) body."""
     check_link(url)
     try:
-        with httpx.Client(transport=transport, verify=True, timeout=timeout, follow_redirects=True,
-                          max_redirects=MAX_REDIRECTS, headers={"User-Agent": USER_AGENT}) as client:
+        with httpx.Client(
+            transport=transport,
+            verify=True,
+            timeout=timeout,
+            follow_redirects=True,
+            max_redirects=MAX_REDIRECTS,
+            headers={"User-Agent": USER_AGENT},
+        ) as client:
             with client.stream("GET", url) as response:
                 if response.status_code >= 400:
-                    raise PrinterError(f"cannot fetch {url}: the site answered HTTP {response.status_code} "
-                                       f"{response.reason_phrase}".rstrip(), hint=FILE_HINT, exit_code=3, kind="fetch_failed")
+                    raise PrinterError(
+                        f"cannot fetch {url}: the site answered HTTP {response.status_code} "
+                        f"{response.reason_phrase}".rstrip(),
+                        hint=FILE_HINT,
+                        exit_code=3,
+                        kind="fetch_failed",
+                    )
                 declared = response.headers.get("content-length", "")
                 if declared.isdigit() and int(declared) > MAX_BYTES:
                     raise _too_large(url)
@@ -106,19 +132,32 @@ def fetch(url: str, timeout: float, transport: httpx.BaseTransport | None = None
                 media_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
                 return Fetched(str(response.url), media_type, response.charset_encoding, b"".join(chunks))
     except httpx.TooManyRedirects as exc:
-        raise PrinterError(f"cannot fetch {url}: more than {MAX_REDIRECTS} redirects", hint="check the link",
-                           exit_code=3, kind="fetch_failed") from exc
+        raise PrinterError(
+            f"cannot fetch {url}: more than {MAX_REDIRECTS} redirects",
+            hint="check the link",
+            exit_code=3,
+            kind="fetch_failed",
+        ) from exc
     except httpx.TimeoutException as exc:
-        raise PrinterError(f"cannot fetch {url}: no answer within {timeout:g} s",
-                           hint="try again, or allow longer with --timeout", exit_code=3, kind="fetch_failed") from exc
+        raise PrinterError(
+            f"cannot fetch {url}: no answer within {timeout:g} s",
+            hint="try again, or allow longer with --timeout",
+            exit_code=3,
+            kind="fetch_failed",
+        ) from exc
     except (httpx.HTTPError, httpx.InvalidURL, UnicodeError) as exc:  # UnicodeError: a host IDNA refuses
-        raise PrinterError(f"cannot fetch {url}: {exc}", hint="check the link and your connection",
-                           exit_code=3, kind="fetch_failed") from exc
+        raise PrinterError(
+            f"cannot fetch {url}: {exc}", hint="check the link and your connection", exit_code=3, kind="fetch_failed"
+        ) from exc
 
 
 def _too_large(url: str) -> PrinterError:
-    return PrinterError(f"cannot fetch {url}: larger than {MAX_BYTES // (1024 * 1024)} MiB",
-                        hint="link to the article page itself, or " + FILE_HINT, exit_code=3, kind="fetch_failed")
+    return PrinterError(
+        f"cannot fetch {url}: larger than {MAX_BYTES // (1024 * 1024)} MiB",
+        hint="link to the article page itself, or " + FILE_HINT,
+        exit_code=3,
+        kind="fetch_failed",
+    )
 
 
 def from_link(url: str, timeout: float) -> Article:
@@ -131,8 +170,11 @@ def from_link(url: str, timeout: float) -> Article:
         return from_html(_decode(page.content, page.charset), page.url, host)
     if page.media_type == "text/plain":
         return from_text(_decode(page.content, page.charset), source=host, url=page.url)
-    raise PrinterError(f"cannot print {url}: it is not a web page ({page.media_type})",
-                       hint="link to the article page itself, or " + FILE_HINT, exit_code=3)
+    raise PrinterError(
+        f"cannot print {url}: it is not a web page ({page.media_type})",
+        hint="link to the article page itself, or " + FILE_HINT,
+        exit_code=3,
+    )
 
 
 def _site(url: str) -> str:
@@ -168,17 +210,22 @@ def is_x_post(url: str) -> bool:
 def from_x(url: str, timeout: float) -> Article:
     """An X post's text, through the public oEmbed endpoint (works for public posts only)."""
     if not re.search(r"/status(?:es)?/\d+", urlsplit(url).path):
-        raise PrinterError(f"{url} is not a link to an X post",
-                           hint="copy the post's own link (it contains /status/)", exit_code=3)
+        raise PrinterError(
+            f"{url} is not a link to an X post", hint="copy the post's own link (it contains /status/)", exit_code=3
+        )
     hint = "X shares public posts only; for a private, deleted or long post, " + FILE_HINT
     try:
         page = fetch(f"{OEMBED}?{urlencode({'url': url, 'omit_script': 'true', 'dnt': 'true'})}", timeout)
     except PrinterError as exc:
-        raise PrinterError(f"X did not return the post {url} ({exc})", hint=hint, exit_code=3, kind="fetch_failed") from exc
+        raise PrinterError(
+            f"X did not return the post {url} ({exc})", hint=hint, exit_code=3, kind="fetch_failed"
+        ) from exc
     try:
         data = json.loads(page.content)
     except ValueError as exc:
-        raise PrinterError(f"X sent an unreadable answer for {url}", hint=hint, exit_code=3, kind="fetch_failed") from exc
+        raise PrinterError(
+            f"X sent an unreadable answer for {url}", hint=hint, exit_code=3, kind="fetch_failed"
+        ) from exc
     if not isinstance(data, dict) or not isinstance(data.get("html"), str):
         raise PrinterError(f"X sent no post text for {url}", hint=hint, exit_code=3, kind="fetch_failed")
     parser = _Extractor()
@@ -187,25 +234,50 @@ def from_x(url: str, timeout: float) -> Article:
 
     def text(key: str) -> str:
         return data[key] if isinstance(data.get(key), str) else ""
+
     name, handle = text("author_name"), urlsplit(text("author_url")).path.strip("/")
     author = f"{name} (@{handle})" if name and handle else name or (f"@{handle}" if handle else "")
     # The embed is the post's <p> followed by "— name (@handle) date": only the <p> is the post.
-    return Article(title=f"{name or 'A post'} on X", body=tuple(p.text for p in parser.paragraphs if p.tag == "p"),
-                   author=author, source="X", url=text("url") or url)
+    return Article(
+        title=f"{name or 'A post'} on X",
+        body=tuple(p.text for p in parser.paragraphs if p.tag == "p"),
+        author=author,
+        source="X",
+        url=text("url") or url,
+    )
 
 
 # --- web pages -------------------------------------------------------------------------------
 
-_VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track",
-         "wbr"}
-_SKIP = {"nav", "aside", "footer", "header", "script", "style", "form", "noscript", "iframe", "svg", "template",
-         "button", "select", "textarea", "canvas", "dialog", "figure"}
+_VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
+_SKIP = {
+    "nav",
+    "aside",
+    "footer",
+    "header",
+    "script",
+    "style",
+    "form",
+    "noscript",
+    "iframe",
+    "svg",
+    "template",
+    "button",
+    "select",
+    "textarea",
+    "canvas",
+    "dialog",
+    "figure",
+}
 _BLOCKS = {"p", "h2", "h3", "h4", "h5", "h6", "li", "blockquote", "pre", "dd"}
 _NEVER_CLUTTER = {"html", "body", "article", "main"}
 # Page furniture recognised by a whole word of its class or id: "ad" matches "ad-slot", never "header".
-_CLUTTER = re.compile(r"(?:^|[\s_-])(?:ads?|advert\w*|sponsor\w*|promo\w*|share|sharing|social|comments?|"
-                      r"newsletter|subscribe|subscription|related|recommended|sidebar|cookies?|consent|banner|"
-                      r"popup|modal|breadcrumbs?|paywall|menu)(?:$|[\s_-])", re.I)
+_CLUTTER = re.compile(
+    r"(?:^|[\s_-])(?:ads?|advert\w*|sponsor\w*|promo\w*|share|sharing|social|comments?|"
+    r"newsletter|subscribe|subscription|related|recommended|sidebar|cookies?|consent|banner|"
+    r"popup|modal|breadcrumbs?|paywall|menu)(?:$|[\s_-])",
+    re.I,
+)
 
 
 @dataclass
@@ -373,7 +445,8 @@ def _body(paras: list[_Para]) -> list[_Para]:
 
     def weight(item: tuple[tuple[int, int, int], list[_Para]]) -> float:
         (rank, _, buried), group = item
-        return sum(len(p.text) for p in group) * BURIED ** buried * (BARE if rank == 2 else 1)
+        return sum(len(p.text) for p in group) * BURIED**buried * (BARE if rank == 2 else 1)
+
     return max(sorted(groups.items(), key=lambda item: item[0][0]), key=weight, default=(None, []))[1]
 
 
@@ -388,8 +461,14 @@ def from_html(html: str, url: str = "", host: str = "") -> Article:
     parser.close()
     meta = parser.meta
     title = (meta.get("og:title") or meta.get("twitter:title") or parser.page_title or parser.first_h1).strip()
-    author = next((a for a in (meta.get("author"), meta.get("article:author"), parser.author_link)
-                   if a and a.strip() and not _LINK.match(a.strip())), "")
+    author = next(
+        (
+            a
+            for a in (meta.get("author"), meta.get("article:author"), parser.author_link)
+            if a and a.strip() and not _LINK.match(a.strip())
+        ),
+        "",
+    )
     source = (meta.get("og:site_name") or meta.get("application-name") or host).strip()
     body = [p.text for p in _body(parser.paragraphs) if " ".join(p.text.split()) != " ".join(title.split())]
     return Article(title=title or source, body=tuple(body), author=author.strip(), source=source, url=url)
@@ -405,19 +484,24 @@ def from_text(text: str, source: str = "", url: str = "") -> Article:
 # --- files -----------------------------------------------------------------------------------
 
 FIELDS = ("title", "body", "author", "source", "url")
-JSON_HINT = 'expected {"title": "...", "body": "first paragraph\\nsecond paragraph", "author": "...", ' \
-            '"source": "...", "url": "..."}'
+JSON_HINT = (
+    'expected {"title": "...", "body": "first paragraph\\nsecond paragraph", "author": "...", '
+    '"source": "...", "url": "..."}'
+)
 
 
 def load_file(path: Path) -> Article:
     """An article saved as JSON (see JSON_HINT), HTML (.html, .htm, .xhtml) or plain text (anything else)."""
     if not path.is_file():
-        raise PrinterError(f"file not found: {path}",
-                           hint="check the path; to fetch a web page give its full link, starting with https://",
-                           exit_code=3)
+        raise PrinterError(
+            f"file not found: {path}",
+            hint="check the path; to fetch a web page give its full link, starting with https://",
+            exit_code=3,
+        )
     if path.stat().st_size > MAX_BYTES:
-        raise PrinterError(f"{path.name} is larger than {MAX_BYTES // (1024 * 1024)} MiB",
-                           hint="save just the article", exit_code=3)
+        raise PrinterError(
+            f"{path.name} is larger than {MAX_BYTES // (1024 * 1024)} MiB", hint="save just the article", exit_code=3
+        )
     suffix = path.suffix.lower()
     kind = "html" if suffix in (".html", ".htm", ".xhtml") else "json" if suffix == ".json" else "text"
     return parse(path.read_bytes(), kind, path.name)
@@ -428,8 +512,11 @@ def load_stdin() -> Article:
     else plain text."""
     content = read_stdin(MAX_BYTES)
     if len(content) > MAX_BYTES:
-        raise PrinterError(f"the article on stdin is larger than {MAX_BYTES // (1024 * 1024)} MiB",
-                           hint="pipe in just the article", exit_code=3)
+        raise PrinterError(
+            f"the article on stdin is larger than {MAX_BYTES // (1024 * 1024)} MiB",
+            hint="pipe in just the article",
+            exit_code=3,
+        )
     start = content.lstrip(b"\xef\xbb\xbf \t\r\n")[:1]
     kind = "json" if start == b"{" else "html" if start == b"<" else "text"
     return parse(content, kind, "stdin")
@@ -449,14 +536,18 @@ def parse(content: bytes, kind: str, name: str = "the article") -> Article:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=JSON_HINT,
-                           exit_code=3) from exc
+        raise PrinterError(
+            f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=JSON_HINT, exit_code=3
+        ) from exc
     if not isinstance(data, dict):
         raise PrinterError(f"{name} must hold a JSON object", hint=JSON_HINT, exit_code=3)
     unknown = sorted(set(data) - set(FIELDS))
     if unknown:
-        raise PrinterError(f"unknown field(s) in {name}: {', '.join(unknown)}",
-                           hint="allowed fields: " + ", ".join(FIELDS), exit_code=3)
+        raise PrinterError(
+            f"unknown field(s) in {name}: {', '.join(unknown)}",
+            hint="allowed fields: " + ", ".join(FIELDS),
+            exit_code=3,
+        )
     missing = [field for field in ("title", "body") if field not in data]
     if missing:
         raise PrinterError(f"{name} is missing {' and '.join(missing)}", hint=JSON_HINT, exit_code=3)
@@ -465,18 +556,40 @@ def parse(content: bytes, kind: str, name: str = "the article") -> Article:
         body = "\n".join(body)
     wrong = sorted(field for field, value in {**data, "body": body}.items() if not isinstance(value, str))
     if wrong:
-        raise PrinterError(f"fields of {name} must be text: {', '.join(wrong)}",
-                           hint="body may also be a list of paragraphs", exit_code=3)
-    return Article(title=data["title"], body=tuple(body.split("\n")), author=data.get("author", ""),
-                   source=data.get("source", ""), url=data.get("url", ""))
+        raise PrinterError(
+            f"fields of {name} must be text: {', '.join(wrong)}",
+            hint="body may also be a list of paragraphs",
+            exit_code=3,
+        )
+    return Article(
+        title=data["title"],
+        body=tuple(body.split("\n")),
+        author=data.get("author", ""),
+        source=data.get("source", ""),
+        url=data.get("url", ""),
+    )
 
 
 # --- normalising for the page font -----------------------------------------------------------
 
 # Web text uses more symbols than a booth story; these print as ASCII. Emoji and other pictographs are
 # left out, and letters of other scripts become "?".
-_WEB_STAND_INS = {"•": "-", "‣": "-", "→": "->", "←": "<-", "⇒": "=>", "®": "(R)", "✓": "v", "✔": "v",
-                  "×": "x", "−": "-", "‐": "-", "‑": "-", "′": "'", "″": '"'}
+_WEB_STAND_INS = {
+    "•": "-",
+    "‣": "-",
+    "→": "->",
+    "←": "<-",
+    "⇒": "=>",
+    "®": "(R)",
+    "✓": "v",
+    "✔": "v",
+    "×": "x",
+    "−": "-",
+    "‐": "-",
+    "‑": "-",
+    "′": "'",
+    "″": '"',
+}
 
 
 def _printable(text: str) -> tuple[str, int]:
@@ -500,6 +613,7 @@ def normalise(article: Article) -> Article:
 
     Refuses (exit code 3) an article with no body text, or one mostly in a script the font cannot print.
     """
+
     def line(text: str) -> tuple[str, int]:
         printable, unknown = _printable(_clean(text, keep_newlines=False))
         return " ".join(printable.split()), unknown  # no gap left where an emoji was
@@ -509,15 +623,25 @@ def normalise(article: Article) -> Article:
     letters = sum(len(text.replace(" ", "")) for text, _ in paragraphs)
     unknown = sum(bad for _, bad in paragraphs)
     if unknown * 2 > letters:
-        raise PrinterError(f"the article is mostly in characters the page font cannot print ({unknown} of "
-                           f"{letters})", hint="the built-in font covers Latin letters only", exit_code=3)
+        raise PrinterError(
+            f"the article is mostly in characters the page font cannot print ({unknown} of {letters})",
+            hint="the built-in font covers Latin letters only",
+            exit_code=3,
+        )
     body = [text for text, _ in paragraphs if text.strip("-? ")]
     if not body:
-        raise PrinterError("no article text found" + (f" in {article.url}" if article.url else ""),
-                           hint="the page may build its text with JavaScript or sit behind a login; "
-                                + FILE_HINT, exit_code=3)
-    return Article(title=title or source or "Untitled", body=tuple(body), author=author, source=source,
-                   url=_clean(article.url, keep_newlines=False))
+        raise PrinterError(
+            "no article text found" + (f" in {article.url}" if article.url else ""),
+            hint="the page may build its text with JavaScript or sit behind a login; " + FILE_HINT,
+            exit_code=3,
+        )
+    return Article(
+        title=title or source or "Untitled",
+        body=tuple(body),
+        author=author,
+        source=source,
+        url=_clean(article.url, keep_newlines=False),
+    )
 
 
 # --- page styles -----------------------------------------------------------------------------
@@ -568,8 +692,14 @@ class _Magazine(_Style):
         y = MARGIN + 40
         label = _fit((article.source or "Feature").upper(), 26, 20, CONTENT_W // 2, 1)
         y = _text_block(d, LEFT, y, label[2], label[0], label[1], ACCENT, bold=1)
-        d.line([(LEFT + label[0].getlength(label[2][0]) + 24, y - _lead(label[1]) // 2),
-                (RIGHT, y - _lead(label[1]) // 2)], fill=HAIRLINE, width=2)
+        d.line(
+            [
+                (LEFT + label[0].getlength(label[2][0]) + 24, y - _lead(label[1]) // 2),
+                (RIGHT, y - _lead(label[1]) // 2),
+            ],
+            fill=HAIRLINE,
+            width=2,
+        )
         y += 16
         font, size, lines, cut = _fit(article.title, 84, 44, CONTENT_W, 3)
         if cut:  # too long for three lines at the smallest size: allow a fourth
@@ -703,11 +833,13 @@ def compose_pages(article: Article, style: str = "magazine") -> list[Image.Image
         if len(list(islice(_wrapped(rest, font, col_w - cap_w), DROP_LINES))) == DROP_LINES:
             cap, paragraphs[0] = paragraphs[0][0], rest
     narrow = (DROP_LINES, col_w - cap_w) if cap else (0, 0)
-    layouts = list(islice(paginate(paragraphs, font, col_w, look.columns, first_rows, rows, narrow),
-                          MAX_PAGES + 1))
+    layouts = list(islice(paginate(paragraphs, font, col_w, look.columns, first_rows, rows, narrow), MAX_PAGES + 1))
     if len(layouts) > MAX_PAGES:
-        raise PrinterError(f"the article is too long to print: more than {MAX_PAGES} pages",
-                           hint="save the part you want as a text file and print that file", exit_code=3)
+        raise PrinterError(
+            f"the article is too long to print: more than {MAX_PAGES} pages",
+            hint="save the part you want as a text file and print that file",
+            exit_code=3,
+        )
     pages = []
     for number, cols in enumerate(layouts, start=1):
         page = first if number == 1 else look.blank()
@@ -717,8 +849,19 @@ def compose_pages(article: Article, style: str = "magazine") -> list[Image.Image
         y = top if number == 1 else look.text_top
         if number == 1 and cap:
             d.text((x0, y + font.getbbox("H")[1] - cap_font.getbbox("H")[1]), cap, font=cap_font, fill=RUST)
-        draw_columns(d, cols, x0, y, col_w, look.gutter, font, look.body, look.ink, look.rule,
-                     indent=(DROP_LINES, cap_w) if number == 1 and cap else (0, 0))
+        draw_columns(
+            d,
+            cols,
+            x0,
+            y,
+            col_w,
+            look.gutter,
+            font,
+            look.body,
+            look.ink,
+            look.rule,
+            indent=(DROP_LINES, cap_w) if number == 1 and cap else (0, 0),
+        )
         look.footer(page, article, number, len(layouts))
         pages.append(page)
     return pages
@@ -737,5 +880,7 @@ def page_files(pages: list[Image.Image], path: Path, fmt: str, paper: Paper = A4
         return [(path, buf.getvalue())]
     if len(pages) == 1:
         return [(path, paper.to_bytes(pages[0], fmt))]
-    return [(path.with_name(f"{path.stem}-{n}{path.suffix}"), paper.to_bytes(page, fmt))
-            for n, page in enumerate(pages, start=1)]
+    return [
+        (path.with_name(f"{path.stem}-{n}{path.suffix}"), paper.to_bytes(page, fmt))
+        for n, page in enumerate(pages, start=1)
+    ]

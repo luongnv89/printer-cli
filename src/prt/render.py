@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 class Rendered:
     """Laid-out pages: ``cut`` maps each field cut with "…" to fit (in page order) to how much of it was printed;
     ``paper`` is the sheet the pages were laid out for."""
+
     pages: list[Image.Image]
     cut: dict[str, Cut] = field(default_factory=dict)
     paper: Paper = A4
@@ -65,12 +66,14 @@ def booth_story(style: str, base: Story | None = None, **overrides: str | None) 
     """The story a booth page prints: ``base`` (the style's own story when None) with ``overrides`` applied
     over it, checked for required fields, length limits and printable characters."""
     from prt import booth
+
     return booth.with_overrides(booth.default_story(style) if base is None else base, **overrides)
 
 
 def booth_page(photo: Image.Image, story: Story, style: str) -> Rendered:
     """One booth page of ``photo`` in ``style`` (see ``booth.STYLES``)."""
     from prt import booth
+
     page, cut = booth.compose(photo, story, style)
     return Rendered([page], cut)
 
@@ -79,6 +82,7 @@ def card_page(photo: Image.Image, card: Card) -> Rendered:
     """The greeting card sheet of ``photo`` and ``card`` (see ``card.compose``): four panels on one A4 sheet,
     laid out to fold into a card."""
     from prt import card as cards
+
     page, cut = cards.compose(photo, card)
     return Rendered([page], cut)
 
@@ -88,6 +92,7 @@ def comic_page(photos: Sequence[Image.Image], comic: Comic | None = None) -> Ren
     ``comic.compose``); bubbles and captions cut with "…" to fit are named ``panels[i].bubbles[j]`` and
     ``panels[i].caption`` in ``cut``."""
     from prt import comic as comics
+
     page, cut = comics.compose(photos, comic)
     return Rendered([page], cut)
 
@@ -95,6 +100,7 @@ def comic_page(photos: Sequence[Image.Image], comic: Comic | None = None) -> Ren
 def text_gazette_page(document: TextGazette) -> Rendered:
     """Lay a sectioned text gazette out as one A4 page."""
     from prt.textgazette import compose_page
+
     page, cut = compose_page(document)
     return Rendered([page], cut)
 
@@ -102,12 +108,14 @@ def text_gazette_page(document: TextGazette) -> Rendered:
 def morning_page(paper: Morning) -> Rendered:
     """Lay a validated morning-edition file out as one A4 page."""
     from prt.morning import document
+
     return text_gazette_page(document(paper))
 
 
 def receipt_page(receipt: Receipt) -> Rendered:
     """Lay collected commits out as one A4 commit receipt."""
     from prt.receipt import document
+
     return text_gazette_page(document(receipt))
 
 
@@ -115,6 +123,7 @@ def article_pages(text: Article, style: str) -> Rendered:
     """The pages of a normalised article in ``style`` (see ``article.ARTICLE_STYLES``); every word is printed,
     so nothing is ever cut."""
     from prt import article
+
     return Rendered(article.compose_pages(text, style))
 
 
@@ -126,6 +135,7 @@ def composed_pages(page: Page) -> Rendered:
     """The pages of a checked page file (see ``compose.load``); blocks run on to the next page, so nothing is
     ever cut."""
     from prt import compose
+
     return Rendered(compose.compose_pages(page))
 
 
@@ -136,6 +146,7 @@ def compose_job_names(title: str, count: int) -> list[str]:
 def strip_page(photos: Sequence[Image.Image], caption: str, mono: bool = False) -> Rendered:
     """The photo-booth strip sheet of four ``photos`` (see ``photocard.strip``) on 4×6 photo paper."""
     from prt import photocard
+
     page, cut = photocard.strip(photos, caption, mono)
     return Rendered([page], cut, PHOTO_4X6)
 
@@ -143,6 +154,7 @@ def strip_page(photos: Sequence[Image.Image], caption: str, mono: bool = False) 
 def instant_page(photo: Image.Image, caption: str) -> Rendered:
     """The instant-photo print of ``photo`` with a handwritten ``caption`` (see ``photocard.instant``) on 4×6."""
     from prt import photocard
+
     page, cut = photocard.instant(photo, caption)
     return Rendered([page], cut, PHOTO_4X6)
 
@@ -151,6 +163,7 @@ def colour_in_page(photo: Image.Image) -> Rendered:
     """The colouring page of ``photo`` (see ``colourin.compose``): its line art, black on white, on A4 (on its
     side for a landscape photo). Nothing is ever cut."""
     from prt import colourin
+
     page, cut = colourin.compose(photo)
     return Rendered([page], cut)
 
@@ -159,6 +172,7 @@ def recipe_cards(recipe: Recipe) -> Rendered:
     """The 4×6 cards of a normalised recipe (see ``recipe.compose_cards``); every ingredient and step is printed,
     over more cards when one is not enough. Only a title too long for two lines is cut, and named in ``cut``."""
     from prt import recipe as recipes
+
     pages, cut = recipes.compose_cards(recipe)
     return Rendered(pages, cut, PHOTO_4X6)
 
@@ -171,6 +185,7 @@ def bingo_cards(game: Bingo, cards: Sequence[tuple[int, ...]]) -> Rendered:
     """One A4 page per bingo card (see ``bingo.compose_card``), ``cards`` being the word indices ``bingo.deal``
     gave; a title or word cut with "…" to fit is named in ``cut`` (``title``, ``words[i]``)."""
     from prt import bingo
+
     pages, cut = bingo.compose_cards(game, list(cards))
     return Rendered(pages, cut)
 
@@ -184,6 +199,7 @@ def puzzle_page(puzzle: Puzzle) -> Rendered:
     its line or a word-search word too wide for its column is cut with "…" and named in ``cut`` (``title``,
     ``words[i]``). The solution stays with ``puzzle`` (``puzzle.answers()``)."""
     from prt import puzzle as puzzles
+
     page, cut = puzzles.compose(puzzle)
     return Rendered([page], cut)
 
@@ -192,6 +208,7 @@ def postcard_sides(photo: Image.Image, card: Postcard) -> Rendered:
     """The two sides of a postcard, front then back (see ``postcard.compose``), each upright as it is read
     (landscape) on 4×6 photo paper."""
     from prt import postcard
+
     pages, cut = postcard.compose(photo, card)
     return Rendered(pages, cut, PHOTO_4X6)
 
@@ -200,12 +217,12 @@ def disc_label(photo: Image.Image, disc: Disc) -> Rendered:
     """The disc label of ``photo`` and ``disc`` (see ``disc.compose``) on a printable CD/DVD, white outside the
     printable ring."""
     from prt import disc as discs
+
     page, cut = discs.compose(photo, disc)
     return Rendered([page], cut, DISC)
 
 
-def send_two_sided(queue: str, pages: Sequence[Image.Image], name: str, ticket: guard.Ticket,
-                   paper: Paper = A4) -> int:
+def send_two_sided(queue: str, pages: Sequence[Image.Image], name: str, ticket: guard.Ticket, paper: Paper = A4) -> int:
     """Submit ``pages`` (front, back) as one two-sided job on ``paper`` through the CUPS queue ``queue``,
     returning the CUPS job id.
 
@@ -218,6 +235,7 @@ def send_two_sided(queue: str, pages: Sequence[Image.Image], name: str, ticket: 
     from pathlib import Path
 
     from prt import media, printing
+
     upright = [paper.for_printer(page) for page in pages]
     options = replace(paper.options(name), media=media.resolve_alias(paper.media), sides="two-sided-short-edge")
     with tempfile.TemporaryDirectory(prefix="prt-") as folder:
@@ -227,8 +245,9 @@ def send_two_sided(queue: str, pages: Sequence[Image.Image], name: str, ticket: 
         return printing.cups_print(queue, path, options)
 
 
-def send_pages(driver: Driver, pages: Sequence[bytes], names: Sequence[str], ticket: guard.Ticket,
-               paper: Paper = A4) -> Iterator[int]:
+def send_pages(
+    driver: Driver, pages: Sequence[bytes], names: Sequence[str], ticket: guard.Ticket, paper: Paper = A4
+) -> Iterator[int]:
     """Submit each JPEG page as its own job on ``paper`` (its media size, tray and media type; A4 by default),
     yielding the job ids in order.
 

@@ -48,13 +48,21 @@ MEMBER_NAME = 0x4A
 
 TRACE = False  # set by `prt --verbose`: one line per request/response on stderr
 
-OP_NAMES = {0x0002: "Print-Job", 0x0004: "Validate-Job", 0x0008: "Cancel-Job", 0x0009: "Get-Job-Attributes",
-            0x000A: "Get-Jobs", 0x000B: "Get-Printer-Attributes", 0x003C: "Identify-Printer"}
+OP_NAMES = {
+    0x0002: "Print-Job",
+    0x0004: "Validate-Job",
+    0x0008: "Cancel-Job",
+    0x0009: "Get-Job-Attributes",
+    0x000A: "Get-Jobs",
+    0x000B: "Get-Printer-Attributes",
+    0x003C: "Identify-Printer",
+}
 
 
 def trace(message: str) -> None:
     if TRACE:
         import sys
+
         sys.stderr.write(f"· {message}\n")
 
 
@@ -72,8 +80,13 @@ OP_IDENTIFY_PRINTER = 0x003C
 
 PRINTER_STATES = {3: "idle", 4: "processing", 5: "stopped"}
 JOB_STATES = {
-    3: "pending", 4: "pending-held", 5: "processing", 6: "processing-stopped",
-    7: "canceled", 8: "aborted", 9: "completed",
+    3: "pending",
+    4: "pending-held",
+    5: "processing",
+    6: "processing-stopped",
+    7: "canceled",
+    8: "aborted",
+    9: "completed",
 }
 
 
@@ -322,8 +335,7 @@ class IPPClient:
     """Synchronous IPP over HTTP(S). TLS verification is skipped only for this printer host,
     because embedded printers ship self-signed certificates."""
 
-    def __init__(self, host: str, port: int = 631, path: str = "/ipp/print", tls: bool = False,
-                 timeout: float = 5.0):
+    def __init__(self, host: str, port: int = 631, path: str = "/ipp/print", tls: bool = False, timeout: float = 5.0):
         self.host, self.port, self.path, self.tls = host, port, path, tls
         self.timeout = timeout
         self._request_id = 0
@@ -338,16 +350,27 @@ class IPPClient:
         scheme = "https" if self.tls else "http"
         return f"{scheme}://{self.host}:{self.port}{self.path}"
 
-    def request(self, operation: int, *, operation_attrs: list[Attr] | None = None,
-                job_attrs: list[Attr] | None = None, data: bytes = b"",
-                timeout: float | None = None) -> Response:
+    def request(
+        self,
+        operation: int,
+        *,
+        operation_attrs: list[Attr] | None = None,
+        job_attrs: list[Attr] | None = None,
+        data: bytes = b"",
+        timeout: float | None = None,
+    ) -> Response:
         self._request_id += 1
-        body = encode_request(operation, self.printer_uri, request_id=self._request_id,
-                              operation_attrs=operation_attrs, job_attrs=job_attrs, data=data)
+        body = encode_request(
+            operation,
+            self.printer_uri,
+            request_id=self._request_id,
+            operation_attrs=operation_attrs,
+            job_attrs=job_attrs,
+            data=data,
+        )
         trace(f"IPP → {OP_NAMES.get(operation, hex(operation))} {self.http_url} ({len(body)} bytes)")
         with httpx.Client(verify=False, timeout=timeout or self.timeout) as client:
-            http = client.post(self.http_url, content=body,
-                               headers={"Content-Type": "application/ipp"})
+            http = client.post(self.http_url, content=body, headers={"Content-Type": "application/ipp"})
         if http.status_code != 200:
             raise IPPError(f"HTTP {http.status_code} from {self.http_url}")
         resp = decode_response(http.content)
@@ -358,7 +381,10 @@ class IPPClient:
         return resp
 
     def get_printer_attributes(self, requested: list[str] | None = None) -> dict[str, Any]:
-        resp = self.request(OP_GET_PRINTER_ATTRIBUTES, operation_attrs=[
-            Attr("requested-attributes", KEYWORD, requested or ["all"]),
-        ])
+        resp = self.request(
+            OP_GET_PRINTER_ATTRIBUTES,
+            operation_attrs=[
+                Attr("requested-attributes", KEYWORD, requested or ["all"]),
+            ],
+        )
         return resp.printer

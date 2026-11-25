@@ -1,0 +1,68 @@
+# Shift-left quality gates. Commit stage: < 10 s on the staged files. Push stage:
+# < 60 s (the full suite took 33 s with -n auto and the E2E script 21 s on a 10-core
+# laptop, 2026-11-25). CI's "Verify hooks were not bypassed" job re-runs both
+# stages over each pull request's diff. Install once:
+#   pre-commit install && pre-commit install --hook-type pre-push
+# Never bypass them with --no-verify.
+#
+# Hooks with no `stages:` run in EVERY stage; this keeps them on commit only.
+# Hooks whose own manifest sets `stages:` (e.g. trailing-whitespace, end-of-file-fixer,
+# check-added-large-files) keep theirs and also run on push.
+default_stages: [pre-commit]
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # Data kept byte-for-byte: fixtures, the font licences and their site copies
+      # (tests/test_site.py compares them), and the README's sample inputs.
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        exclude: &data ^(src/prt/fixtures/|tests/fixtures/|src/prt/fonts/|site/fonts/|assets/samples/)
+      - id: end-of-file-fixer
+        exclude: *data
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: debug-statements
+
+  # Rules: [tool.ruff.lint] in pyproject.toml (E4, E7, E9, F).
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.6
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+        types_or: [python, pyi]  # Python only: leave README/AGENTS code blocks as written
+
+  - repo: local
+    hooks:
+      # Tests named after the staged files (src/prt/cli.py -> tests/test_cli.py,
+      # tests/conftest.py -> all of tests/); nothing related exits 0, because the
+      # push-stage suite below is the gate.
+      - id: pytest-related
+        name: pytest (tests related to the staged files)
+        entry: uv run --locked python scripts/related-tests.py --tests tests
+        language: system
+        types: [python]
+        require_serial: true
+
+      # The whole suite: 150 s serial, 33 s with -n auto (pytest-xdist, a dev
+      # dependency). always_run: a deletion-only push passes no file, and would skip it.
+      - id: pytest-full
+        name: pytest full suite
+        entry: uv run --locked pytest -n auto --tb=short -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      # Every prt command and subcommand against the demo printer, in a temp HOME.
+      - id: e2e-cli
+        name: CLI end-to-end tests
+        entry: bash scripts/e2e_test.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
