@@ -5,7 +5,6 @@ import json
 import os
 import re
 import sys
-import time
 import weakref
 from dataclasses import replace
 from functools import lru_cache
@@ -419,16 +418,37 @@ def test_the_longest_story_stays_inside_the_margins():
             assert _paper_only(page, band), band
 
 
-def test_unbroken_story_renders_quickly_inside_the_margins():
+@pytest.fixture
+def measured(monkeypatch):
+    """Counts every text measurement (calls, characters measured): the work a wrap does, whatever the machine."""
+    work = SimpleNamespace(calls=0, chars=0)
+    getlength = ImageFont.FreeTypeFont.getlength
+
+    def counting(font, text, *args, **kwargs):
+        work.calls += 1
+        work.chars += len(text)
+        return getlength(font, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageFont.FreeTypeFont, "getlength", counting)
+    return work
+
+
+# An unbroken story wrapped by bisection costs about 8,000 to 11,500 measurements and 300,000 to 330,000
+# measured characters; a character-by-character search triples the calls, and shrinking the whole word one
+# character at a time measures millions. Counting work rather than seconds keeps the bound stable on any CPU.
+UNBROKEN_MAX_CALLS = 20_000
+UNBROKEN_MAX_CHARS = 250 * LIMITS["story"]
+
+
+def test_unbroken_story_renders_quickly_inside_the_margins(measured):
     # A pasted URL or base64 blob is one 2500-character "word": it must wrap in good time.
     story = booth.check_story(Story(headline="H", story="x" * LIMITS["story"]), 2)
-    start = time.perf_counter()
     for n in (1, 3):
         pages, _, _ = vintage.compose_pages([Image.new("RGB", (300, 400), "blue")] * n, story)
         w, h = A4_150DPI
         for band in [(0, 0, 80, h), (w - 80, 0, w, h), (0, h - 80, w, h)]:
             assert _paper_only(pages[0], band), (n, band)
-    assert time.perf_counter() - start < 10
+    assert measured.calls < UNBROKEN_MAX_CALLS and measured.chars < UNBROKEN_MAX_CHARS, measured
 
 
 def test_small_caps_set_lower_case_letters_as_smaller_capitals():
@@ -912,13 +932,12 @@ def test_the_longest_story_stays_inside_the_landscape_margins():
         assert all(_bare(page, band) for band in _margins(A4_LANDSCAPE))
 
 
-def test_unbroken_story_renders_quickly_inside_the_landscape_margins():
+def test_unbroken_story_renders_quickly_inside_the_landscape_margins(measured):
     story = booth.check_story(Story(headline="H", story="x" * LIMITS["story"]), 2)
-    start = time.perf_counter()
     for n in (1, 3):
         pages, _, _ = vintage.compose_pages([Image.new("RGB", (300, 400), "blue")] * n, story, landscape=True)
         assert all(_bare(pages[0], band) for band in _margins(A4_LANDSCAPE)), n
-    assert time.perf_counter() - start < 10
+    assert measured.calls < UNBROKEN_MAX_CALLS and measured.chars < UNBROKEN_MAX_CHARS, measured
 
 
 @pytest.mark.parametrize("n", [1, 3])
