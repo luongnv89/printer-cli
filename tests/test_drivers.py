@@ -1,7 +1,7 @@
 import pytest
 
 from prt.drivers import epson
-from prt.drivers.base import PrinterError, Unsupported
+from prt.drivers.base import Driver, PrinterError, Unsupported
 from prt.drivers.fake import FakeDriver
 from prt.drivers.ipp import IPPDriver, parse_keyvals, parse_reason
 from prt.drivers.registry import detect, make_driver
@@ -45,6 +45,19 @@ def test_info_from_real_capture(fake):
 def test_serial_with_non_printable_byte_keeps_raw():
     d = IPPDriver(Target("x", "x"))
     assert d._serial({"printer-device-id": "SN:583132333435363786;"}) == "X1234567 (raw 583132333435363786)"
+
+
+def test_unparseable_low_level_falls_back_to_the_default_15():
+    d = IPPDriver(Target("x", "x"))
+    inks = d.parse_inks(
+        {
+            "marker-names": ["Black", "Cyan", "Magenta"],
+            "marker-levels": [10, 10, 10],
+            "marker-low-levels": ["n/a", 5],  # unparseable, a number, and none given
+        }
+    )
+    assert [ink.low for ink in inks] == [15, 5, 15]
+    assert [ink.state for ink in inks] == ["low", "ok", "low"]
 
 
 def test_reason_parsing():
@@ -119,6 +132,19 @@ def test_generic_driver_lacks_maintenance():
     with pytest.raises(Unsupported) as exc:
         d.head_clean()
     assert "head clean" in str(exc.value)
+
+
+def test_a_driver_without_ipp_refuses_rendered_pages():
+    class Bare(Driver):
+        def info(self):
+            raise AssertionError("not called")
+
+        def status(self):
+            raise AssertionError("not called")
+
+    with pytest.raises(Unsupported) as exc:
+        Bare(Target("bare", "bare.local")).submit(b"page", "image/jpeg", PrintOptions())
+    assert "(capability: print, driver: base)" in str(exc.value)
 
 
 def test_registry():
