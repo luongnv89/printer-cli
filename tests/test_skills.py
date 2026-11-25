@@ -243,6 +243,120 @@ def test_file_in_the_way(home, capsys):
     assert not (skills_dir / "article-print").exists()
 
 
+def tree(root: Path) -> dict[str, str]:
+    """Everything under ``root``, without following links: each file's text, each link's target, each folder."""
+    found = {}
+    for p in sorted(root.rglob("*")):
+        rel = p.relative_to(root).as_posix()
+        found[rel] = ("-> " + os.readlink(p)) if p.is_symlink() else ("/" if p.is_dir() else p.read_text())
+    return found
+
+
+def test_symlinked_skill_folder_is_refused_without_force(home, tmp_path, capsys):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "notes.txt").write_text("mine\n")
+    skills_dir = home / ".claude" / "skills"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "photo-booth").symlink_to(elsewhere, target_is_directory=True)
+    code, out, err = run(capsys, "-f", "json", "skills", "install")
+    assert code == 1 and out == ""
+    error = json.loads(err)["error"]
+    assert error["kind"] == "skill_exists" and str(skills_dir / "photo-booth") in error["message"]
+    assert "--force" in error["hint"]
+    assert tree(elsewhere) == {"notes.txt": "mine\n"}  # nothing written through the link
+    assert sorted(p.name for p in skills_dir.iterdir()) == ["photo-booth"]  # and no other skill installed
+
+
+def test_symlinked_skill_folder_with_matching_files_is_still_refused(home, tmp_path, capsys):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "SKILL.md").write_bytes(bundled_bytes("photo-booth"))
+    (home / ".claude" / "skills").mkdir(parents=True)
+    (home / ".claude" / "skills" / "photo-booth").symlink_to(elsewhere, target_is_directory=True)
+    assert run(capsys, "skills", "install", "photo-booth")[0] == 1
+
+
+def test_symlinked_skill_folder_with_force_installs_into_its_folder(home, tmp_path, capsys):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    link = home / ".claude" / "skills" / "photo-booth"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(elsewhere, target_is_directory=True)
+    assert run(capsys, "skills", "install", "photo-booth", "--force")[0] == 0
+    assert link.is_symlink() and (elsewhere / "SKILL.md").read_bytes() == bundled_bytes("photo-booth")
+
+
+def test_symlinked_skills_folder_above_the_skill_is_fine(home, tmp_path, capsys):
+    real = tmp_path / "dotfiles-skills"
+    real.mkdir()
+    (home / ".claude").mkdir(parents=True)
+    (home / ".claude" / "skills").symlink_to(real, target_is_directory=True)
+    assert run(capsys, "skills", "install")[0] == 0
+    assert sorted(p.name for p in real.iterdir()) == NAMES
+
+
+@pytest.mark.parametrize("force", [[], ["--force"]])
+def test_broken_symlink_skill_folder_is_caught_before_writing(home, tmp_path, capsys, force):
+    skills_dir = home / ".claude" / "skills"
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "photo-booth").symlink_to(tmp_path / "gone", target_is_directory=True)
+    code, out, err = run(capsys, "-f", "json", "skills", "install", *force)
+    assert code == 1 and out == ""
+    error = json.loads(err)["error"]
+    assert error["kind"] == "skill_exists" and "broken symlink" in error["message"]
+    assert tree(skills_dir) == {"photo-booth": "-> " + str(tmp_path / "gone")}  # article-print etc. not written
+    assert not (tmp_path / "gone").exists()
+
+
+@pytest.mark.parametrize("force", [[], ["--force"]])
+def test_folder_in_place_of_skill_md_is_caught_before_writing(home, capsys, force):
+    skills_dir = home / ".claude" / "skills"
+    (skills_dir / "photo-booth" / "SKILL.md").mkdir(parents=True)
+    code, out, err = run(capsys, "-f", "json", "skills", "install", *force)
+    assert code == 1 and out == ""
+    error = json.loads(err)["error"]
+    assert error["kind"] == "skill_exists" and "SKILL.md" in error["message"]
+    assert tree(skills_dir) == {"photo-booth": "/", "photo-booth/SKILL.md": "/"}
+
+
+def fail_on_write(monkeypatch, name):
+    """Make writing skill ``name`` fail, after the pre-check has passed and earlier skills were written."""
+    real = skills._replace
+
+    def replace(path, data):
+        if path.parent.name == name:
+            raise OSError(28, "No space left on device")
+        real(path, data)
+    monkeypatch.setattr(skills, "_replace", replace)
+
+
+def test_failed_write_leaves_no_partial_install(home, monkeypatch, capsys):
+    fail_on_write(monkeypatch, "photo-booth")
+    code, out, err = run(capsys, "-f", "json", "skills", "install", "--claude", "--agents")
+    assert code == 1 and out == ""
+    assert "No space left on device" in json.loads(err)["error"]["message"]
+    assert not (home / ".claude").exists() and not (home / ".agents").exists()
+
+
+def test_failed_forced_write_restores_replaced_files(home, tmp_path, monkeypatch, capsys):
+    run(capsys, "skills", "install")
+    skills_dir = home / ".claude" / "skills"
+    (skills_dir / "article-print" / "SKILL.md").write_text("my own edits\n")
+    outside = tmp_path / "outside.md"
+    outside.write_text("someone else's file\n")
+    (skills_dir / "greeting-card" / "SKILL.md").unlink()
+    (skills_dir / "greeting-card" / "SKILL.md").symlink_to(outside)
+    (skills_dir / "letter-gazette" / "SKILL.md").unlink()
+    fail_on_write(monkeypatch, "puzzle-check")
+    (skills_dir / "puzzle-check" / "SKILL.md").write_text("changed\n")
+    before = tree(skills_dir)
+    code, out, err = run(capsys, "-f", "json", "skills", "install", "--force")
+    assert code == 1
+    assert tree(skills_dir) == before
+    assert outside.read_text() == "someone else's file\n"
+
+
 def test_unwritable_destination(tmp_path, capsys):
     blocker = tmp_path / "file"
     blocker.write_text("x")
