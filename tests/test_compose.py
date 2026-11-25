@@ -372,6 +372,19 @@ def test_unreadable_page_files_are_refused(content, message):
     assert exc.value.exit_code == 3
 
 
+def test_pages_nested_deeper_than_the_limit_are_refused_whatever_json_accepts():
+    nested = "[" * compose.MAX_NESTING + "]" * compose.MAX_NESTING
+    with pytest.raises(PrinterError, match="nested too deeply") as exc:
+        compose.parse(('{"blocks": %s}' % nested).encode(), "page.json")
+    assert exc.value.exit_code == 3
+
+
+def test_brackets_in_text_are_not_nesting():
+    text = "[" * 100 + '{\\"' + "]" * 100
+    page = compose.parse(('{"blocks": [{"type": "text", "text": "%s"}]}' % text).encode(), "page.json")
+    assert page.blocks[0]["text"] == "[" * 100 + '{"' + "]" * 100
+
+
 @pytest.mark.parametrize(
     "template",
     [
