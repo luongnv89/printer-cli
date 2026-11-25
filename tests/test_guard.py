@@ -95,6 +95,7 @@ def _commands(tmp_path):
         "postcard": ["postcard", str(photo), "--side", "front"],
         "disc": ["disc", str(photo)],
         "bingo": ["bingo", "--theme", "road trip", "-n", "2"],
+        "puzzle": ["puzzle", "sudoku", "--seed", "1"],
         "test-page": ["maintain", "test-page"],
         "nozzle-check": ["maintain", "nozzle-check"],
         "clean": ["maintain", "clean", "--force"],
@@ -102,7 +103,7 @@ def _commands(tmp_path):
 
 
 COMMANDS = ["print", "booth", "card", "article", "gazette", "compose", "strip", "instant", "colour-in", "recipe",
-            "postcard", "disc", "bingo", "test-page", "nozzle-check", "clean"]
+            "postcard", "disc", "bingo", "puzzle", "test-page", "nozzle-check", "clean"]
 
 
 # --- agent mode ------------------------------------------------------------------------------------------
