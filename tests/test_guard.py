@@ -105,11 +105,12 @@ def _commands(tmp_path):
         "test-page": ["maintain", "test-page"],
         "nozzle-check": ["maintain", "nozzle-check"],
         "clean": ["maintain", "clean", "--force"],
+        "keepalive": ["keepalive"],
     }
 
 
 COMMANDS = ["print", "booth", "card", "article", "gazette", "gazette-morning", "receipt", "compose", "strip", "instant", "colour-in", "recipe",
-            "postcard", "disc", "bingo", "puzzle", "test-page", "nozzle-check", "clean"]
+            "postcard", "disc", "bingo", "puzzle", "test-page", "nozzle-check", "clean", "keepalive"]
 
 
 # --- agent mode ------------------------------------------------------------------------------------------

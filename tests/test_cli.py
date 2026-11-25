@@ -31,7 +31,7 @@ def run(capsys, *args):
                                   ["jobs", "--help"], ["status", "--help"], ["scan", "--help"],
                                   ["print", "--help"], ["maintain", "clean", "--help"], ["tui", "--help"],
                                   ["booth", "--help"], ["article", "--help"], ["list", "--help"],
-                                  ["jobs", "wait", "--help"]])
+                                  ["jobs", "wait", "--help"], ["keepalive", "--help"]])
 def test_help_everywhere(capsys, argv):
     code, out, err = run(capsys, *argv)
     assert code in (0, 2) if not argv else code == 0
