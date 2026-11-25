@@ -369,7 +369,8 @@ class IPPClient:
             data=data,
         )
         trace(f"IPP → {OP_NAMES.get(operation, hex(operation))} {self.http_url} ({len(body)} bytes)")
-        with httpx.Client(verify=False, timeout=timeout or self.timeout) as client:
+        # Printers serve self-signed certificates and there is no CA to check them against.
+        with httpx.Client(verify=False, timeout=timeout or self.timeout) as client:  # nosec B501
             http = client.post(self.http_url, content=body, headers={"Content-Type": "application/ipp"})
         if http.status_code != 200:
             raise IPPError(f"HTTP {http.status_code} from {self.http_url}")

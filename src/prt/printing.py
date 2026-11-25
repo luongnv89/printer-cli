@@ -62,7 +62,7 @@ def cups_print(queue: str, path: Path, options: PrintOptions) -> int:
         cmd += ["-o", f"media-source={options.tray}"]
     if options.media_type:
         cmd += ["-o", f"media-type={options.media_type}"]
-    cmd.append(str(path))
+    cmd.append(str(path.absolute()))  # absolute, so a file named like "-o.pdf" is never read as an option
     res = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
     if res.returncode != 0:
         raise PrinterError(f"CUPS refused the job: {res.stderr.strip() or res.stdout.strip()}")
