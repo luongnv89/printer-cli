@@ -711,6 +711,42 @@ def identify() -> None:
         STATE.write(json.dumps({"action": "identify", "sent": True}) + "\n")
 
 
+def _require_keepalive_ready(d: Driver) -> None:
+    """Refuse the keep-alive patch on an offline or busy printer, as the nozzle check does (exit code 1)."""
+    pf = nozzle_check_preflight(_fetch_status(d)[1])
+    _show_preflight(pf)
+    if not pf.ok:
+        raise PrinterError("keep-alive patch not sent", hint="fix the issues above and retry", kind="refused")
+
+
+@app.command("keepalive")
+def keepalive_cmd(
+    preview: Optional[Path] = typer.Option(None, "--preview", "--output", "-o",
+                                           help="Save the page here instead of printing; the extension picks the "
+                                                "file type: .pdf, .png, .jpg or .jpeg."),
+    save: Optional[list[Path]] = typer.Option(None, "--save", metavar="<path>",
+                                              help="Also save a copy of the page here (.pdf, .png, .jpg or .jpeg) "
+                                                   "before printing it; repeat for more files."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt (needed when a scheduler runs "
+                                                        "it)."),
+) -> None:
+    """Keep-alive patch: a small square of every ink colour on one A4 sheet, to stop the nozzles drying and clogging.
+
+    Print it every few days from cron, a systemd timer or launchd with --yes. Cyan, magenta, yellow and black always
+    print; light and grey tints let a printer with light or photo inks use them if its driver chooses to.
+    """
+    from prt import booth, keepalive
+    # Check the file names before a file is written or a driver exists.
+    copies = [(path, booth.format_for(path)) for path in save or []]
+    if preview:
+        booth.format_for(preview)
+    rendered = render.Rendered([keepalive.compose()])
+    _print_sheet("keepalive", rendered, keepalive.KIND, preview, copies, "Print a keep-alive colour patch",
+                 "prt keepalive", yes, {"inks": list(keepalive.INKS),
+                                        "patches": [name for row in keepalive.PATCHES for name, _ in row]},
+                 precheck=_require_keepalive_ready)
+
+
 # --- print / jobs / scan -------------------------------------------------------------------
 
 
@@ -969,8 +1005,8 @@ def _print_sheet(action: str, rendered: render.Rendered, label: str, preview: Op
                  info: dict[str, Any], done: str | None = None,
                  precheck: Callable[[Driver], None] | None = None) -> None:
     """Save, preview or print one rendered sheet on its own paper (``prt comic``, ``prt strip``, ``prt instant``,
-    ``prt colour-in``, ``prt disc``): the preview and the copies are written before a driver exists, then the sheet
-    is sent under the print guard.
+    ``prt colour-in``, ``prt disc``, ``prt keepalive``): the preview and the copies are written before a driver exists,
+    then the sheet is sent under the print guard.
 
     ``precheck`` asks the printer whether it can take the sheet at all (``prt disc``: a disc tray); it runs after
     the agent-mode check, so an agent without ``--yes`` hears that first, and before the page caps and the prompt.
