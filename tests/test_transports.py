@@ -1,14 +1,29 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
 from prt.discovery import merge
-from prt.models import ScanSettings
-from prt.printing import match_queue
+from prt.models import PrintOptions, ScanSettings
+from prt.printing import cups_print, match_queue
 from prt.transport import escl, snmp
 
 CAPS = (Path(__file__).parent / "fixtures" / "escl-caps.xml").read_bytes()
+# An internal entity: harmless here, but the same DTD trick makes billion-laughs and external-entity payloads.
+ENTITY_CAPS = (
+    b'<!DOCTYPE x [<!ENTITY m "Evil Scanner">]>'
+    b'<scan:ScannerCapabilities xmlns:scan="http://schemas.hp.com/imaging/escl/2011/05/03"'
+    b' xmlns:pwg="http://www.pwg.org/schemas/2010/12/sm">'
+    b"<pwg:MakeAndModel>&m;</pwg:MakeAndModel>"
+    b"<scan:XResolution>300</scan:XResolution>"
+    b"</scan:ScannerCapabilities>"
+)
+ENTITY_STATE = (
+    b'<!DOCTYPE x [<!ENTITY s "Idle">]>'
+    b'<scan:ScannerStatus xmlns:scan="http://schemas.hp.com/imaging/escl/2011/05/03"'
+    b' xmlns:pwg="http://www.pwg.org/schemas/2010/12/sm"><pwg:State>&s;</pwg:State></scan:ScannerStatus>'
+)
 
 
 def test_escl_capabilities():
@@ -18,6 +33,33 @@ def test_escl_capabilities():
     assert caps.resolutions == [100, 200, 300, 600, 1200]
     assert "RGB24" in caps.color_modes and "application/pdf" in caps.formats
     assert (caps.max_width, caps.max_height) == (2550, 3510)
+
+
+def test_escl_refuses_unreadable_xml():
+    with pytest.raises(escl.ScanError, match="scanner sent unreadable XML"):
+        escl.parse_capabilities(b"not xml")
+
+
+def test_escl_refuses_entity_declarations():
+    with pytest.raises(escl.ScanError, match="scanner sent unreadable XML"):
+        escl.parse_capabilities(ENTITY_CAPS)
+    with pytest.raises(escl.ScanError, match="scanner sent unreadable XML"):
+        escl.parse_state(ENTITY_STATE)
+
+
+def test_escl_scan_falls_back_to_default_caps_on_hostile_capabilities():
+    def handler(req: httpx.Request):
+        if req.url.path.endswith("ScannerCapabilities"):
+            return httpx.Response(200, content=ENTITY_CAPS)
+        if req.method == "POST":
+            return httpx.Response(201, headers={"Location": "http://s/eSCL/ScanJobs/1"})
+        if req.url.path.endswith("NextDocument"):
+            return httpx.Response(200, content=b"%PDF-1.4 scan")
+        return httpx.Response(200)
+
+    c = escl.ESCLClient("http://s/eSCL", transport=httpx.MockTransport(handler))
+    # 150 dpi is not among the hostile reply's resolutions: the scan only goes ahead on the default caps.
+    assert c.scan(ScanSettings(dpi=150), poll=0) == b"%PDF-1.4 scan"
 
 
 def test_escl_settings_xml():
@@ -95,3 +137,16 @@ def test_cups_queue_matching():
     assert match_queue(out, "cfe92100-67c4", "x") == "EPSON_XP_6000_Series"
     assert match_queue(out, None, "pantum.local") == "Pantum"
     assert match_queue(out, None, "nothing") is None
+
+
+def test_cups_print_passes_an_absolute_path(monkeypatch, tmp_path):
+    commands = []
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda cmd, **kw: commands.append(cmd) or SimpleNamespace(returncode=0, stdout="request id is q-3", stderr=""),
+    )
+    monkeypatch.chdir(tmp_path)
+    assert cups_print("q", Path("-o.pdf"), PrintOptions()) == 3
+    last = commands[0][-1]
+    assert Path(last).is_absolute() and Path(last).name == "-o.pdf"
+    assert commands[0][commands[0].index("-t") + 1] == "-o.pdf"  # the job title keeps the file name
