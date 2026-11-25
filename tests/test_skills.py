@@ -74,8 +74,10 @@ def test_missing_skills_is_an_error(tmp_path, monkeypatch, capsys):
 def test_front_matter_parsing(tmp_path):
     folder = tmp_path / "x"
     folder.mkdir()
-    (folder / "SKILL.md").write_text('---\nname: my-skill\ndescription: "Say \\"hi\\": politely."\nlicense: MIT\n'
-                                     "metadata:\n  version: 1.2.3\n  author: 'Me'\n---\n\n# Body\nname: not this\n")
+    (folder / "SKILL.md").write_text(
+        '---\nname: my-skill\ndescription: "Say \\"hi\\": politely."\nlicense: MIT\n'
+        "metadata:\n  version: 1.2.3\n  author: 'Me'\n---\n\n# Body\nname: not this\n"
+    )
     s = skills._read_skill(folder)
     assert (s.name, s.description, s.version) == ("my-skill", 'Say "hi": politely.', "1.2.3")
 
@@ -106,7 +108,8 @@ def test_install_claude(home, capsys):
     result = json.loads(out)
     assert result["action"] == "skills_install"
     assert [(s["name"], s["target"], s["status"]) for s in result["skills"]] == [
-        (name, "claude", "installed") for name in NAMES]
+        (name, "claude", "installed") for name in NAMES
+    ]
     for name in NAMES:
         installed = home / ".claude" / "skills" / name / "SKILL.md"
         assert installed.read_bytes() == bundled_bytes(name)
@@ -131,8 +134,10 @@ def test_install_agents(home, capsys):
 def test_install_both_and_one_skill(home, capsys):
     code, out, err = run(capsys, "-f", "json", "skills", "install", "photo-booth", "--claude", "--agents")
     assert code == 0
-    assert [(s["name"], s["target"]) for s in json.loads(out)["skills"]] == [("photo-booth", "claude"),
-                                                                             ("photo-booth", "agents")]
+    assert [(s["name"], s["target"]) for s in json.loads(out)["skills"]] == [
+        ("photo-booth", "claude"),
+        ("photo-booth", "agents"),
+    ]
     assert [p.name for p in (home / ".claude" / "skills").iterdir()] == ["photo-booth"]
     assert [p.name for p in (home / ".agents" / "skills").iterdir()] == ["photo-booth"]
 
@@ -201,7 +206,8 @@ def test_force_replaces_changed_files(home, capsys):
     code, out, err = run(capsys, "-f", "json", "skills", "install", "--force")
     assert code == 0
     assert {s["name"]: s["status"] for s in json.loads(out)["skills"]} == {
-        name: "replaced" if name == "photo-booth" else "unchanged" for name in NAMES}
+        name: "replaced" if name == "photo-booth" else "unchanged" for name in NAMES
+    }
     assert mine.read_bytes() == bundled_bytes("photo-booth")
     assert (mine.parent / "notes.txt").read_text() == "kept\n"  # files prt does not ship are left alone
 
@@ -328,6 +334,7 @@ def fail_on_write(monkeypatch, name):
         if path.parent.name == name:
             raise OSError(28, "No space left on device")
         real(path, data)
+
     monkeypatch.setattr(skills, "_replace", replace)
 
 
@@ -397,10 +404,27 @@ def test_versions_agree():
 
 def test_agents_md_names_the_agent_features():
     text = (ROOT / "AGENTS.md").read_text()
-    for needle in ["-f json", '{"error"', "--story-file -", "prt article -", "--wait", "prt jobs wait",
-                   "prt styles", "prt schema", "PRT_AGENT=1", "--yes", "max_pages_per_run", "max_pages_per_day",
-                   "estimate", "prt mcp", "printer-cli[mcp]", "prt skills install", "uv run pytest", "prt compose",
-                   "prt schema page"]:
+    for needle in [
+        "-f json",
+        '{"error"',
+        "--story-file -",
+        "prt article -",
+        "--wait",
+        "prt jobs wait",
+        "prt styles",
+        "prt schema",
+        "PRT_AGENT=1",
+        "--yes",
+        "max_pages_per_run",
+        "max_pages_per_day",
+        "estimate",
+        "prt mcp",
+        "printer-cli[mcp]",
+        "prt skills install",
+        "uv run pytest",
+        "prt compose",
+        "prt schema page",
+    ]:
         assert needle in text, needle
 
 
@@ -409,8 +433,9 @@ def test_llms_txt_follows_the_format():
     assert lines[0] == "# printer-cli"
     assert next(line for line in lines[1:] if line.strip()).startswith("> ")
     links = re.findall(r"^- \[[^]]+\]\((https://[^)]+)\)", "\n".join(lines), re.M)
-    assert links and all(link.startswith("https://raw.githubusercontent.com/luongnv89/printer-cli/main/")
-                         for link in links)
+    assert links and all(
+        link.startswith("https://raw.githubusercontent.com/luongnv89/printer-cli/main/") for link in links
+    )
     for link in links:  # every linked file exists in the repository
         assert (ROOT / link.split("/main/", 1)[1]).is_file(), link
 

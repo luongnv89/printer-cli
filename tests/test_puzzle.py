@@ -78,8 +78,11 @@ def test_sudoku_difficulty_sets_how_many_digits_are_given():
 
 
 def test_the_same_seed_makes_the_same_puzzle_and_another_seed_another():
-    for make in (lambda s: puzzle.sudoku(s, "hard"), lambda s: puzzle.wordsearch(s, "hard", theme="zoo"),
-                 lambda s: puzzle.maze(s, "easy")):
+    for make in (
+        lambda s: puzzle.sudoku(s, "hard"),
+        lambda s: puzzle.wordsearch(s, "hard", theme="zoo"),
+        lambda s: puzzle.maze(s, "easy"),
+    ):
         assert make(42).answers() == make(42).answers()
         assert make(42).solution != make(43).solution
     a, b = puzzle.compose(puzzle.sudoku(42)), puzzle.compose(puzzle.sudoku(42))
@@ -109,13 +112,19 @@ def test_every_word_is_in_the_grid_where_the_solution_says(difficulty):
 
 
 def test_words_file_hides_every_word_as_written():
-    words = puzzle.parse_words(json.dumps({"title": "Our Holiday", "words": ["Ice cream", "Sandcastle", "Café",
-                                                                           "Flip-flops", "Rock pool"]}))
+    words = puzzle.parse_words(
+        json.dumps({"title": "Our Holiday", "words": ["Ice cream", "Sandcastle", "Café", "Flip-flops", "Rock pool"]})
+    )
     p = puzzle.wordsearch(1, "easy", words)
     assert p.title == "Our Holiday"
     found = {w["word"]: w["letters"] for w in p.solution["words"]}
-    assert found == {"Ice cream": "ICECREAM", "Sandcastle": "SANDCASTLE", "Café": "CAFE", "Flip-flops": "FLIPFLOPS",
-                     "Rock pool": "ROCKPOOL"}
+    assert found == {
+        "Ice cream": "ICECREAM",
+        "Sandcastle": "SANDCASTLE",
+        "Café": "CAFE",
+        "Flip-flops": "FLIPFLOPS",
+        "Rock pool": "ROCKPOOL",
+    }
     for w in p.solution["words"]:
         assert _read(p.solution["grid"], w["cells"]) == w["letters"]
     # A theme with a words file only names the puzzle, when the file has no title.
@@ -134,16 +143,19 @@ def test_a_long_word_makes_the_grid_bigger_and_twenty_long_words_still_fit():
     assert len(p.solution["words"]) == 12
 
 
-@pytest.mark.parametrize("data, message", [
-    ({"words": ["Moon", "Star"]}, "has 2 words"),
-    ({"words": ["Moon", "Star", "M2"]}, r"words\[2\] \('M2'\) has characters other than letters"),
-    ({"words": ["Moon", "Star", "Go"]}, r"words\[2\] \('Go'\) has 2 letters"),
-    ({"words": ["Moon", "Star", "MOON"]}, r"words\[2\] repeats words\[0\]"),
-    ({"words": ["Moon", "Star", "Sun"], "theme": "x"}, "unknown field"),
-    ({"title": 3, "words": ["Moon", "Star", "Sun"]}, "title in words file must be text"),
-    ({"words": "Moon"}, "must be a list of texts"),
-    ({}, "missing words"),
-])
+@pytest.mark.parametrize(
+    "data, message",
+    [
+        ({"words": ["Moon", "Star"]}, "has 2 words"),
+        ({"words": ["Moon", "Star", "M2"]}, r"words\[2\] \('M2'\) has characters other than letters"),
+        ({"words": ["Moon", "Star", "Go"]}, r"words\[2\] \('Go'\) has 2 letters"),
+        ({"words": ["Moon", "Star", "MOON"]}, r"words\[2\] repeats words\[0\]"),
+        ({"words": ["Moon", "Star", "Sun"], "theme": "x"}, "unknown field"),
+        ({"title": 3, "words": ["Moon", "Star", "Sun"]}, "title in words file must be text"),
+        ({"words": "Moon"}, "must be a list of texts"),
+        ({}, "missing words"),
+    ],
+)
 def test_bad_words_file_is_refused_with_exit_code_3(data, message):
     with pytest.raises(PrinterError, match=message) as exc:
         puzzle.parse_words(json.dumps(data))
@@ -182,8 +194,7 @@ def _check_crossword(p):
 
 
 def test_crossword_places_every_answer_so_that_it_crosses():
-    for file in (puzzle.DEFAULT_CROSSWORD,
-                 puzzle.load_crossword(ROOT / "assets" / "samples" / "crossword.json")):
+    for file in (puzzle.DEFAULT_CROSSWORD, puzzle.load_crossword(ROOT / "assets" / "samples" / "crossword.json")):
         p = puzzle.crossword(file)
         _check_crossword(p)
         assert len(p.solution["across"]) + len(p.solution["down"]) == len(file.entries)
@@ -198,9 +209,17 @@ def test_crossword_layout_depends_on_the_entries_alone():
 
 
 def test_crossword_shows_letter_counts_and_drops_spaces_from_the_grid():
-    file = puzzle.check_crossword(CrosswordFile((Entry("Buzz Aldrin", "Second on the Moon"),
-                                                 Entry("Ice-cream", "A cold treat"),
-                                                 Entry("Zebra", "A striped horse"))), "test", 3)
+    file = puzzle.check_crossword(
+        CrosswordFile(
+            (
+                Entry("Buzz Aldrin", "Second on the Moon"),
+                Entry("Ice-cream", "A cold treat"),
+                Entry("Zebra", "A striped horse"),
+            )
+        ),
+        "test",
+        3,
+    )
     p = puzzle.crossword(file)
     _check_crossword(p)
     shown = {clue: count for way in ("across", "down") for _, clue, count in p.layout.clues[way]}
@@ -208,17 +227,35 @@ def test_crossword_shows_letter_counts_and_drops_spaces_from_the_grid():
 
 
 def test_an_answer_that_cannot_cross_is_refused_by_name():
-    file = puzzle.check_crossword(CrosswordFile((Entry("Moon", "a"), Entry("Mars", "b"), Entry("Tux", "c"))),
-                                  "test", 3)
+    file = puzzle.check_crossword(CrosswordFile((Entry("Moon", "a"), Entry("Mars", "b"), Entry("Tux", "c"))), "test", 3)
     with pytest.raises(PrinterError, match=r"entries\[2\] \('Tux'\) cannot cross the other answers") as exc:
         puzzle.crossword(file)
     assert exc.value.exit_code == 3
 
 
 def test_the_largest_crossword_fits_its_page():
-    words = ["Astronaut", "Telescope", "Satellite", "Spaceship", "Asteroid", "Starlight", "Planetary", "Moonbeam",
-             "Lunar", "Solar", "Comet", "Orbit", "Rocket", "Galaxy", "Nebula", "Meteor", "Crater", "Saturn",
-             "Jupiter", "Neptune"]
+    words = [
+        "Astronaut",
+        "Telescope",
+        "Satellite",
+        "Spaceship",
+        "Asteroid",
+        "Starlight",
+        "Planetary",
+        "Moonbeam",
+        "Lunar",
+        "Solar",
+        "Comet",
+        "Orbit",
+        "Rocket",
+        "Galaxy",
+        "Nebula",
+        "Meteor",
+        "Crater",
+        "Saturn",
+        "Jupiter",
+        "Neptune",
+    ]
     assert len(words) == puzzle.MAX_ENTRIES
     file = puzzle.check_crossword(CrosswordFile(tuple(Entry(w, "x" * puzzle.MAX_CLUE) for w in words)), "t", 3)
     p = puzzle.crossword(file)
@@ -233,22 +270,34 @@ def test_the_largest_crossword_fits_its_page():
     assert crop.getextrema() == (255, 255)
 
 
-@pytest.mark.parametrize("data, message", [
-    ({"entries": [{"answer": "Moon", "clue": "a"}]}, "has 1 entries"),
-    ({"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "Apollo 11", "clue": "b"}]},
-     r"entries\[1\]\.answer \('Apollo 11'\) has characters other than letters"),
-    ({"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "M", "clue": "b"}]}, "has 1 letters"),
-    ({"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "moon", "clue": "b"}]},
-     r"entries\[1\]\.answer repeats entries\[0\]\.answer"),
-    ({"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "Mars", "clue": " "}]}, r"entries\[1\]\.clue is empty"),
-    ({"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "Mars", "clue": "x" * 121}]}, "too long"),
-    ({"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "Mars", "clue": "b", "hint": "c"}]},
-     r"unknown field\(s\) in entries\[1\]: hint"),
-    ({"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "Mars"}]}, r"entries\[1\]\.clue must be text"),
-    ({"entries": [{"answer": "Moon", "clue": "a"}, "Mars"]}, r"entries\[1\] must be an object"),
-    ({"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "Mars", "clue": "😀"}]}, "cannot print"),
-    ({"title": "x"}, "missing entries"),
-])
+@pytest.mark.parametrize(
+    "data, message",
+    [
+        ({"entries": [{"answer": "Moon", "clue": "a"}]}, "has 1 entries"),
+        (
+            {"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "Apollo 11", "clue": "b"}]},
+            r"entries\[1\]\.answer \('Apollo 11'\) has characters other than letters",
+        ),
+        ({"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "M", "clue": "b"}]}, "has 1 letters"),
+        (
+            {"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "moon", "clue": "b"}]},
+            r"entries\[1\]\.answer repeats entries\[0\]\.answer",
+        ),
+        (
+            {"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "Mars", "clue": " "}]},
+            r"entries\[1\]\.clue is empty",
+        ),
+        ({"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "Mars", "clue": "x" * 121}]}, "too long"),
+        (
+            {"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "Mars", "clue": "b", "hint": "c"}]},
+            r"unknown field\(s\) in entries\[1\]: hint",
+        ),
+        ({"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "Mars"}]}, r"entries\[1\]\.clue must be text"),
+        ({"entries": [{"answer": "Moon", "clue": "a"}, "Mars"]}, r"entries\[1\] must be an object"),
+        ({"entries": [{"answer": "Moon", "clue": "a"}, {"answer": "Mars", "clue": "😀"}]}, "cannot print"),
+        ({"title": "x"}, "missing entries"),
+    ],
+)
 def test_bad_crossword_file_is_refused_with_exit_code_3(data, message):
     with pytest.raises(PrinterError, match=message) as exc:
         puzzle.parse_crossword(json.dumps(data))
@@ -276,8 +325,9 @@ def test_maze_is_perfect_and_the_path_runs_from_start_to_finish(difficulty):
 # --- the page --------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("make", [lambda: puzzle.sudoku(1), lambda: puzzle.wordsearch(1), puzzle.crossword,
-                                  lambda: puzzle.maze(1)])
+@pytest.mark.parametrize(
+    "make", [lambda: puzzle.sudoku(1), lambda: puzzle.wordsearch(1), puzzle.crossword, lambda: puzzle.maze(1)]
+)
 def test_each_kind_renders_one_a4_page(make):
     p = make()
     rendered = render.puzzle_page(p)
@@ -358,8 +408,10 @@ def test_a_long_title_is_cut_and_reported():
 # --- prt puzzle --------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("kind, args", [("sudoku", ["--seed", "5"]), ("wordsearch", ["--seed", "5"]),
-                                        ("crossword", []), ("maze", ["--seed", "5"])])
+@pytest.mark.parametrize(
+    "kind, args",
+    [("sudoku", ["--seed", "5"]), ("wordsearch", ["--seed", "5"]), ("crossword", []), ("maze", ["--seed", "5"])],
+)
 def test_preview_saves_the_page_and_prints_nothing(capsys, tmp_path, printer, kind, args):
     out_file = tmp_path / f"{kind}.png"
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "puzzle", kind, *args, "--preview", str(out_file))
@@ -373,8 +425,23 @@ def test_preview_saves_the_page_and_prints_nothing(capsys, tmp_path, printer, ki
 
 def test_json_line_and_answers_file_carry_the_same_solution(capsys, tmp_path, printer):
     answers = tmp_path / "key.json"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "puzzle", "sudoku", "-d", "hard", "--seed", "4821",
-                         "--answers", str(answers), "-o", str(tmp_path / "s.pdf"))
+    code, out, err = run(
+        capsys,
+        "-p",
+        "demo",
+        "-f",
+        "json",
+        "puzzle",
+        "sudoku",
+        "-d",
+        "hard",
+        "--seed",
+        "4821",
+        "--answers",
+        str(answers),
+        "-o",
+        str(tmp_path / "s.pdf"),
+    )
     assert code == 0, err
     line = json.loads(out)
     saved = json.loads(answers.read_text(encoding="utf-8"))
@@ -384,13 +451,28 @@ def test_json_line_and_answers_file_carry_the_same_solution(capsys, tmp_path, pr
 
 
 def test_a_printed_sheet_and_its_preview_with_the_same_seed_are_the_same_puzzle(capsys, tmp_path, printer):
-    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "puzzle", "wordsearch", "--theme", "space",
-                       "-o", str(tmp_path / "w.png"))
+    code, out, _ = run(
+        capsys, "-p", "demo", "-f", "json", "puzzle", "wordsearch", "--theme", "space", "-o", str(tmp_path / "w.png")
+    )
     preview = json.loads(out)
     assert isinstance(preview["seed"], int)
     key = tmp_path / "key.json"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "puzzle", "wordsearch", "--theme", "space",
-                         "--seed", str(preview["seed"]), "--answers", str(key), "--yes")
+    code, out, err = run(
+        capsys,
+        "-p",
+        "demo",
+        "-f",
+        "json",
+        "puzzle",
+        "wordsearch",
+        "--theme",
+        "space",
+        "--seed",
+        str(preview["seed"]),
+        "--answers",
+        str(key),
+        "--yes",
+    )
     assert code == 0, err
     printed = json.loads(out)
     assert printed["job_id"] and printed["solution"] == preview["solution"]
@@ -409,37 +491,48 @@ def test_print_sends_one_a4_page(capsys, printer):
 def test_crossword_file_and_stdin(capsys, tmp_path, printer, stdin):
     data = json.loads((ROOT / "assets" / "samples" / "crossword.json").read_text())
     path = _file(tmp_path, data)
-    code, out, err = run(capsys, "-f", "json", "puzzle", "crossword", "--crossword-file", str(path),
-                         "-o", str(tmp_path / "x.png"))
+    code, out, err = run(
+        capsys, "-f", "json", "puzzle", "crossword", "--crossword-file", str(path), "-o", str(tmp_path / "x.png")
+    )
     assert code == 0, err
     from_file = json.loads(out)
     assert from_file["title"] == "Apollo Crossword" and from_file["seed"] is None
     stdin(json.dumps(data).encode())
-    code, out, err = run(capsys, "-f", "json", "puzzle", "crossword", "--crossword-file", "-",
-                         "-o", str(tmp_path / "y.png"))
+    code, out, err = run(
+        capsys, "-f", "json", "puzzle", "crossword", "--crossword-file", "-", "-o", str(tmp_path / "y.png")
+    )
     assert code == 0, err
     assert json.loads(out)["solution"] == from_file["solution"]
 
 
 def test_words_file_from_stdin(capsys, tmp_path, printer, stdin):
     stdin(json.dumps({"title": "Pets", "words": ["Cat", "Dog", "Rabbit", "Hamster"]}).encode())
-    code, out, err = run(capsys, "-f", "json", "puzzle", "wordsearch", "--words-file", "-", "--seed", "1",
-                         "-o", str(tmp_path / "w.png"))
+    code, out, err = run(
+        capsys, "-f", "json", "puzzle", "wordsearch", "--words-file", "-", "--seed", "1", "-o", str(tmp_path / "w.png")
+    )
     assert code == 0, err
     line = json.loads(out)
-    assert line["title"] == "Pets" and {w["word"] for w in line["solution"]["words"]} == {"Cat", "Dog", "Rabbit",
-                                                                                         "Hamster"}
+    assert line["title"] == "Pets" and {w["word"] for w in line["solution"]["words"]} == {
+        "Cat",
+        "Dog",
+        "Rabbit",
+        "Hamster",
+    }
 
 
-@pytest.mark.parametrize("args, code_, kind, message", [
-    (["wordsearch", "--theme", "mars"], 2, "unknown_theme", "unknown word search theme"),
-    (["sudoku", "--answers", "key.txt"], 2, "usage", "must end in .json"),
-    (["sudoku", "--title", "x" * 61], 2, "usage", "title is too long"),
-    (["maze", "--difficulty", "extreme"], 2, "usage", "extreme"),
-    (["crossword", "--crossword-file", "missing.json"], 3, "invalid_input", "crossword file not found"),
-])
-def test_bad_options_are_refused_before_anything_is_written(capsys, tmp_path, printer, monkeypatch, args, code_,
-                                                            kind, message):
+@pytest.mark.parametrize(
+    "args, code_, kind, message",
+    [
+        (["wordsearch", "--theme", "mars"], 2, "unknown_theme", "unknown word search theme"),
+        (["sudoku", "--answers", "key.txt"], 2, "usage", "must end in .json"),
+        (["sudoku", "--title", "x" * 61], 2, "usage", "title is too long"),
+        (["maze", "--difficulty", "extreme"], 2, "usage", "extreme"),
+        (["crossword", "--crossword-file", "missing.json"], 3, "invalid_input", "crossword file not found"),
+    ],
+)
+def test_bad_options_are_refused_before_anything_is_written(
+    capsys, tmp_path, printer, monkeypatch, args, code_, kind, message
+):
     monkeypatch.chdir(tmp_path)
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "puzzle", *args, "-o", "page.png")
     assert code == code_ and out == ""
@@ -450,8 +543,19 @@ def test_bad_options_are_refused_before_anything_is_written(capsys, tmp_path, pr
 def test_an_output_on_top_of_the_input_file_is_refused(capsys, tmp_path, printer):
     path = _file(tmp_path, {"words": ["Cat", "Dog", "Rabbit"]}, "words.json")
     before = path.read_bytes()
-    code, _, err = run(capsys, "-f", "json", "puzzle", "wordsearch", "--words-file", str(path),
-                       "--answers", str(path), "-o", str(tmp_path / "w.png"))
+    code, _, err = run(
+        capsys,
+        "-f",
+        "json",
+        "puzzle",
+        "wordsearch",
+        "--words-file",
+        str(path),
+        "--answers",
+        str(path),
+        "-o",
+        str(tmp_path / "w.png"),
+    )
     assert code == 2 and "would overwrite" in _error(err)["message"]
     assert path.read_bytes() == before and not (tmp_path / "w.png").exists()
 
@@ -460,8 +564,19 @@ def test_agent_mode_needs_yes_but_preview_and_answers_do_not(capsys, tmp_path, p
     monkeypatch.setenv("PRT_AGENT", "1")
     code, _, err = run(capsys, "-p", "demo", "-f", "json", "puzzle", "sudoku", "--seed", "1")
     assert code == 2 and _error(err)["kind"] == "agent_confirmation_required" and printer.jobs() == []
-    code, _, _ = run(capsys, "-p", "demo", "puzzle", "sudoku", "--seed", "1", "--answers",
-                     str(tmp_path / "k.json"), "-o", str(tmp_path / "s.png"))
+    code, _, _ = run(
+        capsys,
+        "-p",
+        "demo",
+        "puzzle",
+        "sudoku",
+        "--seed",
+        "1",
+        "--answers",
+        str(tmp_path / "k.json"),
+        "-o",
+        str(tmp_path / "s.png"),
+    )
     assert code == 0 and (tmp_path / "k.json").is_file() and printer.jobs() == [] and guard.used_today() == 0
 
 
@@ -501,8 +616,16 @@ def test_puzzle_check_skill_matches_the_cli(capsys, tmp_path, monkeypatch, print
     help_text = "".join(run(capsys, "puzzle", kind, "--help")[1] for kind in puzzle.KINDS)
     help_text += run(capsys, "scan", "--help")[1] + run(capsys, "--help")[1]
     flags = set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", skill))
-    assert {"--answers", "--seed", "--difficulty", "--crossword-file", "--words-file", "--preview", "--yes",
-            "--format"} <= flags
+    assert {
+        "--answers",
+        "--seed",
+        "--difficulty",
+        "--crossword-file",
+        "--words-file",
+        "--preview",
+        "--yes",
+        "--format",
+    } <= flags
     assert [f for f in sorted(flags) if f not in help_text] == []
     monkeypatch.chdir(tmp_path)
     (tmp_path / "crossword.json").write_text(re.search(r"```json\n(.*?)```", skill, re.S).group(1))
@@ -521,8 +644,12 @@ def test_puzzle_check_skill_matches_the_cli(capsys, tmp_path, monkeypatch, print
 
 def test_puzzle_check_skill_describes_every_solution_field():
     skill = SKILL.read_text()
-    shapes = {"sudoku": puzzle.sudoku(1).solution, "wordsearch": puzzle.wordsearch(1).solution,
-              "crossword": puzzle.crossword().solution, "maze": puzzle.maze(1).solution}
+    shapes = {
+        "sudoku": puzzle.sudoku(1).solution,
+        "wordsearch": puzzle.wordsearch(1).solution,
+        "crossword": puzzle.crossword().solution,
+        "maze": puzzle.maze(1).solution,
+    }
     for kind, solution in shapes.items():
         row = next(line for line in skill.splitlines() if line.startswith(f"| {kind} |"))
         for name in re.findall(r"solution\.(\w+)", row):

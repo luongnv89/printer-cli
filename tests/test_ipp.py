@@ -27,20 +27,34 @@ def test_encode_request_header_and_required_attrs():
 
 
 def test_round_trip_scalars_sets_and_collections():
-    raw = _response([(ipp.TAG_OPERATION, [Attr("attributes-charset", ipp.CHARSET, "utf-8")]),
-                     (ipp.TAG_PRINTER, [
-                         Attr("printer-state", ipp.ENUM, 3),
-                         Attr("marker-levels", ipp.INTEGER, [92, 1, 1, 12, 89]),
-                         Attr("marker-names", ipp.NAME, ["Cyan ink", "Black ink"]),
-                         Attr("color-supported", ipp.BOOLEAN, True),
-                         Attr("copies-supported", ipp.RANGE, (1, 99)),
-                         Attr("printer-resolution-default", ipp.RESOLUTION, ipp.Resolution(360, 360)),
-                         Attr("media-col-default", ipp.BEG_COLLECTION, {
-                             "media-size": (ipp.BEG_COLLECTION, {"x-dimension": (ipp.INTEGER, 21000),
-                                                                 "y-dimension": (ipp.INTEGER, 29700)}),
-                             "media-source": (ipp.KEYWORD, "main")}),
-                         Attr("printer-geo-location", ipp.UNKNOWN, None),
-                     ])])
+    raw = _response(
+        [
+            (ipp.TAG_OPERATION, [Attr("attributes-charset", ipp.CHARSET, "utf-8")]),
+            (
+                ipp.TAG_PRINTER,
+                [
+                    Attr("printer-state", ipp.ENUM, 3),
+                    Attr("marker-levels", ipp.INTEGER, [92, 1, 1, 12, 89]),
+                    Attr("marker-names", ipp.NAME, ["Cyan ink", "Black ink"]),
+                    Attr("color-supported", ipp.BOOLEAN, True),
+                    Attr("copies-supported", ipp.RANGE, (1, 99)),
+                    Attr("printer-resolution-default", ipp.RESOLUTION, ipp.Resolution(360, 360)),
+                    Attr(
+                        "media-col-default",
+                        ipp.BEG_COLLECTION,
+                        {
+                            "media-size": (
+                                ipp.BEG_COLLECTION,
+                                {"x-dimension": (ipp.INTEGER, 21000), "y-dimension": (ipp.INTEGER, 29700)},
+                            ),
+                            "media-source": (ipp.KEYWORD, "main"),
+                        },
+                    ),
+                    Attr("printer-geo-location", ipp.UNKNOWN, None),
+                ],
+            ),
+        ]
+    )
     resp = ipp.decode_response(raw)
     assert resp.ok and resp.request_id == 7
     p = resp.printer
@@ -50,8 +64,10 @@ def test_round_trip_scalars_sets_and_collections():
     assert p["color-supported"] is True
     assert p["copies-supported"] == (1, 99)
     assert str(p["printer-resolution-default"]) == "360dpi"
-    assert p["media-col-default"] == {"media-size": {"x-dimension": 21000, "y-dimension": 29700},
-                                      "media-source": "main"}
+    assert p["media-col-default"] == {
+        "media-size": {"x-dimension": 21000, "y-dimension": 29700},
+        "media-source": "main",
+    }
     assert p["printer-geo-location"] is None
 
 
@@ -73,6 +89,7 @@ def test_as_list():
 
 def test_client_posts_ipp(monkeypatch):
     import httpx
+
     captured = {}
 
     def handler(request):

@@ -52,6 +52,7 @@ def _solid(page, minimum=10_000):
 
 # --- the page ------------------------------------------------------------------------------------
 
+
 def test_the_patch_holds_every_ink_colour_on_a4():
     page = keepalive.compose()
     assert page.mode == "RGB" and page.size == A4.size
@@ -81,6 +82,7 @@ def test_the_patch_is_estimated_as_colour_and_light_on_ink():
 
 
 # --- the command ---------------------------------------------------------------------------------
+
 
 def test_yes_prints_one_page_and_books_one(capsys, printer):
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "keepalive", "--yes")

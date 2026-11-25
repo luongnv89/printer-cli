@@ -49,8 +49,9 @@ class Config:
             try:
                 data = tomllib.loads(path.read_text())
             except tomllib.TOMLDecodeError as exc:
-                raise PrinterError(f"invalid config file {path}: {exc}",
-                                   hint="fix the TOML syntax or delete the file", exit_code=3) from exc
+                raise PrinterError(
+                    f"invalid config file {path}: {exc}", hint="fix the TOML syntax or delete the file", exit_code=3
+                ) from exc
             cfg.default = data.get("default")
             cfg.timeout = float(data.get("timeout", DEFAULT_TIMEOUT))
             cfg.max_pages_per_run = _page_cap(data, "max_pages_per_run", path)
@@ -59,8 +60,7 @@ class Config:
             for name, entry in (data.get("printers") or {}).items():
                 if not isinstance(entry, dict) or "host" not in entry:
                     raise PrinterError(f"printer '{name}' in {path} has no host", exit_code=3)
-                cfg.printers[name] = Target(name=name, **{k: v for k, v in entry.items()
-                                                          if k in known and k != "name"})
+                cfg.printers[name] = Target(name=name, **{k: v for k, v in entry.items() if k in known and k != "name"})
         if os.environ.get("PRT_TIMEOUT"):
             try:
                 cfg.timeout = float(os.environ["PRT_TIMEOUT"])
@@ -98,22 +98,29 @@ class Config:
                 return Target(name="demo", host="demo", driver="fake")
             if _looks_like_host(selector):
                 return Target(name=selector, host=selector)
-            raise PrinterError(f"no saved printer named '{selector}'",
-                               hint="run `prt printers list`, or pass a hostname/IP with --printer",
-                               exit_code=2)
+            raise PrinterError(
+                f"no saved printer named '{selector}'",
+                hint="run `prt printers list`, or pass a hostname/IP with --printer",
+                exit_code=2,
+            )
         if len(self.printers) == 1:
             return next(iter(self.printers.values()))
         from prt.discovery import discover
+
         found = [p for p in discover(timeout=2.0) if p.ipp]
         if len(found) == 1:
             return found[0].to_target()
         if not found:
-            raise PrinterError("no printer configured and none found on the network",
-                               hint="wake the printer and run `prt discover`, or `prt printers add NAME HOST`",
-                               exit_code=2)
-        raise PrinterError(f"{len(found)} printers found; which one?",
-                           hint="pick one with --printer, or set a default: `prt printers default NAME`",
-                           exit_code=2)
+            raise PrinterError(
+                "no printer configured and none found on the network",
+                hint="wake the printer and run `prt discover`, or `prt printers add NAME HOST`",
+                exit_code=2,
+            )
+        raise PrinterError(
+            f"{len(found)} printers found; which one?",
+            hint="pick one with --printer, or set a default: `prt printers default NAME`",
+            exit_code=2,
+        )
 
 
 def _page_cap(data: dict, key: str, path: Path) -> int | None:
@@ -121,8 +128,11 @@ def _page_cap(data: dict, key: str, path: Path) -> int | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise PrinterError(f"{key} in {path} must be a whole number of pages, 1 or more",
-                           hint=f"e.g. {key} = 20, or remove the line for no limit", exit_code=3)
+        raise PrinterError(
+            f"{key} in {path} must be a whole number of pages, 1 or more",
+            hint=f"e.g. {key} = 20, or remove the line for no limit",
+            exit_code=3,
+        )
     return value
 
 

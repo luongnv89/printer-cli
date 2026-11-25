@@ -23,8 +23,20 @@ from typing import Callable
 from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 
 from prt.drivers.base import PrinterError
-from prt.layout import (BOTTOM, CONTENT_W, Cuts, _clean, _columns, _columns_height, _fit, _glyphs, _in_source,
-                        _lead, _printable, _text_block)
+from prt.layout import (
+    BOTTOM,
+    CONTENT_W,
+    Cuts,
+    _clean,
+    _columns,
+    _columns_height,
+    _fit,
+    _glyphs,
+    _in_source,
+    _lead,
+    _printable,
+    _text_block,
+)
 from prt.layout import _col_width, _ellipsize, _rows, _wrap  # noqa: F401  (still reachable as booth.<name>)
 from prt.testpage import H, MARGIN, W, _font
 
@@ -51,12 +63,14 @@ STDIN = "-"  # a story file or article source of "-" is read from standard input
 DEFAULT_STORY = Story(
     kicker="Local news",
     headline="Local Star Steps Into the Spotlight",
-    story=("A familiar face stepped up to the photo booth today and smiled for the camera, "
-           "drawing a small but enthusiastic crowd. Witnesses described the moment as "
-           "\"effortless\" and \"exactly what the afternoon needed\".\n"
-           "Asked about the secret behind the look, our subject kept it modest: good light, "
-           "a steady pose and a little confidence. The picture was printed on the spot.\n"
-           "Editors confirm that no further questions will be taken at this time."),
+    story=(
+        "A familiar face stepped up to the photo booth today and smiled for the camera, "
+        "drawing a small but enthusiastic crowd. Witnesses described the moment as "
+        '"effortless" and "exactly what the afternoon needed".\n'
+        "Asked about the secret behind the look, our subject kept it modest: good light, "
+        "a steady pose and a little confidence. The picture was printed on the spot.\n"
+        "Editors confirm that no further questions will be taken at this time."
+    ),
     caption="Pictured: today's guest at the prt photo booth.",
     byline="By the prt newsroom",
 )
@@ -68,9 +82,11 @@ WIZARD_STORY = Story(
     kicker="Legendary Wizard",
     headline="The Spellbound Guest",
     caption="Keeper of the Photo Booth",
-    story=("Appeared in a flash of light at the photo booth and has not stopped smiling since. "
-           "Said to brew a strong cup of tea and an even stronger pose.\n"
-           "Special power: turns any ordinary afternoon into a little bit of magic."),
+    story=(
+        "Appeared in a flash of light at the photo booth and has not stopped smiling since. "
+        "Said to brew a strong cup of tea and an even stronger pose.\n"
+        "Special power: turns any ordinary afternoon into a little bit of magic."
+    ),
     byline="Booth wizard series · card No. 1",
 )
 
@@ -78,9 +94,11 @@ WANTED_STORY = Story(
     kicker="Dead or Alive",
     headline="The Grinning Captain",
     caption="Reward 1,000,000 Gold",
-    story=("Wanted for stealing the show at the photo booth and smiling without a licence. "
-           "Last seen striking a fearless pose and refusing to blink.\n"
-           "Approach with a camera. Do not attempt to out-smile."),
+    story=(
+        "Wanted for stealing the show at the photo booth and smiling without a licence. "
+        "Last seen striking a fearless pose and refusing to blink.\n"
+        "Approach with a camera. Do not attempt to out-smile."
+    ),
     byline="By order of the Harbour Watch",
 )
 
@@ -88,8 +106,10 @@ CERTIFICATE_STORY = Story(
     kicker="Certificate of Achievement",
     headline="The Photo Booth Guest",
     caption="For the Brightest Smile of the Day",
-    story=("In recognition of an outstanding performance in front of the camera: a steady pose, perfect timing "
-           "and a smile that lit up the whole room."),
+    story=(
+        "In recognition of an outstanding performance in front of the camera: a steady pose, perfect timing "
+        "and a smile that lit up the whole room."
+    ),
     byline="The prt Awards Committee",
 )
 
@@ -97,9 +117,11 @@ SPORTS_STORY = Story(
     kicker="Booth City Flashes",
     headline="The Shutter Star",
     caption="Forward · No. 23",
-    story=("Height: just right. Reach: the whole room.\n"
-           "Season: 12 smiles, 9 poses, 0 blinks.\n"
-           "Scouting report: quick off the mark and never misses a photo opportunity."),
+    story=(
+        "Height: just right. Reach: the whole room.\n"
+        "Season: 12 smiles, 9 poses, 0 blinks.\n"
+        "Scouting report: quick off the mark and never misses a photo opportunity."
+    ),
     byline="Photo booth series · rookie card",
 )
 
@@ -107,9 +129,11 @@ MISSING_STORY = Story(
     kicker="Have you seen this cat?",
     headline="Whiskers",
     caption="Reward: a lifetime supply of treats",
-    story=("Last seen near the photo booth, posing for the camera and refusing to share the spotlight. "
-           "Answers to her name, a rattled treat bag or the sound of a tin opener.\n"
-           "Friendly, fluffy and very photogenic. Please do not chase: just take a picture and call."),
+    story=(
+        "Last seen near the photo booth, posing for the camera and refusing to share the spotlight. "
+        "Answers to her name, a rattled treat bag or the sound of a tin opener.\n"
+        "Friendly, fluffy and very photogenic. Please do not chase: just take a picture and call."
+    ),
     byline="Call 555-0134",
 )
 
@@ -117,18 +141,34 @@ MOVIE_STORY = Story(
     kicker="One smile. One take. One legend.",
     headline="The Photo Booth",
     caption="Coming soon to a printer near you",
-    story=("prt Pictures presents a Self-Timer production · starring Today's Guest as Themselves · "
-           "music by The Shutter Clicks · edited by One Lucky Take · directed by The Flash"),
+    story=(
+        "prt Pictures presents a Self-Timer production · starring Today's Guest as Themselves · "
+        "music by The Shutter Clicks · edited by One Lucky Take · directed by The Flash"
+    ),
     byline="Rated PG for scenes of extreme smiling",
 )
 
-DEFAULT_STORIES = {"metro": DEFAULT_STORY, "daily": DEFAULT_STORY, "wizard": WIZARD_STORY, "wanted": WANTED_STORY,
-                   "certificate": CERTIFICATE_STORY, "sports": SPORTS_STORY, "missing": MISSING_STORY,
-                   "movie": MOVIE_STORY}
+DEFAULT_STORIES = {
+    "metro": DEFAULT_STORY,
+    "daily": DEFAULT_STORY,
+    "wizard": WIZARD_STORY,
+    "wanted": WANTED_STORY,
+    "certificate": CERTIFICATE_STORY,
+    "sports": SPORTS_STORY,
+    "missing": MISSING_STORY,
+    "movie": MOVIE_STORY,
+}
 # What each style prints, for messages such as the confirmation prompt.
-KINDS = {"metro": "metro newspaper page", "daily": "daily newspaper page", "wizard": "wizard card",
-         "wanted": "wanted poster", "certificate": "certificate", "sports": "sports card",
-         "missing": "missing-pet poster", "movie": "movie poster"}
+KINDS = {
+    "metro": "metro newspaper page",
+    "daily": "daily newspaper page",
+    "wizard": "wizard card",
+    "wanted": "wanted poster",
+    "certificate": "certificate",
+    "sports": "sports card",
+    "missing": "missing-pet poster",
+    "movie": "movie poster",
+}
 
 
 def default_story(style: str) -> Story:
@@ -142,17 +182,21 @@ def check_story(story: Story, exit_code: int) -> Story:
     for name in FIELDS:
         value = _clean(getattr(story, name), keep_newlines=name == "story")
         if name in REQUIRED and not value:
-            raise PrinterError(f"the story has an empty {name}", hint=f"give the {name} some text",
-                               exit_code=exit_code)
+            raise PrinterError(f"the story has an empty {name}", hint=f"give the {name} some text", exit_code=exit_code)
         if len(value) > LIMITS[name]:
-            raise PrinterError(f"{name} is too long ({len(value)} characters, max {LIMITS[name]})",
-                               hint=f"shorten the {name} so it fits on the page", exit_code=exit_code)
+            raise PrinterError(
+                f"{name} is too long ({len(value)} characters, max {LIMITS[name]})",
+                hint=f"shorten the {name} so it fits on the page",
+                exit_code=exit_code,
+            )
         unprintable = sorted({c for c in value if _glyphs(c) is None})
         if unprintable:
             shown = ", ".join(f"{c} (U+{ord(c):04X})" for c in unprintable[:10])
-            raise PrinterError(f"{name} has characters the page font cannot print: {shown}",
-                               hint="write it in Latin letters (accents are printed without their marks)",
-                               exit_code=exit_code)
+            raise PrinterError(
+                f"{name} has characters the page font cannot print: {shown}",
+                hint="write it in Latin letters (accents are printed without their marks)",
+                exit_code=exit_code,
+            )
         clean[name] = value
     return Story(**clean)
 
@@ -161,13 +205,15 @@ def read_stdin(limit: int) -> bytes:
     """Standard input as bytes, at most ``limit + 1`` of them: a longer result means the input is over ``limit``."""
     stream = getattr(sys.stdin, "buffer", None)
     if stream is None:
-        raise PrinterError("cannot read standard input: there is none", hint="pipe the input in, or give a file",
-                           exit_code=3)
+        raise PrinterError(
+            "cannot read standard input: there is none", hint="pipe the input in, or give a file", exit_code=3
+        )
     try:
         return stream.read(limit + 1)
     except (OSError, ValueError) as exc:  # ValueError: stdin was closed
-        raise PrinterError(f"cannot read standard input: {exc}", hint="pipe the input in, or give a file",
-                           exit_code=3) from exc
+        raise PrinterError(
+            f"cannot read standard input: {exc}", hint="pipe the input in, or give a file", exit_code=3
+        ) from exc
 
 
 def load_story(path: Path) -> Story:
@@ -183,8 +229,11 @@ def load_story(path: Path) -> Story:
         too_big = path.stat().st_size > MAX_STORY_FILE
         content = b"" if too_big else path.read_bytes()
     if too_big:
-        raise PrinterError(f"{name} is larger than {MAX_STORY_FILE // 1024} KiB",
-                           hint="a booth story is a few short paragraphs", exit_code=3)
+        raise PrinterError(
+            f"{name} is larger than {MAX_STORY_FILE // 1024} KiB",
+            hint="a booth story is a few short paragraphs",
+            exit_code=3,
+        )
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -198,23 +247,36 @@ def parse_story(text: str, name: str = "story", kind: str = "story") -> Story:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})",
-                           hint='expected {"headline": "...", "story": "..."}', exit_code=3) from exc
+        raise PrinterError(
+            f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})",
+            hint='expected {"headline": "...", "story": "..."}',
+            exit_code=3,
+        ) from exc
     if not isinstance(data, dict):
-        raise PrinterError(f"{name} must hold a JSON object",
-                           hint='expected {"headline": "...", "story": "..."}', exit_code=3)
+        raise PrinterError(
+            f"{name} must hold a JSON object", hint='expected {"headline": "...", "story": "..."}', exit_code=3
+        )
     unknown = sorted(set(data) - set(FIELDS))
     if unknown:
-        raise PrinterError(f"unknown field(s) in {kind}: {', '.join(unknown)}",
-                           hint="allowed fields: " + ", ".join(FIELDS), exit_code=3)
+        raise PrinterError(
+            f"unknown field(s) in {kind}: {', '.join(unknown)}",
+            hint="allowed fields: " + ", ".join(FIELDS),
+            exit_code=3,
+        )
     missing = [field for field in REQUIRED if field not in data]
     if missing:
-        raise PrinterError(f"{name} is missing {' and '.join(missing)}",
-                           hint='expected {"headline": "...", "story": "..."}', exit_code=3)
+        raise PrinterError(
+            f"{name} is missing {' and '.join(missing)}",
+            hint='expected {"headline": "...", "story": "..."}',
+            exit_code=3,
+        )
     wrong = [field for field, value in data.items() if not isinstance(value, str)]
     if wrong:
-        raise PrinterError(f"{kind} fields must be text: {', '.join(sorted(wrong))}",
-                           hint='quote the values, e.g. "byline": "By Jo"', exit_code=3)
+        raise PrinterError(
+            f"{kind} fields must be text: {', '.join(sorted(wrong))}",
+            hint='quote the values, e.g. "byline": "By Jo"',
+            exit_code=3,
+        )
     return check_story(Story(**data), exit_code=3)
 
 
@@ -241,8 +303,9 @@ def load_photo(path: Path) -> Image.Image:
                 img = Image.alpha_composite(Image.new("RGBA", img.size, "white"), img.convert("RGBA"))
             return img.convert("RGB")
     except UnidentifiedImageError as exc:
-        raise PrinterError(f"cannot read photo {path.name}: not a supported image format",
-                           hint=PHOTO_HINT, exit_code=3) from exc
+        raise PrinterError(
+            f"cannot read photo {path.name}: not a supported image format", hint=PHOTO_HINT, exit_code=3
+        ) from exc
     except (OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
         raise PrinterError(f"cannot read photo {path.name}: {exc}", hint=PHOTO_HINT, exit_code=3) from exc
 
@@ -320,8 +383,9 @@ def _metro(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     max_w = CONTENT_W - 8  # the frame is drawn 4 px outside the photo, so it lines up with the masthead
     base = _photo_box(photo, y, METRO_PHOTO, max_w)  # the narrowest the photo can be
     caption_lines = len(_fit(story.caption, 24, 20, base[2] - base[0] - 40, 2)[2]) if story.caption else 0
-    below = 4 + (caption_lines * _lead(24) + 20 if caption_lines else 0) + 26 + \
-        (_lead(by_size) + 6 if story.byline else 0)
+    below = (
+        4 + (caption_lines * _lead(24) + 20 if caption_lines else 0) + 26 + (_lead(by_size) + 6 if story.byline else 0)
+    )
     room = BOTTOM - 24 - y - below - _columns_height(story.story, CONTENT_W, 2, 44, METRO_BODY)
     grow_to = min(METRO_PHOTO_MAX, round(max_w / min(photo.width / photo.height, 4 / 3)))
     px0, py0, px1, py1 = _photo_box(photo, y, max(METRO_PHOTO, min(grow_to, room)), max_w)
@@ -410,8 +474,9 @@ def _daily(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     y += 14
     d.line([(left, y), (right, y)], fill=DAILY_INK, width=1)
     d.line([(left, BOTTOM), (right, BOTTOM)], fill=DAILY_INK, width=1)
-    story_cut = _columns(d, story.story, (left, y + 20, right, BOTTOM - 16), 3, 34, DAILY_BODY_MAX, 14, DAILY_INK,
-                         rule=GREY)
+    story_cut = _columns(
+        d, story.story, (left, y + 20, right, BOTTOM - 16), 3, 34, DAILY_BODY_MAX, 14, DAILY_INK, rule=GREY
+    )
     if story_cut:
         cut["story"] = story_cut
     return cut
@@ -421,8 +486,7 @@ def _daily(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
 # The page font has no star or ornament glyphs, so every decoration is drawn from shapes.
 
 
-def _star(d: ImageDraw.ImageDraw, cx: float, cy: float, r: float, fill, points: int = 5,
-          inner: float = 0.45) -> None:
+def _star(d: ImageDraw.ImageDraw, cx: float, cy: float, r: float, fill, points: int = 5, inner: float = 0.45) -> None:
     pts = []
     for i in range(points * 2):
         radius = r if i % 2 == 0 else r * inner
@@ -452,8 +516,17 @@ def _grow(box: tuple[int, int, int, int], by: int) -> tuple[int, int, int, int]:
     return x0 - by, y0 - by, x1 + by, y1 + by
 
 
-def _centred(d: ImageDraw.ImageDraw, y: int, text: str, size: int, fill, bold: int = 0,
-             min_size: int | None = None, width: int = CONTENT_W - 120, lines: int = 1):
+def _centred(
+    d: ImageDraw.ImageDraw,
+    y: int,
+    text: str,
+    size: int,
+    fill,
+    bold: int = 0,
+    min_size: int | None = None,
+    width: int = CONTENT_W - 120,
+    lines: int = 1,
+):
     """Fit ``text`` (shrinking to ``min_size``) in ``lines`` centred lines; returns (y below, cut)."""
     font, size, wrapped, cut = _fit(text, size, min_size or size, width, lines)
     return _text_block(d, (W - width) // 2, y, wrapped, font, size, fill, width=width, bold=bold), cut
@@ -481,8 +554,11 @@ def _wizard(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
         d.line([(x + sx * 6, y), (x + sx * 24, y)], fill=GUIDE, width=2)
         d.line([(x, y + sy * 6), (x, y + sy * 24)], fill=GUIDE, width=2)
     card_size = (CARD_W, CARD_H)
-    card = Image.composite(Image.new("RGB", card_size, PLUM), Image.new("RGB", card_size, NAVY),
-                           Image.linear_gradient("L").resize(card_size))
+    card = Image.composite(
+        Image.new("RGB", card_size, PLUM),
+        Image.new("RGB", card_size, NAVY),
+        Image.linear_gradient("L").resize(card_size),
+    )
     sparkle = ImageDraw.Draw(card)
     rng = random.Random(63)  # fixed, so the same card prints the same every time
     for _ in range(70):  # only around the portrait, clear of the text
@@ -501,8 +577,7 @@ def _wizard(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
         y = y0 + 54
         d.text((mid - font.getlength(label) / 2, y), label, font=font, fill=GOLD_LIGHT)
         for side in (-1, 1):
-            _star(d, mid + side * (font.getlength(label) / 2 + 26), y + size * 0.62, 10, GOLD, points=4,
-                  inner=0.35)
+            _star(d, mid + side * (font.getlength(label) / 2 + 26), y + size * 0.62, 10, GOLD, points=4, inner=0.35)
         if cut_kicker:
             cut["kicker"] = cut_kicker
 
@@ -532,8 +607,16 @@ def _wizard(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     for side in (-1, 1):
         inner_x, outer_x = mid + side * 380, mid + side * 450
         notch = outer_x - side * 28
-        d.polygon([(inner_x, by + 22), (outer_x, by + 22), (notch, by + 22 + bh / 2), (outer_x, by + 22 + bh),
-                   (inner_x, by + 22 + bh)], fill=GOLD_DARK)
+        d.polygon(
+            [
+                (inner_x, by + 22),
+                (outer_x, by + 22),
+                (notch, by + 22 + bh / 2),
+                (outer_x, by + 22 + bh),
+                (inner_x, by + 22 + bh),
+            ],
+            fill=GOLD_DARK,
+        )
     d.rectangle([mid - 410, by, mid + 410, by + bh], fill=GOLD, outline=GOLD_DARK, width=3)
     _text_block(d, mid - 360, by + 12, lines, font, size, NAVY, width=720, bold=1)
     y = by + bh + 22 + 10
@@ -544,8 +627,9 @@ def _wizard(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
             cut["caption"] = cut_caption
     lore = (x0 + 70, y + 10, x1 - 70, y1 - 96)
     d.rounded_rectangle(lore, radius=14, fill=CREAM, outline=GOLD, width=3)
-    story_cut = _columns(d, story.story, (lore[0] + 30, lore[1] + 20, lore[2] - 30, lore[3] - 14), 1, 0, 28, 16,
-                         NAVY, centre=True)
+    story_cut = _columns(
+        d, story.story, (lore[0] + 30, lore[1] + 20, lore[2] - 30, lore[3] - 14), 1, 0, 28, 16, NAVY, centre=True
+    )
     if story_cut:
         cut["story"] = story_cut
     if story.byline:
@@ -573,8 +657,9 @@ def _parchment() -> tuple[Image.Image, Image.Image]:
     for cell, colour, depth in ((48, (196, 158, 104), 0.55), (6, (150, 110, 64), 0.18)):  # stains, then grain
         cw, ch = w // cell + 2, h // cell + 2
         noise = Image.frombytes("L", (cw, ch), rng.randbytes(cw * ch)).resize((w, h), Image.Resampling.BICUBIC)
-        paper = Image.composite(Image.new("RGB", (w, h), colour), paper,
-                                noise.point(lambda v, k=depth: round(max(0, v - 110) * k)))
+        paper = Image.composite(
+            Image.new("RGB", (w, h), colour), paper, noise.point(lambda v, k=depth: round(max(0, v - 110) * k))
+        )
     outline = []
     for i in range(0, w - 12, 24):  # walk round the edge, tearing a little off as we go
         outline.append((i, rng.randint(0, 10)))
@@ -603,8 +688,14 @@ def _wanted(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     size = next(s for s in range(240, 100, -4) if _font(s).getlength("WANTED") <= CONTENT_W - 180)
     font = _font(size)
     top, bottom = font.getbbox("WANTED")[1::2]
-    d.text((mid - font.getlength("WANTED") / 2, MARGIN + 74 - top), "WANTED", font=font, fill=SEPIA_DARK,
-           stroke_width=3, stroke_fill=SEPIA_DARK)
+    d.text(
+        (mid - font.getlength("WANTED") / 2, MARGIN + 74 - top),
+        "WANTED",
+        font=font,
+        fill=SEPIA_DARK,
+        stroke_width=3,
+        stroke_fill=SEPIA_DARK,
+    )
     y = MARGIN + 74 + bottom - top + 28
     d.line([(MARGIN + 70, y), (W - MARGIN - 70, y)], fill=SEPIA_DARK, width=5)
     d.line([(MARGIN + 70, y + 11), (W - MARGIN - 70, y + 11)], fill=SEPIA_DARK, width=2)
@@ -622,8 +713,11 @@ def _wanted(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
         if reward[3]:
             reward = _fit(story.caption.upper(), 40, 40, text_w, 2)
     # The photo grows into whatever a short description leaves (up to a 4:3 crop of a wide photo).
-    words = (_lead(k_size) + 6 if story.kicker.strip() else 0) + len(name[2]) * _lead(name[1]) + \
-        (4 + len(reward[2]) * _lead(reward[1]) if reward else 0)
+    words = (
+        (_lead(k_size) + 6 if story.kicker.strip() else 0)
+        + len(name[2]) * _lead(name[1])
+        + (4 + len(reward[2]) * _lead(reward[1]) if reward else 0)
+    )
     room = BOTTOM - 104 - (y + 50 + 22 + 26 + words + 34)
     max_w = CONTENT_W - 200
     grow_to = min(WANTED_PHOTO_MAX, round(max_w / min(photo.width / photo.height, 4 / 3)))
@@ -639,14 +733,21 @@ def _wanted(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     y = box[3] + 22 + 26
 
     if story.kicker.strip():
-        d.text((mid - k_font.getlength(label) / 2, y), label, font=k_font, fill=SEPIA_DARK, stroke_width=1,
-               stroke_fill=SEPIA_DARK)
+        d.text(
+            (mid - k_font.getlength(label) / 2, y),
+            label,
+            font=k_font,
+            fill=SEPIA_DARK,
+            stroke_width=1,
+            stroke_fill=SEPIA_DARK,
+        )
         half = k_font.getlength(label) / 2 + 26
         rule_y = y + k_size * 0.62
         if half + 40 < CONTENT_W / 2 - 70:
             for side in (-1, 1):
-                d.line([(mid + side * half, rule_y), (mid + side * (CONTENT_W / 2 - 70), rule_y)],
-                       fill=SEPIA_DARK, width=3)
+                d.line(
+                    [(mid + side * half, rule_y), (mid + side * (CONTENT_W / 2 - 70), rule_y)], fill=SEPIA_DARK, width=3
+                )
         y += _lead(k_size) + 6
         if cut_kicker:
             cut["kicker"] = cut_kicker
@@ -660,8 +761,9 @@ def _wanted(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
         if cut_reward:
             cut["caption"] = cut_reward
     d.line([(mid - 160, y + 14), (mid + 160, y + 14)], fill=SEPIA, width=2)
-    story_cut = _columns(d, story.story, (MARGIN + 100, y + 34, W - MARGIN - 100, BOTTOM - 104), 1, 0, 30, 16,
-                         SEPIA, centre=True)
+    story_cut = _columns(
+        d, story.story, (MARGIN + 100, y + 34, W - MARGIN - 100, BOTTOM - 104), 1, 0, 30, 16, SEPIA, centre=True
+    )
     if story_cut:
         cut["story"] = story_cut
     if story.byline:
@@ -671,8 +773,12 @@ def _wanted(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     return cut
 
 
-def _ring(page: Image.Image, photo: Image.Image, box: tuple[int, int, int, int],
-           rings: tuple[tuple[int, tuple[int, int, int]], ...]) -> None:
+def _ring(
+    page: Image.Image,
+    photo: Image.Image,
+    box: tuple[int, int, int, int],
+    rings: tuple[tuple[int, tuple[int, int, int]], ...],
+) -> None:
     """The photo in an oval window, inside rings drawn ``grow`` pixels out from it, from the outside in."""
     d = ImageDraw.Draw(page)
     for grow, colour in rings:
@@ -689,8 +795,16 @@ def _seal(d: ImageDraw.ImageDraw, cx: int, cy: int, r: int, fill, dark, ribbon) 
     for side in (-1, 1):
         x = cx + side * r * 0.45
         tail_y = cy + r * 1.55
-        d.polygon([(x - r * 0.28, cy), (x + r * 0.28, cy), (x + r * 0.28 + side * r * 0.2, tail_y),
-                   (x + side * r * 0.1, tail_y - r * 0.25), (x - r * 0.28 + side * r * 0.2, tail_y)], fill=ribbon)
+        d.polygon(
+            [
+                (x - r * 0.28, cy),
+                (x + r * 0.28, cy),
+                (x + r * 0.28 + side * r * 0.2, tail_y),
+                (x + side * r * 0.1, tail_y - r * 0.25),
+                (x - r * 0.28 + side * r * 0.2, tail_y),
+            ],
+            fill=ribbon,
+        )
     _star(d, cx, cy, r, fill, points=24, inner=0.88)
     d.ellipse([cx - r * 0.74, cy - r * 0.74, cx + r * 0.74, cy + r * 0.74], outline=dark, width=3)
     _star(d, cx, cy, r * 0.5, dark)
@@ -732,8 +846,12 @@ def _certificate(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     _ring(page, photo, box, ((16, GOLD), (10, IVORY), (5, GOLD_DARK)))
     y = box[3] + 16 + 30
 
-    y = _text_block(d, (W - text_w) // 2, y, ["This certificate is proudly presented to"], _font(26), 26, GREY,
-                    width=text_w) + 6
+    y = (
+        _text_block(
+            d, (W - text_w) // 2, y, ["This certificate is proudly presented to"], _font(26), 26, GREY, width=text_w
+        )
+        + 6
+    )
     name = _fit(story.headline, 80, 48, text_w, 1)
     if name[3]:  # too long for one line even at the smallest size: allow a second
         name = _fit(story.headline, 48, 48, text_w, 2)
@@ -767,8 +885,9 @@ def _certificate(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
         d.line([(x0, line_y), (x1, line_y)], fill=INK, width=2)
         d.text(((x0 + x1 - small.getlength(label)) / 2, line_y + 10), label, font=small, fill=GREY)
     date_font = _fit(_today(), 24, 16, 320, 1)
-    _text_block(d, left + 90, line_y - 8 - _lead(date_font[1]), date_font[2], date_font[0], date_font[1], INK,
-                width=320)
+    _text_block(
+        d, left + 90, line_y - 8 - _lead(date_font[1]), date_font[2], date_font[0], date_font[1], INK, width=320
+    )
     if story.byline.strip():
         font, size, lines, cut_byline = _fit(story.byline, 26, 18, 320, 2)
         _text_block(d, right - 410, line_y - 8 - len(lines) * _lead(size), lines, font, size, INK, width=320)
@@ -797,8 +916,11 @@ def _sports(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     d.rounded_rectangle([x0, y0, x1 - 1, y1 - 1], radius=30, fill=WHITE, outline=GUIDE, width=2)
     panel = (x0 + 28, y0 + 28, x1 - 28, y1 - 28)
     card_size = (panel[2] - panel[0], panel[3] - panel[1])
-    card = Image.composite(Image.new("RGB", card_size, ROYAL_DARK), Image.new("RGB", card_size, ROYAL),
-                           Image.linear_gradient("L").resize(card_size))
+    card = Image.composite(
+        Image.new("RGB", card_size, ROYAL_DARK),
+        Image.new("RGB", card_size, ROYAL),
+        Image.linear_gradient("L").resize(card_size),
+    )
     stripes = ImageDraw.Draw(card)
     for offset, colour, wide in ((0, SCARLET, 70), (96, YELLOW, 18), (130, WHITE, 8)):  # across the top corner
         a = card_size[0] - 380 + offset
@@ -837,10 +959,21 @@ def _sports(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     top = box[3] - 48
     bar = len(lines) * _lead(size) + 24
     slant = 40
-    d.polygon([(x0 + 40 + slant, top + 8), (x1 - 40 + 8, top + 8), (x1 - 40 - slant + 8, top + bar + 8),
-               (x0 + 40 + 8, top + bar + 8)], fill=ROYAL_DARK)  # shadow
-    d.polygon([(x0 + 40 + slant, top), (x1 - 40, top), (x1 - 40 - slant, top + bar), (x0 + 40, top + bar)],
-              fill=SCARLET, outline=WHITE, width=4)
+    d.polygon(
+        [
+            (x0 + 40 + slant, top + 8),
+            (x1 - 40 + 8, top + 8),
+            (x1 - 40 - slant + 8, top + bar + 8),
+            (x0 + 40 + 8, top + bar + 8),
+        ],
+        fill=ROYAL_DARK,
+    )  # shadow
+    d.polygon(
+        [(x0 + 40 + slant, top), (x1 - 40, top), (x1 - 40 - slant, top + bar), (x0 + 40, top + bar)],
+        fill=SCARLET,
+        outline=WHITE,
+        width=4,
+    )
     _text_block(d, mid - 380, top + 12, lines, font, size, WHITE, width=760, bold=2)
     y = top + bar + 22
 
@@ -850,8 +983,9 @@ def _sports(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
             cut["caption"] = cut_caption
     stats = (x0 + 70, y + 8, x1 - 70, y1 - 96)
     d.rounded_rectangle(stats, radius=12, fill=WHITE, outline=YELLOW, width=4)
-    story_cut = _columns(d, story.story, (stats[0] + 28, stats[1] + 18, stats[2] - 28, stats[3] - 12), 1, 0, 26, 14,
-                         ROYAL_DARK)
+    story_cut = _columns(
+        d, story.story, (stats[0] + 28, stats[1] + 18, stats[2] - 28, stats[3] - 12), 1, 0, 26, 14, ROYAL_DARK
+    )
     if story_cut:
         cut["story"] = story_cut
     if story.byline.strip():
@@ -878,8 +1012,14 @@ def _missing(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     size = next(s for s in range(240, 100, -4) if _font(s).getlength("MISSING") <= CONTENT_W - 120)
     font = _font(size)
     top, bottom = font.getbbox("MISSING")[1::2]
-    d.text((mid - font.getlength("MISSING") / 2, MARGIN + 48 - top), "MISSING", font=font, fill=MISSING_RED,
-           stroke_width=4, stroke_fill=MISSING_RED)
+    d.text(
+        (mid - font.getlength("MISSING") / 2, MARGIN + 48 - top),
+        "MISSING",
+        font=font,
+        fill=MISSING_RED,
+        stroke_width=4,
+        stroke_fill=MISSING_RED,
+    )
     y = MARGIN + 48 + bottom - top + 26
     if story.kicker.strip():
         y, cut_kicker = _centred(d, y, story.kicker.upper(), 56, INK, bold=2, min_size=24, width=text_w)
@@ -915,8 +1055,9 @@ def _missing(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
         y = _text_block(d, (W - text_w) // 2, y + 6, lines, font, size, MISSING_RED, width=text_w, bold=1)
         if cut_reward:
             cut["caption"] = cut_reward
-    if story_cut := _columns(d, story.story, (left + 60, y + 26, right - 60, tabs_top - 30), 1, 0, 30, 16, INK,
-                             centre=True):
+    if story_cut := _columns(
+        d, story.story, (left + 60, y + 26, right - 60, tabs_top - 30), 1, 0, 30, 16, INK, centre=True
+    ):
         cut["story"] = story_cut
 
     if story.byline.strip():
@@ -967,8 +1108,15 @@ def _movie(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
     title_h = len(title[2]) * _lead(title[1])
     foot = bottom - 30 - (len(rating[2]) * _lead(rating[1]) + 18 + 24 if rating else 0)
     # The photo grows into whatever short credits leave; the title sits across its faded foot.
-    below = title_h - title_h // 2 - 30 + 70 + (len(release[2]) * _lead(release[1]) if release else 0) + 24 + \
-        _columns_height(story.story, CONTENT_W - 160, 1, 0, 22)
+    below = (
+        title_h
+        - title_h // 2
+        - 30
+        + 70
+        + (len(release[2]) * _lead(release[1]) if release else 0)
+        + 24
+        + _columns_height(story.story, CONTENT_W - 160, 1, 0, 22)
+    )
     height = max(MOVIE_PHOTO, min(MOVIE_PHOTO_MAX, foot - below - (top + 96)))
     box = (left, top + 96, right, top + 96 + height)
     _photo(page, photo, box, mono=False)
@@ -982,8 +1130,7 @@ def _movie(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
             cut["kicker"] = cut_kicker
 
     font, size, lines, cut_title = title
-    y = _text_block(d, (W - text_w) // 2, box[3] - 30 - title_h // 2, lines, font, size, MARQUEE, width=text_w,
-                    bold=3)
+    y = _text_block(d, (W - text_w) // 2, box[3] - 30 - title_h // 2, lines, font, size, MARQUEE, width=text_w, bold=3)
     if cut_title:
         cut["headline"] = cut_title
     for i in range(5):  # the critics' stars
@@ -1013,8 +1160,15 @@ def _movie(page: Image.Image, photo: Image.Image, story: Story) -> Cuts:
 
 
 STYLES: dict[str, Callable[[Image.Image, Image.Image, Story], Cuts]] = {
-    "metro": _metro, "daily": _daily, "wizard": _wizard, "wanted": _wanted, "certificate": _certificate,
-    "sports": _sports, "missing": _missing, "movie": _movie}
+    "metro": _metro,
+    "daily": _daily,
+    "wizard": _wizard,
+    "wanted": _wanted,
+    "certificate": _certificate,
+    "sports": _sports,
+    "missing": _missing,
+    "movie": _movie,
+}
 
 
 def compose(photo: Image.Image, story: Story | None = None, style: str = "metro") -> tuple[Image.Image, Cuts]:
@@ -1043,8 +1197,9 @@ def format_for(path: Path) -> str:
     fmt = SAVE_FORMATS.get(path.suffix.lower())
     if fmt is None:
         reason = f"unknown file type {path.suffix}" if path.suffix else "no file extension"
-        raise PrinterError(f"cannot save {path}: {reason}",
-                           hint=f"end the file name in one of {', '.join(SAVE_FORMATS)}", exit_code=2)
+        raise PrinterError(
+            f"cannot save {path}: {reason}", hint=f"end the file name in one of {', '.join(SAVE_FORMATS)}", exit_code=2
+        )
     return fmt
 
 
@@ -1060,4 +1215,3 @@ def to_bytes(page: Image.Image, fmt: str) -> bytes:
     else:
         raise ValueError(f"unknown page format {fmt!r}")
     return buf.getvalue()
-

@@ -22,13 +22,19 @@ def render(title: str = "printer") -> Image.Image:
     img = Image.new("RGB", (W, H), "white")
     d = ImageDraw.Draw(img)
     d.text((MARGIN, MARGIN), "prt test page", fill="black", font=_font(56))
-    d.text((MARGIN, MARGIN + 74), f"{title} · {time.strftime('%Y-%m-%d %H:%M')}", fill=(90, 90, 90),
-           font=_font(26))
+    d.text((MARGIN, MARGIN + 74), f"{title} · {time.strftime('%Y-%m-%d %H:%M')}", fill=(90, 90, 90), font=_font(26))
     y = MARGIN + 150
 
     # Primary ink bars (C M Y K) and secondary mixes (R G B)
-    bars = [("C", (0, 255, 255)), ("M", (255, 0, 255)), ("Y", (255, 255, 0)), ("K", (0, 0, 0)),
-            ("R", (255, 0, 0)), ("G", (0, 160, 0)), ("B", (0, 0, 255))]
+    bars = [
+        ("C", (0, 255, 255)),
+        ("M", (255, 0, 255)),
+        ("Y", (255, 255, 0)),
+        ("K", (0, 0, 0)),
+        ("R", (255, 0, 0)),
+        ("G", (0, 160, 0)),
+        ("B", (0, 0, 255)),
+    ]
     bw = (W - 2 * MARGIN) // len(bars)
     for i, (label, rgb) in enumerate(bars):
         x = MARGIN + i * bw
@@ -50,8 +56,7 @@ def render(title: str = "printer") -> Image.Image:
     sw = (W - 2 * MARGIN) // steps
     for i in range(steps):
         g = round(255 * (1 - i / (steps - 1)))
-        d.rectangle([MARGIN + i * sw, y, MARGIN + (i + 1) * sw - 4, y + 110], fill=(g, g, g),
-                    outline=(180, 180, 180))
+        d.rectangle([MARGIN + i * sw, y, MARGIN + (i + 1) * sw - 4, y + 110], fill=(g, g, g), outline=(180, 180, 180))
         d.text((MARGIN + i * sw + 4, y + 118), f"{i * 10}%", fill="black", font=_font(20))
     y += 190
 
@@ -60,8 +65,12 @@ def render(title: str = "printer") -> Image.Image:
         for k in range(0, W - 2 * MARGIN, 12 * width):
             d.line([(MARGIN + k, y), (MARGIN + k, y + 90)], fill="black", width=width)
         y += 120
-    d.text((MARGIN, H - MARGIN - 30), "Check: solid bars, smooth gradients, crisp lines. "
-           "Streaks → run `prt maintain nozzle-check`.", fill=(90, 90, 90), font=_font(22))
+    d.text(
+        (MARGIN, H - MARGIN - 30),
+        "Check: solid bars, smooth gradients, crisp lines. Streaks → run `prt maintain nozzle-check`.",
+        fill=(90, 90, 90),
+        font=_font(22),
+    )
     return img
 
 

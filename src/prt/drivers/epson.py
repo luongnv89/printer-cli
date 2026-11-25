@@ -32,22 +32,35 @@ def head_clean_payload() -> bytes:
 
 
 def nozzle_check_payload() -> bytes:
-    return (EXIT_PACKET_MODE + REMOTE_START + remote_cmd(b"VI", 0, 0) + remote_cmd(b"NC", 0, 0x10)
-            + remote_cmd(b"NC", 0, 0) + REMOTE_END + JOB_END)
+    return (
+        EXIT_PACKET_MODE
+        + REMOTE_START
+        + remote_cmd(b"VI", 0, 0)
+        + remote_cmd(b"NC", 0, 0x10)
+        + remote_cmd(b"NC", 0, 0)
+        + REMOTE_END
+        + JOB_END
+    )
 
 
 class EpsonDriver(IPPDriver):
     name = "epson"
     vendor = "epson"
-    capabilities = IPPDriver.capabilities | frozenset({
-        Capability.NOZZLE_CHECK, Capability.HEAD_CLEAN, Capability.TEST_PAGE, Capability.COUNTERS,
-    })
+    capabilities = IPPDriver.capabilities | frozenset(
+        {
+            Capability.NOZZLE_CHECK,
+            Capability.HEAD_CLEAN,
+            Capability.TEST_PAGE,
+            Capability.COUNTERS,
+        }
+    )
 
     # --- side channels (overridden by the replay driver) ----------------------
     def snmp_page_count(self) -> int | None:
         try:
-            values = snmp.get(self.target.host, [snmp.PRT_LIFETIME_COUNT],
-                              self.target.snmp_community, timeout=min(self.timeout, 2.0))
+            values = snmp.get(
+                self.target.host, [snmp.PRT_LIFETIME_COUNT], self.target.snmp_community, timeout=min(self.timeout, 2.0)
+            )
         except (snmp.SNMPError, OSError):
             return None
         value = values.get(snmp.PRT_LIFETIME_COUNT)
@@ -55,10 +68,10 @@ class EpsonDriver(IPPDriver):
 
     def send_raw(self, payload: bytes) -> None:
         from prt.transport.ipp import trace
+
         trace(f"RAW → {self.target.host}:{self.target.raw_port} ({len(payload)} bytes ESC/P2 remote mode)")
         try:
-            with socket.create_connection((self.target.host, self.target.raw_port),
-                                          timeout=self.timeout) as sock:
+            with socket.create_connection((self.target.host, self.target.raw_port), timeout=self.timeout) as sock:
                 sock.sendall(payload)
         except OSError as exc:
             raise Unreachable(self.target, f"raw port {self.target.raw_port}: {exc}") from exc
@@ -81,6 +94,7 @@ class EpsonDriver(IPPDriver):
 
     def test_page(self) -> int:
         from prt.testpage import render_jpeg
+
         try:
             data = render_jpeg(self.display_name)
         except ImportError as exc:  # pragma: no cover - Pillow is a dependency

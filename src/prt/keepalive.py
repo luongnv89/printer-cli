@@ -19,10 +19,21 @@ KIND = "keep-alive patch"
 INKS = ("cyan", "magenta", "yellow", "black")  # the cartridges every printer fires for the solid patches
 # Name and colour of each square, row by row. The tints are about 30 % of a solid ink, the greys 25 % and 50 %.
 PATCHES = (
-    (("cyan", (0, 255, 255)), ("magenta", (255, 0, 255)), ("yellow", (255, 255, 0)), ("black", (0, 0, 0)),
-     ("red", (255, 0, 0)), ("green", (0, 160, 0)), ("blue", (0, 0, 255))),
-    (("light cyan", (178, 255, 255)), ("light magenta", (255, 178, 255)), ("light grey", (192, 192, 192)),
-     ("mid grey", (128, 128, 128))),
+    (
+        ("cyan", (0, 255, 255)),
+        ("magenta", (255, 0, 255)),
+        ("yellow", (255, 255, 0)),
+        ("black", (0, 0, 0)),
+        ("red", (255, 0, 0)),
+        ("green", (0, 160, 0)),
+        ("blue", (0, 0, 255)),
+    ),
+    (
+        ("light cyan", (178, 255, 255)),
+        ("light magenta", (255, 178, 255)),
+        ("light grey", (192, 192, 192)),
+        ("mid grey", (128, 128, 128)),
+    ),
 )
 MARGIN = A4.mm(15)
 SQUARE = A4.mm(18)

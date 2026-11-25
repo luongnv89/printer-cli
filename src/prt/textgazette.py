@@ -14,8 +14,7 @@ from PIL import Image, ImageDraw
 
 from prt import fonts, vintage
 from prt.booth import Story
-from prt.layout import (Cut, Cuts, ELLIPSIS, _col_width, _cut, _ellipsize, _in_source, _lead, _rows, _wrap,
-                        draw_columns)
+from prt.layout import Cut, Cuts, ELLIPSIS, _col_width, _cut, _ellipsize, _in_source, _lead, _rows, _wrap, draw_columns
 
 
 @dataclass(frozen=True)
@@ -25,6 +24,7 @@ class TextBlock:
     ``key`` is the input field the fit report names when the text is cut. ``label`` is generated metadata
     printed before it (a bullet, or a commit's time and hash) and is not counted in the field's characters.
     """
+
     text: str
     key: str
     label: str = ""
@@ -33,6 +33,7 @@ class TextBlock:
 @dataclass(frozen=True)
 class Section:
     """A titled section of text blocks; ``key`` names the section in the fit report."""
+
     title: str
     blocks: tuple[TextBlock, ...]
     key: str
@@ -41,6 +42,7 @@ class Section:
 @dataclass(frozen=True)
 class TextGazette:
     """Everything a one-page text gazette prints, already normalised by its producer."""
+
     masthead: str
     headline: str
     sections: tuple[Section, ...]
@@ -76,7 +78,9 @@ def _wrapped_entries(blocks: tuple[TextBlock, ...], font, col_w: int) -> tuple[l
     return entries, wrapped
 
 
-def _arrange(entries: list[Entry], rows: int, columns: int, font, col_w: int) -> tuple[list[list[Entry]], list[Entry], bool]:
+def _arrange(
+    entries: list[Entry], rows: int, columns: int, font, col_w: int
+) -> tuple[list[list[Entry]], list[Entry], bool]:
     """Balance wrapped lines over columns of ``rows`` lines; ellipsize the last visible line on overflow."""
     rows = max(1, rows)
     capacity = rows * columns
@@ -130,7 +134,7 @@ def _cuts(blocks: tuple[TextBlock, ...], wrapped: list[Wrapped], printed: list[E
             last = got[-1]
             # At a block boundary the continuation ellipsis may only have been appended; no character of
             # this block was cut then. When there was no room for it whole words were dropped, which is a cut.
-            modified = not (last.endswith(ELLIPSIS) and last[:-len(ELLIPSIS)].rstrip() == original)
+            modified = not (last.endswith(ELLIPSIS) and last[: -len(ELLIPSIS)].rstrip() == original)
         else:
             modified = False
         if complete and not modified:
@@ -143,8 +147,9 @@ def _cuts(blocks: tuple[TextBlock, ...], wrapped: list[Wrapped], printed: list[E
     return cuts
 
 
-def _draw_blocks(d: ImageDraw.ImageDraw, blocks: tuple[TextBlock, ...], box: tuple[int, int, int, int],
-                 columns: int = 2) -> Cuts:
+def _draw_blocks(
+    d: ImageDraw.ImageDraw, blocks: tuple[TextBlock, ...], box: tuple[int, int, int, int], columns: int = 2
+) -> Cuts:
     """Draw blocks in ruled columns, shrinking Old Standard until they fit; cut and report what remains."""
     if not blocks:
         return {}
@@ -159,8 +164,18 @@ def _draw_blocks(d: ImageDraw.ImageDraw, blocks: tuple[TextBlock, ...], box: tup
         if not overflow or size == vintage.BODY_MIN:
             break
     cuts = _cuts(blocks, wrapped, printed, font) if overflow else {}
-    draw_columns(d, [[line for _, line in col] for col in cols], x0, y0, col_w, vintage.GUTTER, font, size,
-                 vintage.INK, rule=vintage.INK)
+    draw_columns(
+        d,
+        [[line for _, line in col] for col in cols],
+        x0,
+        y0,
+        col_w,
+        vintage.GUTTER,
+        font,
+        size,
+        vintage.INK,
+        rule=vintage.INK,
+    )
     return cuts
 
 
@@ -202,8 +217,9 @@ def _draw_section(d: ImageDraw.ImageDraw, section: Section, box: tuple[int, int,
 def blank_page(sheet=vintage.PORTRAIT) -> Image.Image:
     """A white A4 sheet with the cream printable area the gazette uses."""
     page = Image.new("RGB", (sheet.width, sheet.height), "white")
-    ImageDraw.Draw(page).rectangle([sheet.inset, sheet.inset, sheet.width - sheet.inset - 1,
-                                    sheet.height - sheet.inset - 1], fill=vintage.PAPER)
+    ImageDraw.Draw(page).rectangle(
+        [sheet.inset, sheet.inset, sheet.width - sheet.inset - 1, sheet.height - sheet.inset - 1], fill=vintage.PAPER
+    )
     return page
 
 
@@ -221,10 +237,16 @@ def compose_page(document: TextGazette) -> tuple[Image.Image, Cuts]:
     page = blank_page(sheet)
     d = ImageDraw.Draw(page)
     head_story = Story(headline=document.headline, story="", kicker=document.kicker, byline=document.byline)
-    y, cuts = vintage.draw_head(d, head_story, sheet, masthead=document.masthead,
-                                tagline=document.tagline or vintage.TAGLINE,
-                                dateline=document.dateline or None,
-                                edition=document.edition or vintage.EDITION, price=document.price)
+    y, cuts = vintage.draw_head(
+        d,
+        head_story,
+        sheet,
+        masthead=document.masthead,
+        tagline=document.tagline or vintage.TAGLINE,
+        dateline=document.dateline or None,
+        edition=document.edition or vintage.EDITION,
+        price=document.price,
+    )
     left, right = sheet.margin, sheet.width - sheet.margin
     bottom = sheet.bottom - 52
     heights = _content_heights(document.sections, sheet.content_w, bottom - y)

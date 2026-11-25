@@ -11,7 +11,7 @@ from prt.config import Config, config_path
 from prt.discovery import Discovered
 from prt.drivers.base import Unreachable
 from prt.drivers.fake import FakeDriver
-from prt.models import Status, Target
+from prt.models import Target
 from prt.transport import ipp
 
 from conftest import PRT, clean_env, without_estimate
@@ -27,11 +27,27 @@ def run(capsys, *args):
 
 # --- help / version / usage -------------------------------------------------------
 
-@pytest.mark.parametrize("argv", [[], ["--help"], ["printers", "--help"], ["maintain", "--help"],
-                                  ["jobs", "--help"], ["status", "--help"], ["scan", "--help"],
-                                  ["print", "--help"], ["maintain", "clean", "--help"], ["tui", "--help"],
-                                  ["booth", "--help"], ["article", "--help"], ["list", "--help"],
-                                  ["jobs", "wait", "--help"], ["keepalive", "--help"]])
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        [],
+        ["--help"],
+        ["printers", "--help"],
+        ["maintain", "--help"],
+        ["jobs", "--help"],
+        ["status", "--help"],
+        ["scan", "--help"],
+        ["print", "--help"],
+        ["maintain", "clean", "--help"],
+        ["tui", "--help"],
+        ["booth", "--help"],
+        ["article", "--help"],
+        ["list", "--help"],
+        ["jobs", "wait", "--help"],
+        ["keepalive", "--help"],
+    ],
+)
 def test_help_everywhere(capsys, argv):
     code, out, err = run(capsys, *argv)
     assert code in (0, 2) if not argv else code == 0
@@ -54,6 +70,7 @@ def test_hoist_globals():
 
 
 # --- read commands ------------------------------------------------------------------------
+
 
 def test_status_plain_records(capsys):
     code, out, err = run(capsys, "-p", "demo", "status")
@@ -105,14 +122,17 @@ def test_unknown_driver_is_usage_error(capsys):
 
 # --- printers list: connection status ------------------------------------------------------
 
+
 @pytest.fixture
 def checked(monkeypatch):
     """make_driver for the list check: online.local answers, asleep.local and broken.local fail.
 
     Returns the (host, timeout) of every driver asked for."""
     calls = []
-    failures = {"asleep.local": lambda target: Unreachable(target, "timed out"),
-                "broken.local": lambda target: RuntimeError("garbled IPP reply")}
+    failures = {
+        "asleep.local": lambda target: Unreachable(target, "timed out"),
+        "broken.local": lambda target: RuntimeError("garbled IPP reply"),
+    }
 
     def make_driver(target, timeout=5.0):
         calls.append((target.host, timeout))
@@ -132,21 +152,23 @@ def _save(capsys, *hosts):
 def test_printers_list_shows_connection_status_by_default(capsys, checked):
     _save(capsys, "online.local", "asleep.local", "broken.local")
     code, out, _ = run(capsys, "printers", "list")
-    assert code == 0 and out.splitlines() == ["online\tonline.local\tauto\tdefault\tonline",
-                                              "asleep\tasleep.local\tauto\t\toffline",
-                                              "broken\tbroken.local\tauto\t\toffline"]
+    assert code == 0 and out.splitlines() == [
+        "online\tonline.local\tauto\tdefault\tonline",
+        "asleep\tasleep.local\tauto\t\toffline",
+        "broken\tbroken.local\tauto\t\toffline",
+    ]
     code, out, _ = run(capsys, "-f", "json", "printers", "list")
     assert code == 0 and json.loads(out) == [
         {"name": "online", "host": "online.local", "driver": "auto", "default": True, "reachable": "online"},
         {"name": "asleep", "host": "asleep.local", "driver": "auto", "default": False, "reachable": "offline"},
-        {"name": "broken", "host": "broken.local", "driver": "auto", "default": False, "reachable": "offline"}]
+        {"name": "broken", "host": "broken.local", "driver": "auto", "default": False, "reachable": "offline"},
+    ]
 
 
 def test_printers_list_no_check_contacts_no_printer(capsys, checked):
     _save(capsys, "online.local", "asleep.local")
     code, out, _ = run(capsys, "printers", "list", "--no-check")
-    assert code == 0 and out.splitlines() == ["online\tonline.local\tauto\tdefault\t",
-                                              "asleep\tasleep.local\tauto\t\t"]
+    assert code == 0 and out.splitlines() == ["online\tonline.local\tauto\tdefault\t", "asleep\tasleep.local\tauto\t\t"]
     code, out, _ = run(capsys, "-f", "json", "printers", "list", "--no-check")
     assert [r["reachable"] for r in json.loads(out)] == [None, None]
     assert checked == []
@@ -183,8 +205,10 @@ def test_printers_list_checks_in_parallel_and_keeps_the_order(capsys, monkeypatc
     monkeypatch.setattr("prt.cli.make_driver", make_driver)
     _save(capsys, "first.local", "second.local")
     code, out, _ = run(capsys, "printers", "list")
-    assert code == 0 and out.splitlines() == ["first\tfirst.local\tauto\tdefault\tonline",
-                                              "second\tsecond.local\tauto\t\toffline"]
+    assert code == 0 and out.splitlines() == [
+        "first\tfirst.local\tauto\tdefault\tonline",
+        "second\tsecond.local\tauto\t\toffline",
+    ]
 
 
 def test_list_is_printers_list(capsys, checked):
@@ -196,6 +220,7 @@ def test_list_is_printers_list(capsys, checked):
 
 
 # --- discover (auto-save) ------------------------------------------------------------------
+
 
 def _dev(host, addresses=(), model="EPSON XP-6000 Series", ipp=True, **kw):
     return Discovered(name=model, host=host, addresses=list(addresses), make_model=model, ipp=ipp, **kw)
@@ -213,8 +238,10 @@ def test_discover_saves_new_printers(capsys, monkeypatch):
     _discovers(monkeypatch, XP, CANON)
     code, out, err = run(capsys, "discover")
     assert code == 0
-    assert out.splitlines() == ["EPSON XP-6000 Series\tEPSON721655.local\t192.168.1.70\tipp\txp-6000\tadded",
-                                "Canon TS8300 series\tCanon-TS8300.local\t192.168.1.81\tipp\tts8300\tadded"]
+    assert out.splitlines() == [
+        "EPSON XP-6000 Series\tEPSON721655.local\t192.168.1.70\tipp\txp-6000\tadded",
+        "Canon TS8300 series\tCanon-TS8300.local\t192.168.1.81\tipp\tts8300\tadded",
+    ]
     cfg = Config.load()
     assert cfg.printers["xp-6000"] == Target(name="xp-6000", host="EPSON721655.local")
     assert cfg.printers["ts8300"].host == "Canon-TS8300.local" and cfg.default is None
@@ -227,7 +254,9 @@ def test_discover_json_names_added_printers(capsys, monkeypatch):
     code, out, _ = run(capsys, "-f", "json", "discover")
     data = json.loads(out)
     assert [(d["host"], d["saved_as"], d["added"]) for d in data] == [
-        ("EPSON721655.local", "xp-6000", True), ("Canon-TS8300.local", "office", False)]
+        ("EPSON721655.local", "xp-6000", True),
+        ("Canon-TS8300.local", "office", False),
+    ]
     assert data[0]["services"] == ["ipp"] and data[0]["addresses"] == ["192.168.1.70"]
 
 
@@ -245,9 +274,11 @@ def test_discover_leaves_config_alone_when_printers_are_already_saved(capsys, mo
     """Matched by host (any case) and by one of the advertised addresses: nothing to add, no rewrite."""
     path = config_path()
     path.parent.mkdir(parents=True)
-    path.write_text('# my printers\ndefault = "office"\ncolour = "blue"\n\n'
-                    '[printers.office]\nhost = "192.168.1.70"\ndriver = "epson"\n\n'
-                    '[printers.study]\nhost = "canon-ts8300.local"\n')
+    path.write_text(
+        '# my printers\ndefault = "office"\ncolour = "blue"\n\n'
+        '[printers.office]\nhost = "192.168.1.70"\ndriver = "epson"\n\n'
+        '[printers.study]\nhost = "canon-ts8300.local"\n'
+    )
     before = path.read_bytes()
     _discovers(monkeypatch, XP, CANON)
     code, out, err = run(capsys, "discover")
@@ -272,17 +303,24 @@ def test_discover_suffixes_a_taken_name(capsys, monkeypatch):
     again = _dev("epson721655-2.local", ["192.168.1.70"])  # same device answering under a second name
     _discovers(monkeypatch, XP, twin, again)
     code, out, _ = run(capsys, "discover")
-    assert [ln.split("\t")[4:] for ln in out.splitlines()] == [["xp-6000-2", "added"], ["xp-6000-3", "added"],
-                                                              ["xp-6000-2", ""]]
+    assert [ln.split("\t")[4:] for ln in out.splitlines()] == [
+        ["xp-6000-2", "added"],
+        ["xp-6000-3", "added"],
+        ["xp-6000-2", ""],
+    ]
     cfg = Config.load()
     assert cfg.printers["xp-6000"].host == "other.local"
     assert {n: p.host for n, p in cfg.printers.items() if n != "xp-6000"} == {
-        "xp-6000-2": "EPSON721655.local", "xp-6000-3": "EPSON999999.local"}
+        "xp-6000-2": "EPSON721655.local",
+        "xp-6000-3": "EPSON999999.local",
+    }
 
 
 def test_discover_does_not_save_scanner_only_devices(capsys, monkeypatch):
-    _discovers(monkeypatch, _dev("scanner.local", ["192.168.1.90"], model="ScanSnap iX1600", ipp=False,
-                                 scanner=True, scan_port=80))
+    _discovers(
+        monkeypatch,
+        _dev("scanner.local", ["192.168.1.90"], model="ScanSnap iX1600", ipp=False, scanner=True, scan_port=80),
+    )
     code, out, err = run(capsys, "discover")
     assert code == 0 and out == "ScanSnap iX1600\tscanner.local\t192.168.1.90\tescl\t\t\n"
     assert not config_path().exists()
@@ -296,11 +334,20 @@ def test_discover_with_nothing_found_writes_no_config(capsys, monkeypatch):
 
 
 def test_discover_names_from_untrusted_text_keep_the_config_loadable(capsys, monkeypatch):
-    _discovers(monkeypatch, _dev("a.local", model='Café "Imprimante" <b>'), _dev("b.local", model="日本"),
-               _dev("c.local", model="Demo"), _dev("d.local", model="Bad", ipp_path="/ipp\nprint"))
+    _discovers(
+        monkeypatch,
+        _dev("a.local", model='Café "Imprimante" <b>'),
+        _dev("b.local", model="日本"),
+        _dev("c.local", model="Demo"),
+        _dev("d.local", model="Bad", ipp_path="/ipp\nprint"),
+    )
     code, out, _ = run(capsys, "discover")
     assert [ln.split("\t")[4:] for ln in out.splitlines()] == [
-        ["caf-imprimante-b", "added"], ["printer", "added"], ["demo-2", "added"], ["", ""]]
+        ["caf-imprimante-b", "added"],
+        ["printer", "added"],
+        ["demo-2", "added"],
+        ["", ""],
+    ]
     code, out, _ = run(capsys, "printers", "list", "--no-check")
     assert code == 0 and [ln.split("\t")[0] for ln in out.splitlines()] == ["caf-imprimante-b", "printer", "demo-2"]
 
@@ -316,6 +363,7 @@ def test_discover_styled_box_names_added_printers(capsys, monkeypatch):
 
 
 # --- offline / cache -----------------------------------------------------------------------
+
 
 def test_offline_with_cache_shows_stale_and_exits_1(capsys):
     """Default config (driver = auto): the detection probe fails, the cache must still be used."""
@@ -336,6 +384,7 @@ def test_offline_without_cache_errors(capsys):
 
 
 # --- maintenance ---------------------------------------------------------------------------
+
 
 def test_clean_refused_on_low_ink(capsys):
     code, out, err = run(capsys, "-p", "demo", "maintain", "clean", "--yes")
@@ -362,10 +411,12 @@ def test_identify_and_test_page(capsys):
 
 def test_unsupported_capability(capsys, monkeypatch):
     from prt.drivers.ipp import IPPDriver
+
     monkeypatch.setattr(IPPDriver, "attributes", lambda self, refresh=True: FakeDriver().fixture["printer"])
     code, _, err = run(capsys, "-p", "pantum.local", "printers", "--help")
     from prt.config import Config
     from prt.models import Target
+
     cfg = Config.load()
     cfg.printers["pantum"] = Target("pantum", "pantum.local", driver="ipp")
     cfg.save()
@@ -375,8 +426,10 @@ def test_unsupported_capability(capsys, monkeypatch):
 
 # --- print / scan --------------------------------------------------------------------------
 
+
 def test_print_jpeg_png_and_missing(capsys, tmp_path):
     from PIL import Image
+
     jpg, png = tmp_path / "a.jpg", tmp_path / "b.png"
     Image.new("RGB", (10, 10), "red").save(jpg)
     Image.new("RGB", (10, 10), "blue").save(png)
@@ -403,6 +456,7 @@ def test_demo_jpeg_scan_is_a_readable_letter(capsys, tmp_path):
     from PIL import Image
 
     from prt.drivers.fake import DEMO_LETTER
+
     colour, gray = tmp_path / "c.jpg", tmp_path / "g.jpg"
     code, out, _ = run(capsys, "-p", "demo", "-f", "json", "scan", "--format", "jpeg", "-o", str(colour))
     assert code == 0 and json.loads(out) == {"file": str(colour), "bytes": colour.stat().st_size}
@@ -424,6 +478,7 @@ def booth_printer(monkeypatch):
     """One FakeDriver handed to the CLI; `made` counts how often a driver was created at all."""
     from types import SimpleNamespace
     from prt import booth
+
     fake = FakeDriver()
     made = []
     monkeypatch.setattr("prt.cli.make_driver", lambda target, timeout=5.0: made.append(target) or fake)
@@ -434,6 +489,7 @@ def booth_printer(monkeypatch):
 
 def _booth_photo(tmp_path, name="photo.jpg"):
     from PIL import Image
+
     path = tmp_path / name
     Image.new("RGB", (300, 400), (0, 0, 255)).save(path)
     return path
@@ -441,11 +497,13 @@ def _booth_photo(tmp_path, name="photo.jpg"):
 
 def _expected_page(photo, story=None, style="metro"):
     from prt import booth
+
     return booth.to_jpeg(booth.compose(booth.load_photo(photo), story or booth.default_story(style), style)[0])
 
 
 def test_booth_bare_invocation_prints_default_story(capsys, tmp_path, monkeypatch, booth_printer):
     from PIL import Image
+
     photo = _booth_photo(tmp_path)
     monkeypatch.setattr("sys.stdin.isatty", lambda: True, raising=False)
     asked = []
@@ -469,10 +527,15 @@ BOOTH_STYLES = ("metro", "daily", "wizard", "wanted", "certificate", "sports", "
 
 def test_booth_styles(capsys, tmp_path, booth_printer):
     photo = _booth_photo(tmp_path)
-    for job_id, style in enumerate(BOOTH_STYLES, start=101):
-        code, out, _ = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--style", style, "--yes")
-        assert code == 0 and without_estimate(out) == {"action": "booth", "style": style, "job_id": job_id,
-                                                 "fits": True, "cut": {}}
+    for job_id, booth_style in enumerate(BOOTH_STYLES, start=101):
+        code, out, _ = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--style", booth_style, "--yes")
+        assert code == 0 and without_estimate(out) == {
+            "action": "booth",
+            "style": booth_style,
+            "job_id": job_id,
+            "fits": True,
+            "cut": {},
+        }
     pages = booth_printer.jobs()
     assert pages == [_expected_page(photo, style=style) for style in BOOTH_STYLES]
     assert len(set(pages)) == len(BOOTH_STYLES)  # every style prints a different page
@@ -483,14 +546,24 @@ def test_booth_styles(capsys, tmp_path, booth_printer):
 def test_booth_style_choices_match_renderer():
     from prt import booth
     from prt.cli import BoothStyle
+
     assert {s.value for s in BoothStyle} == set(booth.STYLES) == set(BOOTH_STYLES)
 
 
-@pytest.mark.parametrize("style, kind", [("wizard", "wizard card"), ("wanted", "wanted poster"),
-                                         ("certificate", "certificate"), ("sports", "sports card"),
-                                         ("missing", "missing-pet poster"), ("movie", "movie poster")])
+@pytest.mark.parametrize(
+    "style, kind",
+    [
+        ("wizard", "wizard card"),
+        ("wanted", "wanted poster"),
+        ("certificate", "certificate"),
+        ("sports", "sports card"),
+        ("missing", "missing-pet poster"),
+        ("movie", "movie poster"),
+    ],
+)
 def test_booth_themed_style_prints_its_own_default(capsys, tmp_path, monkeypatch, booth_printer, style, kind):
     from prt import booth
+
     photo = _booth_photo(tmp_path)
     monkeypatch.setattr("sys.stdin.isatty", lambda: True, raising=False)
     asked = []
@@ -505,9 +578,22 @@ def test_booth_themed_style_prints_its_own_default(capsys, tmp_path, monkeypatch
 def test_booth_themed_style_flags_override_its_default(capsys, tmp_path, booth_printer):
     from dataclasses import replace
     from prt import booth
+
     photo = _booth_photo(tmp_path)
-    code, _, _ = run(capsys, "-p", "demo", "booth", str(photo), "-s", "wanted", "--headline", "Captain Jo",
-                     "--caption", "Reward 5 gold", "--yes")
+    code, _, _ = run(
+        capsys,
+        "-p",
+        "demo",
+        "booth",
+        str(photo),
+        "-s",
+        "wanted",
+        "--headline",
+        "Captain Jo",
+        "--caption",
+        "Reward 5 gold",
+        "--yes",
+    )
     assert code == 0
     expected = replace(booth.default_story("wanted"), headline="Captain Jo", caption="Reward 5 gold")
     assert booth_printer.jobs() == [_expected_page(photo, expected, "wanted")]
@@ -515,10 +601,23 @@ def test_booth_themed_style_flags_override_its_default(capsys, tmp_path, booth_p
 
 def test_booth_themed_style_story_file_replaces_the_default(capsys, tmp_path, booth_printer):
     from prt.booth import Story
+
     photo, story = _booth_photo(tmp_path), tmp_path / "card.json"
     story.write_text(json.dumps({"headline": "Mira the Bright", "story": "Reads by candlelight.", "kicker": "Rare"}))
-    code, _, err = run(capsys, "-p", "demo", "booth", str(photo), "-s", "wizard", "--story-file", str(story),
-                       "--byline", "Card 7", "--yes")
+    code, _, err = run(
+        capsys,
+        "-p",
+        "demo",
+        "booth",
+        str(photo),
+        "-s",
+        "wizard",
+        "--story-file",
+        str(story),
+        "--byline",
+        "Card 7",
+        "--yes",
+    )
     assert code == 0 and "cut to fit" not in err
     expected = Story(headline="Mira the Bright", story="Reads by candlelight.", kicker="Rare", byline="Card 7")
     assert booth_printer.jobs() == [_expected_page(photo, expected, "wizard")]
@@ -527,11 +626,18 @@ def test_booth_themed_style_story_file_replaces_the_default(capsys, tmp_path, bo
 @pytest.mark.parametrize("style", ["wizard", "wanted", "certificate", "sports", "missing", "movie"])
 def test_booth_themed_style_preview_never_creates_a_driver(capsys, tmp_path, booth_printer, style):
     from PIL import Image
+
     photo, out_file = _booth_photo(tmp_path), tmp_path / f"{style}.jpg"
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "-s", style, "-o", str(out_file))
     assert code == 0 and "not printed" in err and booth_printer.made == []
-    assert without_estimate(out) == {"action": "booth", "style": style, "file": str(out_file),
-                               "bytes": out_file.stat().st_size, "fits": True, "cut": {}}
+    assert without_estimate(out) == {
+        "action": "booth",
+        "style": style,
+        "file": str(out_file),
+        "bytes": out_file.stat().st_size,
+        "fits": True,
+        "cut": {},
+    }
     assert out_file.read_bytes() == _expected_page(photo, style=style)
     assert Image.open(out_file).size == (1240, 1754)
 
@@ -542,25 +648,49 @@ def test_booth_themed_style_bad_input_sends_nothing(capsys, tmp_path, booth_prin
     bad.write_bytes(b"not a picture")
     code, _, err = run(capsys, "-p", "demo", "booth", str(bad), "-s", style, "--yes")
     assert code == 3 and "cannot read photo" in err
-    code, _, err = run(capsys, "-p", "demo", "booth", str(_booth_photo(tmp_path, "ok.jpg")), "-s", style,
-                       "--headline", "日本", "--yes")
+    code, _, err = run(
+        capsys, "-p", "demo", "booth", str(_booth_photo(tmp_path, "ok.jpg")), "-s", style, "--headline", "日本", "--yes"
+    )
     assert code == 2 and "cannot print" in err
     assert booth_printer.made == [] and booth_printer.jobs() == []
 
 
 def test_booth_themed_style_warns_when_text_is_cut(capsys, tmp_path, booth_printer):
-    code, _, err = run(capsys, "--no-color", "booth", str(_booth_photo(tmp_path)), "-s", "wanted",
-                       "-o", str(tmp_path / "page.jpg"), "--headline", "Wide headline words " * 6)
+    code, _, err = run(
+        capsys,
+        "--no-color",
+        "booth",
+        str(_booth_photo(tmp_path)),
+        "-s",
+        "wanted",
+        "-o",
+        str(tmp_path / "page.jpg"),
+        "--headline",
+        "Wide headline words " * 6,
+    )
     assert code == 0 and "headline cut to fit the wanted page" in err
 
 
 def test_booth_story_file_with_flag_override(capsys, tmp_path, booth_printer):
     from prt.booth import Story
+
     photo = _booth_photo(tmp_path)
     story = tmp_path / "story.json"
     story.write_text(json.dumps({"headline": "From the file", "story": "File body.\nSecond.", "kicker": "Sport"}))
-    code, _, _ = run(capsys, "-p", "demo", "booth", str(photo), "--story-file", str(story),
-                     "--headline", "Flag wins", "--byline", "By Zoë", "--yes")
+    code, _, _ = run(
+        capsys,
+        "-p",
+        "demo",
+        "booth",
+        str(photo),
+        "--story-file",
+        str(story),
+        "--headline",
+        "Flag wins",
+        "--byline",
+        "By Zoë",
+        "--yes",
+    )
     assert code == 0
     expected = Story(headline="Flag wins", story="File body.\nSecond.", kicker="Sport", byline="By Zoë")
     assert booth_printer.jobs() == [_expected_page(photo, expected)]
@@ -569,9 +699,20 @@ def test_booth_story_file_with_flag_override(capsys, tmp_path, booth_printer):
 def test_booth_multiline_flags_keep_words_apart(capsys, tmp_path, booth_printer):
     from dataclasses import replace
     from prt import booth
+
     photo = _booth_photo(tmp_path)
-    code, _, _ = run(capsys, "-p", "demo", "booth", str(photo), "--headline", "Hello\nWorld",
-                     "--caption", "Seen at\r\nthe booth", "--yes")
+    code, _, _ = run(
+        capsys,
+        "-p",
+        "demo",
+        "booth",
+        str(photo),
+        "--headline",
+        "Hello\nWorld",
+        "--caption",
+        "Seen at\r\nthe booth",
+        "--yes",
+    )
     assert code == 0
     expected = replace(booth.DEFAULT_STORY, headline="Hello World", caption="Seen at the booth")
     assert booth_printer.jobs() == [_expected_page(photo, expected)]
@@ -579,13 +720,21 @@ def test_booth_multiline_flags_keep_words_apart(capsys, tmp_path, booth_printer)
 
 def test_booth_preview_writes_jpeg_and_never_creates_a_driver(capsys, tmp_path, booth_printer):
     from PIL import Image
+
     photo, out_file = _booth_photo(tmp_path), tmp_path / "page.jpg"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "-s", "daily",
-                         "--preview", str(out_file))
+    code, out, err = run(
+        capsys, "-p", "demo", "-f", "json", "booth", str(photo), "-s", "daily", "--preview", str(out_file)
+    )
     assert booth_printer.made == []
     assert code == 0 and "not printed" in err
-    assert without_estimate(out) == {"action": "booth", "style": "daily", "file": str(out_file),
-                               "bytes": out_file.stat().st_size, "fits": True, "cut": {}}
+    assert without_estimate(out) == {
+        "action": "booth",
+        "style": "daily",
+        "file": str(out_file),
+        "bytes": out_file.stat().st_size,
+        "fits": True,
+        "cut": {},
+    }
     assert out_file.read_bytes() == _expected_page(photo, style="daily")
     assert Image.open(out_file).size == (1240, 1754)
 
@@ -597,41 +746,61 @@ def test_booth_preview_to_missing_folder(capsys, tmp_path, booth_printer):
 
 def _page_of(path):
     from prt import booth
+
     return booth.compose(booth.load_photo(path), None, "metro")[0]
 
 
 def _assert_same_page(file, page):
     from PIL import Image, ImageChops
+
     with Image.open(file) as image:
         assert image.size == (1240, 1754) and ImageChops.difference(image.convert("RGB"), page).getbbox() is None
 
 
 def _print_jobs(fake):
     """(document-format, data) of every Print-Job the CLI sent."""
-    return [(next(a.value for a in attrs if a.name == "document-format"), data)
-            for op, attrs, _, data in fake.client.requests if op == ipp.OP_PRINT_JOB]
+    return [
+        (next(a.value for a in attrs if a.name == "document-format"), data)
+        for op, attrs, _, data in fake.client.requests
+        if op == ipp.OP_PRINT_JOB
+    ]
 
 
-@pytest.mark.parametrize("name, magic", [("page.pdf", b"%PDF-"), ("PAGE.PNG", b"\x89PNG\r\n\x1a\n"),
-                                         ("page.Jpeg", b"\xff\xd8\xff")])
+@pytest.mark.parametrize(
+    "name, magic", [("page.pdf", b"%PDF-"), ("PAGE.PNG", b"\x89PNG\r\n\x1a\n"), ("page.Jpeg", b"\xff\xd8\xff")]
+)
 def test_booth_preview_picks_the_file_type_from_the_extension(capsys, tmp_path, booth_printer, name, magic):
     photo, out_file = _booth_photo(tmp_path), tmp_path / name
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--preview", str(out_file))
     assert code == 0 and "not printed" in err and booth_printer.made == []
-    assert without_estimate(out) == {"action": "booth", "style": "metro", "file": str(out_file),
-                               "bytes": out_file.stat().st_size, "fits": True, "cut": {}}
+    assert without_estimate(out) == {
+        "action": "booth",
+        "style": "metro",
+        "file": str(out_file),
+        "bytes": out_file.stat().st_size,
+        "fits": True,
+        "cut": {},
+    }
     assert out_file.read_bytes().startswith(magic)
 
 
 def test_booth_save_prints_and_keeps_digital_copies(capsys, tmp_path, booth_printer):
     photo, pdf, png = _booth_photo(tmp_path), tmp_path / "page.pdf", tmp_path / "page.png"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--save", str(pdf),
-                         "--save", str(png), "--yes")
+    code, out, err = run(
+        capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--save", str(pdf), "--save", str(png), "--yes"
+    )
     assert code == 0 and "queued as job 101" in err and f"saved {pdf}" in err and f"saved {png}" in err
-    assert without_estimate(out) == {"action": "booth", "style": "metro", "job_id": 101, "fits": True, "cut": {},
-                                      "saved": [
-        {"file": str(pdf), "format": "pdf", "bytes": pdf.stat().st_size},
-        {"file": str(png), "format": "png", "bytes": png.stat().st_size}]}
+    assert without_estimate(out) == {
+        "action": "booth",
+        "style": "metro",
+        "job_id": 101,
+        "fits": True,
+        "cut": {},
+        "saved": [
+            {"file": str(pdf), "format": "pdf", "bytes": pdf.stat().st_size},
+            {"file": str(png), "format": "png", "bytes": png.stat().st_size},
+        ],
+    }
     assert _print_jobs(booth_printer.driver) == [("image/jpeg", _expected_page(photo))]
     assert pdf.read_bytes().startswith(b"%PDF-")
     _assert_same_page(png, _page_of(photo))
@@ -639,13 +808,18 @@ def test_booth_save_prints_and_keeps_digital_copies(capsys, tmp_path, booth_prin
 
 def test_booth_preview_with_save_writes_every_file_and_prints_nothing(capsys, tmp_path, booth_printer):
     photo, jpg, pdf = _booth_photo(tmp_path), tmp_path / "page.jpg", tmp_path / "copy.PDF"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "-o", str(jpg),
-                         "--save", str(pdf))
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "-o", str(jpg), "--save", str(pdf))
     assert code == 0 and "not printed" in err
     assert booth_printer.made == [] and booth_printer.jobs() == []
-    assert without_estimate(out) == {"action": "booth", "style": "metro", "file": str(jpg),
-                               "bytes": jpg.stat().st_size, "fits": True, "cut": {},
-                               "saved": [{"file": str(pdf), "format": "pdf", "bytes": pdf.stat().st_size}]}
+    assert without_estimate(out) == {
+        "action": "booth",
+        "style": "metro",
+        "file": str(jpg),
+        "bytes": jpg.stat().st_size,
+        "fits": True,
+        "cut": {},
+        "saved": [{"file": str(pdf), "format": "pdf", "bytes": pdf.stat().st_size}],
+    }
     assert jpg.read_bytes() == _expected_page(photo) and pdf.read_bytes().startswith(b"%PDF-")
 
 
@@ -671,14 +845,16 @@ def test_booth_save_works_without_a_reachable_printer(capsys, tmp_path, monkeypa
     _assert_same_page(png, _page_of(photo))
 
 
-@pytest.mark.parametrize("args, bad", [
-    (["-o", "page.gif"], "page.gif"),
-    (["--preview", "page"], "page"),
-    (["--save", "page.pdf", "--save", "page.txt", "--yes"], "page.txt"),
-    (["-o", "page.png", "--save", "page.bmp"], "page.bmp"),
-])
-def test_booth_unsupported_file_type_writes_and_sends_nothing(capsys, tmp_path, monkeypatch, booth_printer,
-                                                              args, bad):
+@pytest.mark.parametrize(
+    "args, bad",
+    [
+        (["-o", "page.gif"], "page.gif"),
+        (["--preview", "page"], "page"),
+        (["--save", "page.pdf", "--save", "page.txt", "--yes"], "page.txt"),
+        (["-o", "page.png", "--save", "page.bmp"], "page.bmp"),
+    ],
+)
+def test_booth_unsupported_file_type_writes_and_sends_nothing(capsys, tmp_path, monkeypatch, booth_printer, args, bad):
     monkeypatch.chdir(tmp_path)
     _booth_photo(tmp_path)
     code, out, err = run(capsys, "-p", "demo", "--no-color", "booth", "photo.jpg", *args)
@@ -689,20 +865,40 @@ def test_booth_unsupported_file_type_writes_and_sends_nothing(capsys, tmp_path, 
 
 
 def test_booth_save_to_missing_folder_prints_nothing(capsys, tmp_path, booth_printer):
-    code, _, err = run(capsys, "-p", "demo", "booth", str(_booth_photo(tmp_path)),
-                       "--save", str(tmp_path / "no" / "page.pdf"), "--yes")
+    code, _, err = run(
+        capsys, "-p", "demo", "booth", str(_booth_photo(tmp_path)), "--save", str(tmp_path / "no" / "page.pdf"), "--yes"
+    )
     assert code == 1 and "cannot write" in err
     assert booth_printer.made == [] and booth_printer.jobs() == []
 
 
 def test_booth_warns_when_text_is_cut_to_fit(capsys, tmp_path, booth_printer):
     photo, out_file = _booth_photo(tmp_path), tmp_path / "page.jpg"
-    code, _, err = run(capsys, "-p", "demo", "--no-color", "booth", str(photo), "--yes",
-                       "--caption", "A caption that runs on and on " * 6)
+    code, _, err = run(
+        capsys,
+        "-p",
+        "demo",
+        "--no-color",
+        "booth",
+        str(photo),
+        "--yes",
+        "--caption",
+        "A caption that runs on and on " * 6,
+    )
     assert code == 0 and "queued as job" in err
     assert "caption cut to fit the metro page" in err and "--preview" in err
-    code, _, err = run(capsys, "--no-color", "booth", str(photo), "-o", str(out_file),
-                       "--headline", "Wide headline words " * 6, "--story", "Wide paragraph.\n" * 140)
+    code, _, err = run(
+        capsys,
+        "--no-color",
+        "booth",
+        str(photo),
+        "-o",
+        str(out_file),
+        "--headline",
+        "Wide headline words " * 6,
+        "--story",
+        "Wide paragraph.\n" * 140,
+    )
     assert code == 0 and "headline, story cut to fit the metro page" in err
     assert len(booth_printer.made) == 1  # the preview created no driver
     code, _, err = run(capsys, "-p", "demo", "booth", str(photo), "-o", str(out_file))
@@ -712,16 +908,28 @@ def test_booth_warns_when_text_is_cut_to_fit(capsys, tmp_path, booth_printer):
 def test_booth_json_reports_each_cut_field(capsys, tmp_path, booth_printer):
     photo, out_file = _booth_photo(tmp_path), tmp_path / "page.jpg"
     headline, story = ("Wide headline words " * 6).strip(), ("Wide paragraph.\n" * 140).strip()
-    code, out, err = run(capsys, "-f", "json", "booth", str(photo), "-o", str(out_file),
-                         "--headline", headline, "--story", story)
+    code, out, err = run(
+        capsys, "-f", "json", "booth", str(photo), "-o", str(out_file), "--headline", headline, "--story", story
+    )
     report = json.loads(out)
     assert code == 0 and report["fits"] is False and list(report["cut"]) == ["headline", "story"]
     assert report["cut"]["headline"]["given"] == len(headline) and report["cut"]["story"]["given"] == len(story)
     for fit in report["cut"].values():
         assert set(fit) == {"max_fit", "given"} and 0 < fit["max_fit"] < fit["given"]
     # Shortened to what fitted, the headline is no longer cut.
-    code, out, _ = run(capsys, "-f", "json", "booth", str(photo), "-o", str(out_file),
-                       "--headline", headline[:report["cut"]["headline"]["max_fit"]], "--story", story)
+    code, out, _ = run(
+        capsys,
+        "-f",
+        "json",
+        "booth",
+        str(photo),
+        "-o",
+        str(out_file),
+        "--headline",
+        headline[: report["cut"]["headline"]["max_fit"]],
+        "--story",
+        story,
+    )
     assert code == 0 and list(json.loads(out)["cut"]) == ["story"]
     # A printed page carries the same report.
     code, out, _ = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--yes", "--headline", headline)
@@ -760,6 +968,7 @@ def test_booth_bad_story_sends_nothing(capsys, tmp_path, booth_printer):
 
 def test_booth_story_file_dash_reads_stdin(capsys, tmp_path, booth_printer, stdin):
     from prt.booth import Story
+
     photo = _booth_photo(tmp_path)
     stdin(json.dumps({"headline": "Piped In", "story": "From stdin.\nSecond."}).encode())
     code, _, _ = run(capsys, "-p", "demo", "booth", str(photo), "--story-file", "-", "--byline", "By Jo", "--yes")
@@ -767,8 +976,9 @@ def test_booth_story_file_dash_reads_stdin(capsys, tmp_path, booth_printer, stdi
     assert booth_printer.jobs() == [_expected_page(photo, Story("Piped In", "From stdin.\nSecond.", byline="By Jo"))]
 
 
-@pytest.mark.parametrize("content, message", [(b"{oops", "story on stdin is not valid JSON"),
-                                              (b"x" * (64 * 1024 + 1), "larger than 64 KiB")])
+@pytest.mark.parametrize(
+    "content, message", [(b"{oops", "story on stdin is not valid JSON"), (b"x" * (64 * 1024 + 1), "larger than 64 KiB")]
+)
 def test_booth_bad_story_on_stdin_sends_nothing(capsys, tmp_path, booth_printer, stdin, content, message):
     stdin(content)
     code, out, err = run(capsys, "-p", "demo", "booth", str(_booth_photo(tmp_path)), "--story-file", "-", "--yes")
@@ -781,6 +991,7 @@ def test_photo_booth_skill_matches_the_cli(capsys, tmp_path, monkeypatch, booth_
     import re
     import shlex
     from conftest import ROOT
+
     skill = (ROOT / "skills" / "photo-booth" / "SKILL.md").read_text()
     code, help_text, _ = run(capsys, "booth", "--help")
     flags = set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", skill))
@@ -803,6 +1014,7 @@ def test_article_print_skill_matches_the_cli(capsys, tmp_path, monkeypatch, boot
     import re
     import shlex
     from conftest import ROOT
+
     skill = (ROOT / "skills" / "article-print" / "SKILL.md").read_text()
     help_text = run(capsys, "article", "--help")[1] + run(capsys, "--help")[1]  # it also names --timeout
     flags = set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", skill))
@@ -830,6 +1042,7 @@ def test_scan_to_file(capsys, tmp_path):
 
 
 # --- btop style verification (references/btop-style.md §7) ---------------------------------
+
 
 def _sub(*args, **env):
     return subprocess.run([*PRT, *args], capture_output=True, env=clean_env(**env))
@@ -869,8 +1082,10 @@ def test_v6_ascii_glyphs_are_ascii():
 
 
 def test_v7_meter_no_color():
-    out = style.render(style.Mode(styled=True, tier="none", unicode=True), style.meter(50, 10, style.Mode(
-        styled=True, tier="none", unicode=True)))
+    out = style.render(
+        style.Mode(styled=True, tier="none", unicode=True),
+        style.meter(50, 10, style.Mode(styled=True, tier="none", unicode=True)),
+    )
     assert out == "■" * 5 + "·" * 5 + "  50%"
 
 
@@ -892,10 +1107,12 @@ def test_verbose_traces_protocol(capsys):
     code, out, err = run(capsys, "-v", "--timeout", "0.5", "-p", "127.0.0.1", "status")
     assert code == 1 and "IPP → Get-Printer-Attributes" in err
     from prt.transport import ipp
+
     ipp.TRACE = False
 
 
 # --- errors as JSON under -f json (#20) -------------------------------------------------------
+
 
 def _error(err):
     """The JSON error object on stderr: the last line, after any notes."""
@@ -905,17 +1122,26 @@ def _error(err):
 def test_json_error_has_code_kind_and_hint(capsys):
     code, out, err = run(capsys, "-f", "json", "printers", "remove", "nope")
     assert code == 2 and out == ""
-    assert json.loads(err) == {"error": {"code": 2, "kind": "usage", "message": "no saved printer named 'nope'",
-                                         "hint": "see `prt printers list`"}}
+    assert json.loads(err) == {
+        "error": {
+            "code": 2,
+            "kind": "usage",
+            "message": "no saved printer named 'nope'",
+            "hint": "see `prt printers list`",
+        }
+    }
 
 
-@pytest.mark.parametrize("argv, code, kind", [
-    (["--timeout", "0.5", "-p", "127.0.0.1", "status"], 1, "unreachable"),
-    (["-p", "demo", "maintain", "clean", "--yes"], 1, "refused"),
-    (["status", "--bogus"], 2, "usage"),
-    (["--timeout", "soon", "status"], 2, "usage"),
-    (["-p", "demo", "print", "nope.jpg"], 3, "invalid_input"),
-])
+@pytest.mark.parametrize(
+    "argv, code, kind",
+    [
+        (["--timeout", "0.5", "-p", "127.0.0.1", "status"], 1, "unreachable"),
+        (["-p", "demo", "maintain", "clean", "--yes"], 1, "refused"),
+        (["status", "--bogus"], 2, "usage"),
+        (["--timeout", "soon", "status"], 2, "usage"),
+        (["-p", "demo", "print", "nope.jpg"], 3, "invalid_input"),
+    ],
+)
 def test_json_error_code_matches_the_exit_code(capsys, argv, code, kind):
     exit_code, out, err = run(capsys, "-f", "json", *argv)
     error = _error(err)
@@ -926,9 +1152,15 @@ def test_json_error_code_matches_the_exit_code(capsys, argv, code, kind):
 def test_json_error_for_an_article_that_cannot_be_fetched(capsys, monkeypatch):
     import httpx
     from prt import article
+
     real_fetch = article.fetch
-    monkeypatch.setattr(article, "fetch", lambda url, timeout, transport=None: real_fetch(
-        url, timeout, transport=httpx.MockTransport(lambda request: httpx.Response(404))))
+    monkeypatch.setattr(
+        article,
+        "fetch",
+        lambda url, timeout, transport=None: real_fetch(
+            url, timeout, transport=httpx.MockTransport(lambda request: httpx.Response(404))
+        ),
+    )
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "article", "https://blog.example/gone")
     error = _error(err)
     assert code == 3 and out == "" and error["kind"] == "fetch_failed" and error["hint"]
@@ -964,6 +1196,7 @@ def test_text_errors_are_unchanged_without_json(capsys):
 def test_printer_error_kind_comes_from_the_raise_site_the_class_or_the_exit_code():
     from prt.drivers.base import PrinterError, Unsupported
     from prt.models import Capability
+
     assert PrinterError("x").kind == "error"
     assert PrinterError("x", exit_code=2).kind == "usage"
     assert PrinterError("x", exit_code=3).kind == "invalid_input"
@@ -971,11 +1204,16 @@ def test_printer_error_kind_comes_from_the_raise_site_the_class_or_the_exit_code
     assert Unreachable(Target("p", "h")).kind == "unreachable"
     assert Unsupported(FakeDriver(), Capability.SCAN).kind == "unsupported"
     assert PrinterError("boom", hint="fix it", exit_code=3).to_dict() == {
-        "code": 3, "kind": "invalid_input", "message": "boom", "hint": "fix it"}
+        "code": 3,
+        "kind": "invalid_input",
+        "message": "boom",
+        "hint": "fix it",
+    }
 
 
 def test_json_requested_reads_the_global_format_option():
     from prt.cli import json_requested
+
     assert json_requested(hoist_globals(["status", "-f", "json"]))
     assert json_requested(["--format=json", "-p", "demo", "ink"])
     assert not json_requested(["-f", "json", "-f", "text", "ink"])
@@ -984,6 +1222,7 @@ def test_json_requested_reads_the_global_format_option():
 
 
 # --- waiting for jobs (#22) -----------------------------------------------------------------------
+
 
 @pytest.fixture
 def printer(monkeypatch):
@@ -997,6 +1236,7 @@ def printer(monkeypatch):
 @pytest.fixture
 def photo(tmp_path):
     from PIL import Image
+
     path = tmp_path / "a.jpg"
     Image.new("RGB", (10, 10), "red").save(path)
     return path
@@ -1016,8 +1256,7 @@ def test_print_without_wait_does_not_follow_the_job(capsys, printer, photo):
 
 
 @pytest.mark.parametrize("final, state, kind", [(8, "aborted", "job_failed"), (7, "canceled", "job_canceled")])
-def test_print_wait_reports_a_job_that_did_not_print_and_exits_non_zero(capsys, printer, photo, final, state,
-                                                                         kind):
+def test_print_wait_reports_a_job_that_did_not_print_and_exits_non_zero(capsys, printer, photo, final, state, kind):
     printer.client.final_job_state = final
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "print", str(photo), "--wait")
     assert code == 1 and json.loads(out)[0]["state"] == state
@@ -1031,10 +1270,10 @@ def test_print_wait_names_every_job_that_did_not_print(capsys, printer, photo, m
         real_advance()
         if printer.client.submitted.get(102, {}).get("job-state") == 9:
             printer.client.submitted[102]["job-state"] = 8
+
     monkeypatch.setattr(printer.client, "_advance", advance)
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "print", str(photo), str(photo), "--wait")
-    assert code == 1 and [(r["job_id"], r["state"]) for r in json.loads(out)] == [(101, "completed"),
-                                                                                   (102, "aborted")]
+    assert code == 1 and [(r["job_id"], r["state"]) for r in json.loads(out)] == [(101, "completed"), (102, "aborted")]
     assert _error(err)["kind"] == "job_failed"
     assert _error(err)["message"] == "1 of 2 jobs did not print: job 102 aborted"
 
@@ -1078,6 +1317,7 @@ def test_print_wait_still_names_every_sent_job_when_waiting_fails(capsys, printe
         if operation == ipp.OP_GET_JOBS and 101 in printer.client.submitted:
             printer.client.submitted[101]["job-state"] = 9
         return real_request(operation, **kw)
+
     monkeypatch.setattr(printer.client, "request", request)
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "print", str(photo), str(photo), "--wait")
     assert code == 1 and _error(err)["kind"] == "job_not_found"
@@ -1096,9 +1336,12 @@ def test_jobs_wait_unknown_job(capsys, printer):
 
 def test_jobs_wait_gives_up_after_the_wait_timeout(capsys, printer, photo, monkeypatch):
     from types import SimpleNamespace
+
     now = [0.0]
-    monkeypatch.setattr("prt.drivers.base.time", SimpleNamespace(
-        monotonic=lambda: now[0], sleep=lambda s: now.__setitem__(0, now[0] + s)))
+    monkeypatch.setattr(
+        "prt.drivers.base.time",
+        SimpleNamespace(monotonic=lambda: now[0], sleep=lambda s: now.__setitem__(0, now[0] + s)),
+    )
     monkeypatch.setattr("prt.drivers.base.JOB_POLL_INTERVAL", 2.0)
     monkeypatch.setattr(printer.client, "_advance", lambda: None)  # the job never leaves "pending"
     assert run(capsys, "-p", "demo", "print", str(photo))[0] == 0
@@ -1110,6 +1353,7 @@ def test_jobs_wait_gives_up_after_the_wait_timeout(capsys, printer, photo, monke
 
 def test_wait_for_job_reports_each_state_change_once(printer):
     from prt.models import PrintOptions
+
     job_id = printer.submit(b"x", "image/jpeg", PrintOptions(job_name="w"))
     seen = []
     job = printer.wait_for_job(job_id, timeout=10, interval=0, on_state=lambda j: seen.append(j.state))

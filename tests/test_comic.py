@@ -66,6 +66,7 @@ def printer(monkeypatch):
 
 # --- the page ----------------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("n", [3, 4, 5, 6])
 def test_panels_fill_the_page_in_rows_without_overlapping(n):
     boxes = comic.panel_boxes(n)
@@ -73,7 +74,7 @@ def test_panels_fill_the_page_in_rows_without_overlapping(n):
     for x0, y0, x1, y1 in boxes:
         assert comic.MARGIN <= x0 < x1 <= comic.W - comic.MARGIN and comic.MARGIN <= y0 < y1 <= comic.H - comic.MARGIN
     for i, a in enumerate(boxes):
-        for b in boxes[i + 1:]:
+        for b in boxes[i + 1 :]:
             assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
     rows = sorted({y0 for _, y0, _, _ in boxes})
     assert len(rows) == len(comic.ROWS[n])
@@ -111,9 +112,9 @@ def _band_is_lighter(page, box, top=True):
 
 
 def test_bubbles_are_drawn_in_their_band_over_the_photo():
-    data = Comic(panels=(Panel((Bubble("Hello there!", "top-left"),)),
-                         Panel((Bubble("Down here", "bottom-right"),)),
-                         Panel()))
+    data = Comic(
+        panels=(Panel((Bubble("Hello there!", "top-left"),)), Panel((Bubble("Down here", "bottom-right"),)), Panel())
+    )
     page, cut = comic.compose(_images(3), comic.check_comic(data, 3))
     assert cut == {}
     boxes = comic.panel_boxes(3, comic.MARGIN)  # no title or byline: the panels start at the margin
@@ -122,11 +123,13 @@ def test_bubbles_are_drawn_in_their_band_over_the_photo():
     assert not _band_is_lighter(page, boxes[2]) and not _band_is_lighter(page, boxes[2], top=False)
 
 
-@pytest.mark.parametrize("kind, tail", [("speech", "left"), ("speech", "none"), ("thought", "right"),
-                                        ("thought", "none")])
+@pytest.mark.parametrize(
+    "kind, tail", [("speech", "left"), ("speech", "none"), ("thought", "right"), ("thought", "none")]
+)
 def test_every_kind_and_tail_draws(kind, tail):
-    panels = tuple(Panel((Bubble("Words in a bubble", position, tail, kind),))
-                   for position in ("top", "bottom-left", "top-right"))
+    panels = tuple(
+        Panel((Bubble("Words in a bubble", position, tail, kind),)) for position in ("top", "bottom-left", "top-right")
+    )
     page, cut = comic.compose(_images(3), comic.check_comic(Comic(panels), 3))
     assert cut == {} and _band_is_lighter(page, comic.panel_boxes(3)[0])
 
@@ -140,10 +143,17 @@ def test_three_bubbles_in_one_band_share_it_without_overlapping():
 
 def test_overlong_text_is_cut_and_reported_per_bubble_in_reading_order():
     long = "word " * 28
-    data = Comic(title="W" * 60, panels=(
-        Panel((Bubble("Short."), Bubble(long), Bubble(long)), caption="WWWW " * 20),
-        Panel((Bubble("Short.", "bottom"),)),
-        Panel(), Panel(), Panel(), Panel()))
+    data = Comic(
+        title="W" * 60,
+        panels=(
+            Panel((Bubble("Short."), Bubble(long), Bubble(long)), caption="WWWW " * 20),
+            Panel((Bubble("Short.", "bottom"),)),
+            Panel(),
+            Panel(),
+            Panel(),
+            Panel(),
+        ),
+    )
     checked = comic.check_comic(data, 3)
     _, cut = comic.compose(_images(6), checked)
     assert list(cut) == ["title", "panels[0].caption", "panels[0].bubbles[1]", "panels[0].bubbles[2]"]
@@ -158,7 +168,7 @@ def test_a_bubble_cut_to_its_max_fit_then_fits():
     panels = (Panel((Bubble("One"), Bubble("Two"), Bubble(text, "top-right"))),) + (Panel(),) * 5
     _, cut = comic.compose(_images(6), comic.check_comic(Comic(panels), 3))
     c = cut["panels[0].bubbles[2]"]
-    shorter = (Panel((Bubble("One"), Bubble("Two"), Bubble(text[:c.max_fit], "top-right"))),) + (Panel(),) * 5
+    shorter = (Panel((Bubble("One"), Bubble("Two"), Bubble(text[: c.max_fit], "top-right"))),) + (Panel(),) * 5
     assert comic.compose(_images(6), comic.check_comic(Comic(shorter), 3))[1] == {}
 
 
@@ -190,45 +200,68 @@ def test_text_of_only_combining_marks_is_drawn_without_crashing(capsys, tmp_path
     page, cut = comic.compose(_images(3), comic.parse_comic(json.dumps(data)))
     assert page.size == (comic.W, comic.H) and cut == {}
     out_file = tmp_path / "comic.png"
-    code, _, err = run(capsys, "comic", *map(str, _photos(tmp_path, 3)),
-                       "--comic-file", str(_comic_file(tmp_path, data)), "-o", str(out_file))
+    code, _, err = run(
+        capsys,
+        "comic",
+        *map(str, _photos(tmp_path, 3)),
+        "--comic-file",
+        str(_comic_file(tmp_path, data)),
+        "-o",
+        str(out_file),
+    )
     assert code == 0, err
     assert out_file.read_bytes().startswith(b"\x89PNG")
 
 
 # --- the comic file ----------------------------------------------------------------------------
 
+
 def test_comic_file_fills_in_default_positions_and_cleans_text():
-    parsed = comic.parse_comic(json.dumps({"title": "  A   day ", "panels": [
-        {"caption": "Morning", "bubbles": [{"text": "Hi!"}, {"text": "Hello\nyou"}, {"text": "Bye", "kind": "thought"}]},
-        {}, {"bubbles": []}]}))
+    parsed = comic.parse_comic(
+        json.dumps(
+            {
+                "title": "  A   day ",
+                "panels": [
+                    {
+                        "caption": "Morning",
+                        "bubbles": [{"text": "Hi!"}, {"text": "Hello\nyou"}, {"text": "Bye", "kind": "thought"}],
+                    },
+                    {},
+                    {"bubbles": []},
+                ],
+            }
+        )
+    )
     assert parsed.title == "A day" and len(parsed.panels) == 3
     assert [b.position for b in parsed.panels[0].bubbles] == ["top-left", "top-right", "bottom-right"]
     assert parsed.panels[0].bubbles[1].text == "Hello you" and parsed.panels[0].bubbles[2].kind == "thought"
     assert parsed.panels[0].bubbles[0].tail == "center" and parsed.panels[1] == Panel()
 
 
-@pytest.mark.parametrize("data, where", [
-    ({"panels": _panels(2)}, "2 panels"),
-    ({"panels": _panels(7)}, "7 panels"),
-    ({}, "missing panels"),
-    ({"panels": {}}, "panels must be a list"),
-    ({"panels": [{"bubbles": [{"text": "a"}] * 4}, {}, {}]}, "panels[0] has 4 bubbles"),
-    ({"panels": [{}, {"bubbles": [{"text": "a", "position": "middle"}]}, {}]}, "panels[1].bubbles[0].position"),
-    ({"panels": [{}, {}, {"bubbles": [{"text": "a", "tail": "up"}]}]}, "panels[2].bubbles[0].tail"),
-    ({"panels": [{"bubbles": [{"text": "a", "kind": "shout"}]}, {}, {}]}, "panels[0].bubbles[0].kind"),
-    ({"panels": [{"bubbles": [{"position": "top"}]}, {}, {}]}, "panels[0].bubbles[0] is missing text"),
-    ({"panels": [{"bubbles": [{"text": "  "}]}, {}, {}]}, "panels[0].bubbles[0].text is empty"),
-    ({"panels": [{"bubbles": [{"text": "x" * 141}]}, {}, {}]}, "panels[0].bubbles[0].text is too long"),
-    ({"panels": [{"bubbles": [{"text": 5}]}, {}, {}]}, "must be text"),
-    ({"panels": [{"bubbles": ["Hi"]}, {}, {}]}, "panels[0].bubbles[0] must be a JSON object"),
-    ({"panels": [{"caption": "c" * 101}, {}, {}]}, "panels[0].caption is too long"),
-    ({"panels": [{"speech": "Hi"}, {}, {}]}, "unknown field(s) in panels[0]: speech"),
-    ({"panels": _panels(3), "colour": "red"}, "unknown field(s)"),
-    ({"panels": _panels(3), "title": "t" * 61}, "title is too long"),
-    ({"panels": [{"bubbles": [{"text": "Party \U0001f389"}]}, {}, {}]}, "cannot print"),
-    ([], "must hold a JSON object"),
-])
+@pytest.mark.parametrize(
+    "data, where",
+    [
+        ({"panels": _panels(2)}, "2 panels"),
+        ({"panels": _panels(7)}, "7 panels"),
+        ({}, "missing panels"),
+        ({"panels": {}}, "panels must be a list"),
+        ({"panels": [{"bubbles": [{"text": "a"}] * 4}, {}, {}]}, "panels[0] has 4 bubbles"),
+        ({"panels": [{}, {"bubbles": [{"text": "a", "position": "middle"}]}, {}]}, "panels[1].bubbles[0].position"),
+        ({"panels": [{}, {}, {"bubbles": [{"text": "a", "tail": "up"}]}]}, "panels[2].bubbles[0].tail"),
+        ({"panels": [{"bubbles": [{"text": "a", "kind": "shout"}]}, {}, {}]}, "panels[0].bubbles[0].kind"),
+        ({"panels": [{"bubbles": [{"position": "top"}]}, {}, {}]}, "panels[0].bubbles[0] is missing text"),
+        ({"panels": [{"bubbles": [{"text": "  "}]}, {}, {}]}, "panels[0].bubbles[0].text is empty"),
+        ({"panels": [{"bubbles": [{"text": "x" * 141}]}, {}, {}]}, "panels[0].bubbles[0].text is too long"),
+        ({"panels": [{"bubbles": [{"text": 5}]}, {}, {}]}, "must be text"),
+        ({"panels": [{"bubbles": ["Hi"]}, {}, {}]}, "panels[0].bubbles[0] must be a JSON object"),
+        ({"panels": [{"caption": "c" * 101}, {}, {}]}, "panels[0].caption is too long"),
+        ({"panels": [{"speech": "Hi"}, {}, {}]}, "unknown field(s) in panels[0]: speech"),
+        ({"panels": _panels(3), "colour": "red"}, "unknown field(s)"),
+        ({"panels": _panels(3), "title": "t" * 61}, "title is too long"),
+        ({"panels": [{"bubbles": [{"text": "Party \U0001f389"}]}, {}, {}]}, "cannot print"),
+        ([], "must hold a JSON object"),
+    ],
+)
 def test_bad_comic_files_are_refused_with_exit_code_3_saying_where(data, where):
     with pytest.raises(PrinterError) as exc:
         comic.parse_comic(json.dumps(data))
@@ -236,8 +269,11 @@ def test_bad_comic_files_are_refused_with_exit_code_3_saying_where(data, where):
 
 
 def test_comic_file_that_is_missing_not_json_or_too_big_is_refused(tmp_path):
-    for content, message in ((b"{nope", "not valid JSON"), (b"\xff\xfe", "not UTF-8"),
-                             (b" " * (comic.MAX_COMIC_FILE + 1), "larger than 64 KiB")):
+    for content, message in (
+        (b"{nope", "not valid JSON"),
+        (b"\xff\xfe", "not UTF-8"),
+        (b" " * (comic.MAX_COMIC_FILE + 1), "larger than 64 KiB"),
+    ):
         path = tmp_path / "c.json"
         path.write_bytes(content)
         with pytest.raises(PrinterError) as exc:
@@ -266,6 +302,7 @@ def test_to_dict_round_trips_through_the_parser():
 
 # --- styles and schema -------------------------------------------------------------------------
 
+
 def _accepted(data) -> bool:
     try:
         comic.parse_comic(json.dumps(data))
@@ -275,32 +312,40 @@ def _accepted(data) -> bool:
     return True
 
 
-@pytest.mark.parametrize("data", [
-    {"panels": _panels(3)},
-    {"panels": _panels(6), "title": "T", "byline": "B"},
-    {"panels": [{"caption": "c", "bubbles": [{"text": "a", "position": "bottom", "tail": "none", "kind": "thought"}]},
-                {"bubbles": [{"text": "a"}, {"text": "b"}, {"text": "c"}]}, {}]},
-    {"panels": [{"bubbles": [{"text": "Ça va? Привет!"}]}, {}, {}]},
-    {"panels": _panels(2)},
-    {"panels": _panels(7)},
-    {"panels": [{"bubbles": [{"text": "a"}] * 4}, {}, {}]},
-    {"panels": [{"bubbles": [{"text": "a", "position": "middle"}]}, {}, {}]},
-    {"panels": [{"bubbles": [{"text": "a", "tail": "up"}]}, {}, {}]},
-    {"panels": [{"bubbles": [{"text": "a", "kind": "shout"}]}, {}, {}]},
-    {"panels": [{"bubbles": [{"text": ""}]}, {}, {}]},
-    {"panels": [{"bubbles": [{"text": "   "}]}, {}, {}]},
-    {"panels": [{"bubbles": [{"text": "x" * 141}]}, {}, {}]},
-    {"panels": [{"bubbles": [{"tail": "left"}]}, {}, {}]},
-    {"panels": [{"bubbles": ["Hi"]}, {}, {}]},
-    {"panels": [{"caption": 1}, {}, {}]},
-    {"panels": [{"caption": "c" * 101}, {}, {}]},
-    {"panels": [{"extra": 1}, {}, {}]},
-    {"panels": _panels(3), "title": None},
-    {"panels": _panels(3), "title": "t" * 61},
-    {"panels": "three"},
-    {"title": "T"},
-    [],
-])
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"panels": _panels(3)},
+        {"panels": _panels(6), "title": "T", "byline": "B"},
+        {
+            "panels": [
+                {"caption": "c", "bubbles": [{"text": "a", "position": "bottom", "tail": "none", "kind": "thought"}]},
+                {"bubbles": [{"text": "a"}, {"text": "b"}, {"text": "c"}]},
+                {},
+            ]
+        },
+        {"panels": [{"bubbles": [{"text": "Ça va? Привет!"}]}, {}, {}]},
+        {"panels": _panels(2)},
+        {"panels": _panels(7)},
+        {"panels": [{"bubbles": [{"text": "a"}] * 4}, {}, {}]},
+        {"panels": [{"bubbles": [{"text": "a", "position": "middle"}]}, {}, {}]},
+        {"panels": [{"bubbles": [{"text": "a", "tail": "up"}]}, {}, {}]},
+        {"panels": [{"bubbles": [{"text": "a", "kind": "shout"}]}, {}, {}]},
+        {"panels": [{"bubbles": [{"text": ""}]}, {}, {}]},
+        {"panels": [{"bubbles": [{"text": "   "}]}, {}, {}]},
+        {"panels": [{"bubbles": [{"text": "x" * 141}]}, {}, {}]},
+        {"panels": [{"bubbles": [{"tail": "left"}]}, {}, {}]},
+        {"panels": [{"bubbles": ["Hi"]}, {}, {}]},
+        {"panels": [{"caption": 1}, {}, {}]},
+        {"panels": [{"caption": "c" * 101}, {}, {}]},
+        {"panels": [{"extra": 1}, {}, {}]},
+        {"panels": _panels(3), "title": None},
+        {"panels": _panels(3), "title": "t" * 61},
+        {"panels": "three"},
+        {"title": "T"},
+        [],
+    ],
+)
 def test_schema_agrees_with_the_comic_parser(data):
     assert Draft202012Validator(catalog.schema("comic")).is_valid(data) == _accepted(data)
 
@@ -319,12 +364,17 @@ def test_styles_list_the_comic_strip(capsys):
     assert style["command"] == "comic" and style["schema"] == "comic" and style["max_pages"] == 1
     assert style["photos"] == {"min": 3, "max": 6} and style["paper"]["size"] == "a4"
     assert [(f["name"], f["max_length"]) for f in style["fields"]] == [
-        ("title", 60), ("byline", 60), ("panels[].caption", 100), ("panels[].bubbles[].text", 140)]
+        ("title", 60),
+        ("byline", 60),
+        ("panels[].caption", 100),
+        ("panels[].bubbles[].text", 140),
+    ]
     code, out, _ = run(capsys, "schema", "comic")
     assert code == 0 and json.loads(out)["title"] == "prt comic"
 
 
 # --- prt comic ---------------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("suffix, magic", [(".png", b"\x89PNG"), (".pdf", b"%PDF"), (".jpg", b"\xff\xd8")])
 def test_preview_saves_the_page_and_prints_nothing(capsys, tmp_path, printer, suffix, magic):
@@ -334,20 +384,37 @@ def test_preview_saves_the_page_and_prints_nothing(capsys, tmp_path, printer, su
     assert code == 0, err
     assert "not printed" in err and out_file.read_bytes().startswith(magic)
     assert printer.made == [] and printer.jobs() == [] and guard.used_today() == 0
-    assert without_estimate(out) == {"action": "comic", "file": str(out_file), "bytes": out_file.stat().st_size,
-                                     "photos": 4, "title": "The Big Day",
-                                     "paper": {"size": "a4", "media": "a4", "tray": None}, "fits": True, "cut": {}}
+    assert without_estimate(out) == {
+        "action": "comic",
+        "file": str(out_file),
+        "bytes": out_file.stat().st_size,
+        "photos": 4,
+        "title": "The Big Day",
+        "paper": {"size": "a4", "media": "a4", "tray": None},
+        "fits": True,
+        "cut": {},
+    }
 
 
 def test_preview_png_is_the_composed_page(capsys, tmp_path, printer):
     photos = _photos(tmp_path, 3)
     data = {"title": "Ours", "panels": [{"bubbles": [{"text": "Hi!"}]}, {"caption": "Later"}, {}]}
     out_file = tmp_path / "comic.png"
-    code, _, err = run(capsys, "comic", *map(str, photos), "--comic-file", str(_comic_file(tmp_path, data)),
-                       "--byline", "by us", "-o", str(out_file))
+    code, _, err = run(
+        capsys,
+        "comic",
+        *map(str, photos),
+        "--comic-file",
+        str(_comic_file(tmp_path, data)),
+        "--byline",
+        "by us",
+        "-o",
+        str(out_file),
+    )
     assert code == 0, err
-    expected = render.comic_page([booth.load_photo(p) for p in photos],
-                                 comic.with_overrides(comic.parse_comic(json.dumps(data)), byline="by us")).pages[0]
+    expected = render.comic_page(
+        [booth.load_photo(p) for p in photos], comic.with_overrides(comic.parse_comic(json.dumps(data)), byline="by us")
+    ).pages[0]
     assert Image.open(out_file).convert("RGB").tobytes() == expected.tobytes()
 
 
@@ -400,12 +467,20 @@ def test_comic_file_from_stdin(capsys, tmp_path, printer, stdin):
     assert json.loads(out)["title"] == "Piped" and printer.made == []
 
 
-@pytest.mark.parametrize("content", [b"{nope", b'{"panels": 3}', b'{"panels": [{}, {}, {"bubbles": [{"text": 1}]}]}',
-                                     b'{"panels": [{}, {}, {"bubbles": [{"text": "\xf0\x9f\x8e\x89"}]}]}'])
+@pytest.mark.parametrize(
+    "content",
+    [
+        b"{nope",
+        b'{"panels": 3}',
+        b'{"panels": [{}, {}, {"bubbles": [{"text": 1}]}]}',
+        b'{"panels": [{}, {}, {"bubbles": [{"text": "\xf0\x9f\x8e\x89"}]}]}',
+    ],
+)
 def test_bad_comic_on_stdin_exits_3_and_prints_nothing(capsys, tmp_path, printer, stdin, content):
     stdin(content)
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "comic", *map(str, _photos(tmp_path, 3)),
-                         "--comic-file", "-", "--yes")
+    code, out, err = run(
+        capsys, "-p", "demo", "-f", "json", "comic", *map(str, _photos(tmp_path, 3)), "--comic-file", "-", "--yes"
+    )
     assert code == 3 and _error(err)["kind"] == "invalid_input" and out == ""
     assert printer.made == [] and guard.used_today() == 0
 
@@ -434,8 +509,17 @@ def test_wrong_counts_bad_photos_and_outputs_are_refused_before_anything_is_writ
 def test_a_cut_bubble_is_warned_and_reported(capsys, tmp_path, printer):
     long = ("This bubble has far more words than a small comic panel could ever hold, " * 2)[:140].strip()
     data = {"panels": _panels(5, bubbles=[{"text": "One"}, {"text": "Two"}, {"text": long}])}
-    code, out, err = run(capsys, "-f", "json", "comic", *map(str, _photos(tmp_path, 5)), "--comic-file",
-                         str(_comic_file(tmp_path, data)), "-o", str(tmp_path / "c.jpg"))
+    code, out, err = run(
+        capsys,
+        "-f",
+        "json",
+        "comic",
+        *map(str, _photos(tmp_path, 5)),
+        "--comic-file",
+        str(_comic_file(tmp_path, data)),
+        "-o",
+        str(tmp_path / "c.jpg"),
+    )
     assert code == 0, err
     assert "panels[0].bubbles[2]" in err and "cut to fit the comic strip" in err
     report = json.loads(out)

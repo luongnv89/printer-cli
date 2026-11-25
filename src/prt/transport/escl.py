@@ -165,8 +165,7 @@ class ESCLClient:
         except httpx.HTTPError:
             pass
         if caps and caps.resolutions and settings.dpi not in caps.resolutions:
-            raise ScanError(f"{settings.dpi} dpi not supported; choose one of "
-                            + ", ".join(map(str, caps.resolutions)))
+            raise ScanError(f"{settings.dpi} dpi not supported; choose one of " + ", ".join(map(str, caps.resolutions)))
         body = build_settings(settings, caps)
         report("starting")
         with self._client(timeout=max(self.timeout, 30)) as c:

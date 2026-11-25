@@ -40,6 +40,7 @@ def printer(monkeypatch):
     def sent():
         jobs = [op for op, *_ in fake.client.requests if op == ipp.OP_PRINT_JOB]
         return len(jobs) + len(fake.raw_sent) + len(cups)
+
     return SimpleNamespace(driver=fake, cups=cups, sent=sent)
 
 
@@ -83,8 +84,16 @@ def _config(**keys):
 def _commands(tmp_path):
     photo = _photo(tmp_path)
     morning_file = tmp_path / "morning.json"
-    morning_file.write_text(json.dumps({"weather": {"summary": "Fair"}, "calendar": {"items": []},
-                                        "todos": {"items": []}, "headlines": {"items": []}}))
+    morning_file.write_text(
+        json.dumps(
+            {
+                "weather": {"summary": "Fair"},
+                "calendar": {"items": []},
+                "todos": {"items": []},
+                "headlines": {"items": []},
+            }
+        )
+    )
     return {
         "print": ["print", str(photo)],
         "booth": ["booth", str(photo)],
@@ -109,8 +118,28 @@ def _commands(tmp_path):
     }
 
 
-COMMANDS = ["print", "booth", "card", "article", "gazette", "gazette-morning", "receipt", "compose", "strip", "instant", "colour-in", "recipe",
-            "postcard", "disc", "bingo", "puzzle", "test-page", "nozzle-check", "clean", "keepalive"]
+COMMANDS = [
+    "print",
+    "booth",
+    "card",
+    "article",
+    "gazette",
+    "gazette-morning",
+    "receipt",
+    "compose",
+    "strip",
+    "instant",
+    "colour-in",
+    "recipe",
+    "postcard",
+    "disc",
+    "bingo",
+    "puzzle",
+    "test-page",
+    "nozzle-check",
+    "clean",
+    "keepalive",
+]
 
 
 # --- agent mode ------------------------------------------------------------------------------------------
@@ -130,8 +159,19 @@ def test_agent_mode_prints_with_yes(capsys, tmp_path, printer, agent, command):
     assert printer.sent() >= 1
 
 
-@pytest.mark.parametrize("value, on", [("1", True), ("true", True), ("YES", True), ("on", True), ("0", False),
-                                       ("", False), ("false", False), ("no", False)])
+@pytest.mark.parametrize(
+    "value, on",
+    [
+        ("1", True),
+        ("true", True),
+        ("YES", True),
+        ("on", True),
+        ("0", False),
+        ("", False),
+        ("false", False),
+        ("no", False),
+    ],
+)
 def test_agent_mode_switch(monkeypatch, value, on):
     monkeypatch.setenv("PRT_AGENT", value)
     assert guard.agent_mode() is on
@@ -143,8 +183,9 @@ def test_without_agent_mode_print_needs_no_yes(capsys, tmp_path, printer):
 
 
 def test_agent_mode_preview_needs_no_yes_and_books_nothing(capsys, tmp_path, printer, agent):
-    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "booth", str(_photo(tmp_path)),
-                       "--preview", str(tmp_path / "page.png"))
+    code, out, _ = run(
+        capsys, "-p", "demo", "-f", "json", "booth", str(_photo(tmp_path)), "--preview", str(tmp_path / "page.png")
+    )
     assert code == 0 and json.loads(out)["estimate"]["pages"] == 1
     assert printer.sent() == 0 and guard.used_today() == 0
 
@@ -235,6 +276,7 @@ def test_a_failed_submit_still_counts_the_page(capsys, tmp_path, printer, monkey
 
     def fail(*a, **k):
         raise Unreachable(printer.driver.target, "timed out")
+
     monkeypatch.setattr(printer.driver, "submit", fail)
     assert run(capsys, "-p", "demo", "booth", str(_photo(tmp_path)), "--yes")[0] == 1
     assert guard.used_today() == 1
@@ -250,6 +292,7 @@ def test_a_failed_page_gives_back_the_pages_after_it(capsys, tmp_path, printer, 
         if len(calls) == 2:
             raise Unreachable(printer.driver.target, "timed out")
         return real(*a, **k)
+
     monkeypatch.setattr(printer.driver, "submit", second_fails)
     assert run(capsys, "-p", "demo", "gazette", *photos, "--yes")[0] == 1
     assert guard.used_today() == 2  # both attempted
@@ -276,7 +319,8 @@ def test_a_print_refused_before_sending_books_nothing(capsys, tmp_path, printer,
 
 
 def test_a_print_that_fails_after_a_pre_send_failure_on_another_file_counts_only_what_was_sent(
-        capsys, tmp_path, printer):
+    capsys, tmp_path, printer
+):
     _config(max_pages_per_day=5)
     broken = tmp_path / "broken.png"
     broken.write_bytes(b"not a png")
@@ -289,6 +333,7 @@ def test_a_print_whose_submit_fails_still_counts_the_page(capsys, tmp_path, prin
 
     def fail(*a, **k):
         raise Unreachable(printer.driver.target, "timed out")
+
     monkeypatch.setattr(printer.driver, "submit", fail)
     assert run(capsys, "-p", "demo", "print", str(_photo(tmp_path)))[0] == 1
     assert guard.used_today() == 1
@@ -301,6 +346,7 @@ def test_a_print_refused_by_cups_still_counts_its_pages(capsys, tmp_path, printe
 
     def refuse(queue, path, options):
         raise PrinterError("CUPS refused the job: stopped")
+
     monkeypatch.setattr("prt.printing.cups_print", refuse)
     assert run(capsys, "-p", "demo", "print", str(pdf))[0] == 1
     assert guard.used_today() == 2
@@ -308,6 +354,7 @@ def test_a_print_refused_by_cups_still_counts_its_pages(capsys, tmp_path, printe
 
 def test_mcp_print_file_books_pages_only_when_it_sends(tmp_path, monkeypatch):
     from prt.mcp_server import Tools
+
     cfg = _config(max_pages_per_day=1)
     fake = FakeDriver()
     monkeypatch.setattr("prt.mcp_server.make_driver", lambda target, timeout=5.0: fake)
@@ -320,6 +367,7 @@ def test_mcp_print_file_books_pages_only_when_it_sends(tmp_path, monkeypatch):
 
     def fail(*a, **k):
         raise Unreachable(fake.target, "timed out")
+
     monkeypatch.setattr(fake, "submit", fail)
     with pytest.raises(PrinterError):
         tools.print_file(path=str(_photo(tmp_path)), confirm=True)
@@ -389,25 +437,31 @@ def test_bad_cap_in_config_is_refused(tmp_path, value):
 
 
 def _pdf(pages, *, extra=b"", page=b"<</Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]>>"):
-    objs = [b"<</Type /Catalog /Pages 2 0 R>>",
-            b"<</Type /Pages /Kids [" + b" ".join(b"%d 0 R" % (3 + i) for i in range(pages)) + b"] /Count %d>>"
-            % pages] + [page] * pages
+    objs = [
+        b"<</Type /Catalog /Pages 2 0 R>>",
+        b"<</Type /Pages /Kids [" + b" ".join(b"%d 0 R" % (3 + i) for i in range(pages)) + b"] /Count %d>>" % pages,
+    ] + [page] * pages
     body = b"".join(b"%d 0 obj\n" % (n + 1) + o + b"\nendobj\n" for n, o in enumerate(objs))
     return b"%PDF-1.4\n" + body + extra + b"trailer<</Root 1 0 R>>\n%%EOF\n"
 
 
 def _objstm_pdf(pages):
     """A PDF 1.5 file whose page tree is packed in a compressed object stream, as pdflatex writes it."""
-    packed = [b"<</Type/Pages/Kids[" + b" ".join(b"%d 0 R" % (3 + i) for i in range(pages)) + b"]/Count %d>>"
-              % pages] + [b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]>>"] * pages
+    packed = [
+        b"<</Type/Pages/Kids[" + b" ".join(b"%d 0 R" % (3 + i) for i in range(pages)) + b"]/Count %d>>" % pages
+    ] + [b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]>>"] * pages
     offsets, pos = [], 0
     for i, o in enumerate(packed):
         offsets += [b"%d" % (2 + i), b"%d" % pos]
         pos += len(o) + 1
     header = b" ".join(offsets) + b" "
     data = zlib.compress(header + b" ".join(packed))
-    stream = (b"9 0 obj\n<</Type/ObjStm/N %d/First %d/Filter/FlateDecode/Length %d>>stream\n"
-              % (len(packed), len(header), len(data)) + data + b"\nendstream\nendobj\n")
+    stream = (
+        b"9 0 obj\n<</Type/ObjStm/N %d/First %d/Filter/FlateDecode/Length %d>>stream\n"
+        % (len(packed), len(header), len(data))
+        + data
+        + b"\nendstream\nendobj\n"
+    )
     return b"%PDF-1.5\n1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n" + stream + b"%%EOF\n"
 
 
@@ -416,6 +470,7 @@ def test_pdf_page_count_plain_and_compact():
     assert guard.count_pdf_pages(_pdf(3)) == 3
     assert guard.count_pdf_pages(_pdf(2, page=b"<</Type/Page/Parent 2 0 R>>")) == 2  # no spaces
     from prt.drivers.fake import _PDF
+
     assert guard.count_pdf_pages(_PDF) == 1
 
 
@@ -433,17 +488,23 @@ def test_pdf_page_count_takes_a_higher_page_tree_count():
 
 
 def test_pdf_page_count_decodes_escaped_names_and_finds_untyped_pages():
-    escaped = _pdf(1, extra=b"7 0 obj\n<</Typ#65 /P#61ge /Parent 2 0 R>>\nendobj\n"
-                            b"8 0 obj\n<</Typ#65 /P#61ge /Parent 2 0 R>>\nendobj\n")
+    escaped = _pdf(
+        1,
+        extra=b"7 0 obj\n<</Typ#65 /P#61ge /Parent 2 0 R>>\nendobj\n"
+        b"8 0 obj\n<</Typ#65 /P#61ge /Parent 2 0 R>>\nendobj\n",
+    )
     assert guard.count_pdf_pages(escaped) >= 3
     untyped = _pdf(1, extra=b"7 0 obj\n<</Parent 2 0 R /Contents 9 0 R>>\nendobj\n")
     assert guard.count_pdf_pages(untyped) >= 2
 
 
 def test_pdf_page_count_ignores_annotations_outlines_and_pages_nodes():
-    pdf = _pdf(1, extra=b"7 0 obj\n<</Type /Annot /Subtype /Popup /Parent 8 0 R /Contents (hi)>>\nendobj\n"
-                        b"8 0 obj\n<</Type /Outlines /Count 50 /First 9 0 R>>\nendobj\n"
-                        b"9 0 obj\n<</Title (One) /Parent 8 0 R>>\nendobj\n")
+    pdf = _pdf(
+        1,
+        extra=b"7 0 obj\n<</Type /Annot /Subtype /Popup /Parent 8 0 R /Contents (hi)>>\nendobj\n"
+        b"8 0 obj\n<</Type /Outlines /Count 50 /First 9 0 R>>\nendobj\n"
+        b"9 0 obj\n<</Title (One) /Parent 8 0 R>>\nendobj\n",
+    )
     assert guard.count_pdf_pages(pdf) == 1
 
 
@@ -475,8 +536,12 @@ def _page(colour):
 
 def test_estimate_of_a_blank_page():
     assert guard.estimate([_page("white")]) == {
-        "pages": 1, "colour": False, "ink": {"cyan": 0.0, "magenta": 0.0, "yellow": 0.0, "black": 0.0},
-        "ink_percent": 0.0, "summary": "~1 page, black and white, est. ink <1%"}
+        "pages": 1,
+        "colour": False,
+        "ink": {"cyan": 0.0, "magenta": 0.0, "yellow": 0.0, "black": 0.0},
+        "ink_percent": 0.0,
+        "summary": "~1 page, black and white, est. ink <1%",
+    }
 
 
 def test_estimate_of_solid_black_and_red_pages():
@@ -501,11 +566,13 @@ def test_preview_json_carries_the_estimate(capsys, tmp_path, printer):
     code, out, _ = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "-o", str(tmp_path / "b.png"))
     est = json.loads(out)["estimate"]
     assert code == 0 and est["pages"] == 1 and est["colour"] is True and est["summary"].startswith("~1 page, colour")
-    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--style", "daily",
-                       "-o", str(tmp_path / "d.png"))
+    code, out, _ = run(
+        capsys, "-p", "demo", "-f", "json", "booth", str(photo), "--style", "daily", "-o", str(tmp_path / "d.png")
+    )
     assert code == 0 and json.loads(out)["estimate"]["colour"] is False  # the black-and-white broadsheet
-    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "article", str(_article(tmp_path, 12)),
-                       "-o", str(tmp_path / "a.pdf"))
+    code, out, _ = run(
+        capsys, "-p", "demo", "-f", "json", "article", str(_article(tmp_path, 12)), "-o", str(tmp_path / "a.pdf")
+    )
     data = json.loads(out)
     assert code == 0 and data["estimate"]["pages"] == data["pages"] > 1
     code, out, _ = run(capsys, "-p", "demo", "-f", "json", "gazette", str(photo), "-o", str(tmp_path / "g.pdf"))
@@ -519,6 +586,7 @@ def test_preview_json_carries_the_estimate(capsys, tmp_path, printer):
 async def test_tui_test_page_obeys_the_daily_cap():
     from prt.models import Target
     from prt.tui.app import PrtApp
+
     cfg = _config(max_pages_per_day=1)
     guard._update(guard.ledger_path(), lambda used: 1)
     app = PrtApp([Target(name="demo", host="demo", driver="fake")], cfg=cfg)

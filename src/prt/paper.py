@@ -28,6 +28,7 @@ A4_AREA_MM2 = 210 * 297  # the page a cartridge's rated yield is counted in
 @dataclass(frozen=True)
 class Paper:
     """One sheet: its size, the printer media and tray it is printed on, and the resolution pages are drawn at."""
+
     name: str  # what prt calls it, e.g. "4x6"
     label: str  # what a person reads, e.g. "4×6"
     width_mm: float  # upright: the short side
@@ -81,6 +82,7 @@ class Paper:
         """The page as the printer takes it, upright: a page laid out on its side is turned a quarter turn
         counter-clockwise (IPP's "landscape"), so it reads once the sheet is turned clockwise."""
         from PIL import Image
+
         return page.transpose(Image.Transpose.ROTATE_90) if page.width > page.height else page
 
     def to_bytes(self, page: Image.Image, fmt: str) -> bytes:
@@ -110,7 +112,16 @@ A4 = Paper("a4", "A4", 210, 297, "a4", duplex=True)
 PHOTO_4X6 = Paper("4x6", "4×6", 101.6, 152.4, "4x6", tray="photo", media_type="photographic", dpi=300)
 
 # A printable 12 cm CD/DVD in the disc tray, drawn at 300 dpi on the 120 mm square around it (see prt.disc).
-DISC = Paper("disc", "CD/DVD", 120, 120, "disc", tray="disc", media_type="disc", dpi=300,
-             load="a printable CD/DVD in the disc tray, printable side up")
+DISC = Paper(
+    "disc",
+    "CD/DVD",
+    120,
+    120,
+    "disc",
+    tray="disc",
+    media_type="disc",
+    dpi=300,
+    load="a printable CD/DVD in the disc tray, printable side up",
+)
 
 PAPERS = {paper.name: paper for paper in (A4, PHOTO_4X6, DISC)}

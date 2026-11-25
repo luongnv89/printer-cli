@@ -69,6 +69,7 @@ def _photo_image(size=(300, 400), colour=(0, 0, 255)):
 # over backwards about the line y = H/2; (2) fold in half again with the photo on the front: the photo panel
 # keeps facing the viewer and the other half turns over backwards about the line x = W/2.
 
+
 def _fold(x, y, z=1):
     """Where a point (x, y) of the sheet, on the face pointing ``z`` (+1 printed side), ends up after both folds:
     (x, y, z) in the same frame. The photo is printed on the bottom half, on the right (``card.PANELS``)."""
@@ -196,11 +197,13 @@ def test_blank_inside_left_without_a_message_and_text_with_one():
 def test_page_is_an_a4_jpeg_at_150dpi():
     sheet, _ = card.compose(_photo_image())
     from prt import booth
+
     page = Image.open(io.BytesIO(booth.to_jpeg(sheet)))
     assert page.size == (1240, 1754) and page.info["dpi"] == (150, 150)
 
 
 # --- the verse ---------------------------------------------------------------------------------------------
+
 
 def test_a_blank_line_in_the_verse_is_kept_as_one_stanza_break():
     clean = card.check_card(Card("Hi", "  One  \n\n\n\ttwo\r\nthree\n\n"), exit_code=3)
@@ -234,9 +237,9 @@ def test_a_verse_too_long_for_its_box_is_cut_and_its_cut_counts_the_verse_given(
     assert size == card.VERSE_MIN and cut is not None
     assert cut.given == len(verse) and 0 < cut.max_fit < cut.given
     assert rows[-1][1].endswith("…")
-    assert verse[:cut.max_fit].endswith(rows[-1][1].removesuffix("…").rstrip())
+    assert verse[: cut.max_fit].endswith(rows[-1][1].removesuffix("…").rstrip())
     # Cut to max_fit characters (stanza breaks included in the count), the verse fits in the same box.
-    assert card.fit_verse(verse[:cut.max_fit], x1 - x0, y1 - y0)[3] is None
+    assert card.fit_verse(verse[: cut.max_fit], x1 - x0, y1 - y0)[3] is None
 
 
 def test_verse_cut_counts_characters_as_given_not_as_printed():
@@ -244,41 +247,56 @@ def test_verse_cut_counts_characters_as_given_not_as_printed():
     verse = card.check_card(Card("Hi", verse[:600]), exit_code=3).verse
     font, size, rows, cut = card.fit_verse(verse, 300, 120)
     assert cut is not None and cut.given == len(verse)
-    assert card.fit_verse(verse[:cut.max_fit], 300, 120)[3] is None
+    assert card.fit_verse(verse[: cut.max_fit], 300, 120)[3] is None
 
 
 def test_fields_cut_to_fit_are_reported_in_reading_order():
     # Within the length limits only text in very many lines, or in very long words, can overflow its box.
-    long_text = card.with_overrides(card.DEFAULT_CARD, greeting="W" * 60, message="A note\n" * 42,
-                                    verse=_long_verse(), signature="W" * 80, back="W" * 80)
+    long_text = card.with_overrides(
+        card.DEFAULT_CARD,
+        greeting="W" * 60,
+        message="A note\n" * 42,
+        verse=_long_verse(),
+        signature="W" * 80,
+        back="W" * 80,
+    )
     _, cut = card.compose(_photo_image(), long_text)
     assert list(cut) == ["greeting", "message", "verse", "signature", "back"]
     for name, c in cut.items():
         assert c.given == len(getattr(long_text, name)) and c.max_fit < c.given
-    shorter = Card(**{name: getattr(long_text, name)[:cut[name].max_fit] for name in card.FIELDS})
+    shorter = Card(**{name: getattr(long_text, name)[: cut[name].max_fit] for name in card.FIELDS})
     assert card.compose(_photo_image(), card.check_card(shorter, exit_code=3))[1] == {}
 
 
 # --- the card file -----------------------------------------------------------------------------------------
 
+
 def test_load_card_reads_every_field(tmp_path):
-    data = {"greeting": "Happy Birthday!", "verse": "Roses\nare red", "message": "To Jo",
-            "signature": "Love, Sam", "back": "Made by Sam"}
+    data = {
+        "greeting": "Happy Birthday!",
+        "verse": "Roses\nare red",
+        "message": "To Jo",
+        "signature": "Love, Sam",
+        "back": "Made by Sam",
+    }
     assert card.load_card(_card_file(tmp_path, data)) == Card(**data)
 
 
-@pytest.mark.parametrize("content, message", [
-    ("not json", "not valid JSON"),
-    ([1, 2], "must hold a JSON object"),
-    ({"greeting": "Hi"}, "missing verse"),
-    ({"verse": "x"}, "missing greeting"),
-    ({"greeting": "Hi", "verse": "x", "headline": "y"}, "unknown field(s) in card file: headline"),
-    ({"greeting": "Hi", "verse": 3}, "card file fields must be text: verse"),
-    ({"greeting": "   ", "verse": "x"}, "empty greeting"),
-    ({"greeting": "Hi", "verse": "x" * 601}, "verse is too long (601 characters, max 600)"),
-    ({"greeting": "Hi 🎂", "verse": "x"}, "cannot print"),
-    (b"\xff\xfe", "not UTF-8"),
-])
+@pytest.mark.parametrize(
+    "content, message",
+    [
+        ("not json", "not valid JSON"),
+        ([1, 2], "must hold a JSON object"),
+        ({"greeting": "Hi"}, "missing verse"),
+        ({"verse": "x"}, "missing greeting"),
+        ({"greeting": "Hi", "verse": "x", "headline": "y"}, "unknown field(s) in card file: headline"),
+        ({"greeting": "Hi", "verse": 3}, "card file fields must be text: verse"),
+        ({"greeting": "   ", "verse": "x"}, "empty greeting"),
+        ({"greeting": "Hi", "verse": "x" * 601}, "verse is too long (601 characters, max 600)"),
+        ({"greeting": "Hi 🎂", "verse": "x"}, "cannot print"),
+        (b"\xff\xfe", "not UTF-8"),
+    ],
+)
 def test_bad_card_file_is_refused_with_exit_code_3(tmp_path, content, message):
     with pytest.raises(PrinterError) as exc:
         card.load_card(_card_file(tmp_path, content))
@@ -302,6 +320,7 @@ def test_overrides_are_checked_as_usage_errors():
 
 # --- prt styles and prt schema card ------------------------------------------------------------------------
 
+
 def test_card_style_follows_the_card_fields_and_limits():
     style = next(s for s in catalog.styles() if s["name"] == "card")
     assert style["command"] == "card" and style["args"] == [] and style["schema"] == "card"
@@ -324,17 +343,20 @@ def _card_accepted(data) -> bool:
     return True
 
 
-@pytest.mark.parametrize("data", [
-    {"greeting": "Hi", "verse": "x"},
-    {"greeting": "Hi", "verse": "x", "message": "", "signature": "", "back": ""},
-    {"greeting": "x" * 60, "verse": "y" * 600, "message": "m" * 300, "signature": "s" * 80, "back": "b" * 80},
-    {"greeting": "x" * 61, "verse": "y"},
-    {"greeting": "Hi", "verse": "y" * 601},
-    {"greeting": " ", "verse": "y"},
-    {"greeting": "Hi"},
-    {"greeting": "Hi", "verse": "y", "extra": "z"},
-    {"greeting": "Hi", "verse": 1},
-])
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"greeting": "Hi", "verse": "x"},
+        {"greeting": "Hi", "verse": "x", "message": "", "signature": "", "back": ""},
+        {"greeting": "x" * 60, "verse": "y" * 600, "message": "m" * 300, "signature": "s" * 80, "back": "b" * 80},
+        {"greeting": "x" * 61, "verse": "y"},
+        {"greeting": "Hi", "verse": "y" * 601},
+        {"greeting": " ", "verse": "y"},
+        {"greeting": "Hi"},
+        {"greeting": "Hi", "verse": "y", "extra": "z"},
+        {"greeting": "Hi", "verse": 1},
+    ],
+)
 def test_card_schema_agrees_with_the_card_file_check(data):
     assert _schema_valid(data) == _card_accepted(data)
 
@@ -347,13 +369,20 @@ def test_card_schema_example_is_the_default_card():
 
 # --- prt card ------------------------------------------------------------------------------------------------
 
+
 def test_card_preview_saves_the_sheet_and_prints_nothing(capsys, tmp_path, printer):
     photo, out_file = _photo(tmp_path), tmp_path / "card.png"
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "card", str(photo), "--preview", str(out_file))
     assert code == 0 and "not printed" in err and "Fold the sheet" in err
     assert printer.made == [] and printer.jobs() == [] and guard.used_today() == 0
-    assert without_estimate(out) == {"action": "card", "file": str(out_file), "bytes": out_file.stat().st_size,
-                                     "fits": True, "cut": {}, "fold": card.FOLD}
+    assert without_estimate(out) == {
+        "action": "card",
+        "file": str(out_file),
+        "bytes": out_file.stat().st_size,
+        "fits": True,
+        "cut": {},
+        "fold": card.FOLD,
+    }
     expected, _ = card.compose(card_photo := Image.open(photo).convert("RGB"))
     assert card_photo.size == (300, 400)
     assert Image.open(out_file).tobytes() == expected.tobytes()
@@ -369,14 +398,28 @@ def test_card_preview_needs_no_yes_in_agent_mode(capsys, tmp_path, printer, monk
 
 def test_card_prints_the_verse_from_the_command_line(capsys, tmp_path, printer):
     from prt import booth
+
     photo = _photo(tmp_path)
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "card", str(photo), "--greeting", "Happy Birthday!",
-                         "--verse", "Roses are red\n\nThe sky is blue", "--signature", "Love, Sam", "--yes")
+    code, out, err = run(
+        capsys,
+        "-p",
+        "demo",
+        "-f",
+        "json",
+        "card",
+        str(photo),
+        "--greeting",
+        "Happy Birthday!",
+        "--verse",
+        "Roses are red\n\nThe sky is blue",
+        "--signature",
+        "Love, Sam",
+        "--yes",
+    )
     assert code == 0, err
     data = without_estimate(out)
     assert data == {"action": "card", "job_id": data["job_id"], "fits": True, "cut": {}, "fold": card.FOLD}
-    expected = Card("Happy Birthday!", "Roses are red\n\nThe sky is blue", "", "Love, Sam",
-                    card.DEFAULT_CARD.back)
+    expected = Card("Happy Birthday!", "Roses are red\n\nThe sky is blue", "", "Love, Sam", card.DEFAULT_CARD.back)
     sheet, _ = card.compose(booth.load_photo(photo), expected)
     assert printer.jobs() == [booth.to_jpeg(sheet)]
     assert guard.used_today() == 1
@@ -384,11 +427,11 @@ def test_card_prints_the_verse_from_the_command_line(capsys, tmp_path, printer):
 
 def test_card_file_and_flags_override_it(capsys, tmp_path, printer):
     from prt import booth
+
     photo = _photo(tmp_path)
     path = _card_file(tmp_path, {"greeting": "Congratulations", "verse": "Well done", "back": "From the team"})
     out_file = tmp_path / "card.jpg"
-    code, _, err = run(capsys, "card", str(photo), "--card-file", str(path), "--greeting", "Bravo", "-o",
-                       str(out_file))
+    code, _, err = run(capsys, "card", str(photo), "--card-file", str(path), "--greeting", "Bravo", "-o", str(out_file))
     assert code == 0, err
     expected = Card("Bravo", "Well done", back="From the team")
     assert out_file.read_bytes() == booth.to_jpeg(card.compose(booth.load_photo(photo), expected)[0])
@@ -397,34 +440,36 @@ def test_card_file_and_flags_override_it(capsys, tmp_path, printer):
 def test_card_file_dash_reads_stdin(capsys, tmp_path, printer, stdin):
     stdin(json.dumps({"greeting": "Get well soon", "verse": "Rest up"}).encode())
     out_file = tmp_path / "card.png"
-    code, out, err = run(capsys, "-f", "json", "card", str(_photo(tmp_path)), "--card-file", "-", "-o",
-                         str(out_file))
+    code, out, err = run(capsys, "-f", "json", "card", str(_photo(tmp_path)), "--card-file", "-", "-o", str(out_file))
     assert code == 0, err and out_file.is_file()
 
 
 def test_bad_card_on_stdin_sends_nothing(capsys, tmp_path, printer, stdin):
     stdin(b'{"greeting": "Hi"}')
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "card", str(_photo(tmp_path)), "--card-file", "-",
-                         "--yes")
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "card", str(_photo(tmp_path)), "--card-file", "-", "--yes")
     assert code == 3 and _error(err)["kind"] == "invalid_input" and "missing verse" in _error(err)["message"]
     assert out == "" and printer.made == [] and guard.used_today() == 0
 
 
 def test_card_cut_is_reported_and_warned(capsys, tmp_path, printer):
     out_file = tmp_path / "card.png"
-    code, out, err = run(capsys, "-f", "json", "card", str(_photo(tmp_path)), "--greeting", "W" * 60,
-                         "-o", str(out_file))
+    code, out, err = run(
+        capsys, "-f", "json", "card", str(_photo(tmp_path)), "--greeting", "W" * 60, "-o", str(out_file)
+    )
     assert code == 0 and "greeting cut to fit the card" in err
     data = json.loads(out)
     assert data["fits"] is False and set(data["cut"]) == {"greeting"}
     assert data["cut"]["greeting"]["given"] == 60 and 0 < data["cut"]["greeting"]["max_fit"] < 60
 
 
-@pytest.mark.parametrize("args, code, message", [
-    (["--greeting", ""], 2, "empty greeting"),
-    (["--verse", "x" * 601], 2, "verse is too long"),
-    (["-o", "card.txt"], 2, "unknown file type"),
-])
+@pytest.mark.parametrize(
+    "args, code, message",
+    [
+        (["--greeting", ""], 2, "empty greeting"),
+        (["--verse", "x" * 601], 2, "verse is too long"),
+        (["-o", "card.txt"], 2, "unknown file type"),
+    ],
+)
 def test_bad_flags_are_usage_errors_and_print_nothing(capsys, tmp_path, printer, args, code, message):
     result, _, err = run(capsys, "-p", "demo", "-f", "json", "card", str(_photo(tmp_path)), *args, "--yes")
     assert result == code and message in _error(err)["message"]
@@ -465,7 +510,6 @@ def test_card_asks_before_printing(capsys, tmp_path, printer, monkeypatch):
 
 def test_save_keeps_a_copy_and_prints(capsys, tmp_path, printer):
     copy = tmp_path / "card.pdf"
-    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "card", str(_photo(tmp_path)), "--save", str(copy),
-                       "--yes")
+    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "card", str(_photo(tmp_path)), "--save", str(copy), "--yes")
     assert code == 0 and copy.read_bytes().startswith(b"%PDF") and len(printer.jobs()) == 1
     assert json.loads(out)["saved"] == [{"file": str(copy), "format": "pdf", "bytes": copy.stat().st_size}]

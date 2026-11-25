@@ -98,84 +98,157 @@ def _caption() -> dict[str, Any]:
 
 
 def _block(kind: str, description: str, properties: dict[str, Any], required: tuple[str, ...] = ()) -> dict[str, Any]:
-    return {"type": "object", "description": description,
-            "properties": {"type": {"const": kind}, **properties},
-            "required": ["type", *required], "additionalProperties": False}
+    return {
+        "type": "object",
+        "description": description,
+        "properties": {"type": {"const": kind}, **properties},
+        "required": ["type", *required],
+        "additionalProperties": False,
+    }
 
 
 def _leaf_blocks() -> list[dict[str, Any]]:
     """The schema of every block except ``columns``, which holds these."""
     return [
-        _block("heading", "A heading, in bold type", {
-            "text": _string("The heading", MAX_HEADING),
-            "level": {"enum": list(HEADING_SIZES), "description": "1 (largest, the default), 2 or 3"},
-            "align": _align("left")}, ("text",)),
-        _block("text", "Paragraphs of text; a newline starts a new paragraph. Long text runs on to the next page", {
-            "text": _string("The text", MAX_TEXT),
-            "size": {"enum": list(TEXT_SIZES), "description": "Type size: small, normal (the default) or large"},
-            "align": _align("left")}, ("text",)),
-        _block("image", "A picture from a local file: JPEG, PNG, WebP, GIF, BMP or TIFF, as wide as fits", {
-            "path": {"type": "string", "minLength": 1, "pattern": NO_LINK,
-                     "description": "Path of the image file; a relative path is read from the page file's folder "
-                                    "(the current folder for a page on stdin). Web links are refused"},
-            "height": {"type": "number", "minimum": IMAGE_MM[0], "maximum": IMAGE_MM[1],
-                       "description": "Most it may be tall, in mm; by default up to two thirds of the page"},
-            "caption": _caption(),
-            "align": _align("center")}, ("path",)),
-        _block("qr", "A QR code", {
-            "data": {"type": "string", "minLength": 1, "maxLength": MAX_QR_DATA,
-                     "description": "What the code holds, e.g. a link or a Wi-Fi network"},
-            "size": {"type": "number", "minimum": QR_MM[0], "maximum": QR_MM[1],
-                     "description": f"Width of the code in mm; default {QR_DEFAULT_MM}"},
-            "caption": _caption(),
-            "align": _align("center")}, ("data",)),
-        _block("rule", "A horizontal line across the page or column", {
-            "weight": {"enum": list(RULE_PX), "description": "thin (the default) or thick"}}),
+        _block(
+            "heading",
+            "A heading, in bold type",
+            {
+                "text": _string("The heading", MAX_HEADING),
+                "level": {"enum": list(HEADING_SIZES), "description": "1 (largest, the default), 2 or 3"},
+                "align": _align("left"),
+            },
+            ("text",),
+        ),
+        _block(
+            "text",
+            "Paragraphs of text; a newline starts a new paragraph. Long text runs on to the next page",
+            {
+                "text": _string("The text", MAX_TEXT),
+                "size": {"enum": list(TEXT_SIZES), "description": "Type size: small, normal (the default) or large"},
+                "align": _align("left"),
+            },
+            ("text",),
+        ),
+        _block(
+            "image",
+            "A picture from a local file: JPEG, PNG, WebP, GIF, BMP or TIFF, as wide as fits",
+            {
+                "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": NO_LINK,
+                    "description": "Path of the image file; a relative path is read from the page file's folder "
+                    "(the current folder for a page on stdin). Web links are refused",
+                },
+                "height": {
+                    "type": "number",
+                    "minimum": IMAGE_MM[0],
+                    "maximum": IMAGE_MM[1],
+                    "description": "Most it may be tall, in mm; by default up to two thirds of the page",
+                },
+                "caption": _caption(),
+                "align": _align("center"),
+            },
+            ("path",),
+        ),
+        _block(
+            "qr",
+            "A QR code",
+            {
+                "data": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": MAX_QR_DATA,
+                    "description": "What the code holds, e.g. a link or a Wi-Fi network",
+                },
+                "size": {
+                    "type": "number",
+                    "minimum": QR_MM[0],
+                    "maximum": QR_MM[1],
+                    "description": f"Width of the code in mm; default {QR_DEFAULT_MM}",
+                },
+                "caption": _caption(),
+                "align": _align("center"),
+            },
+            ("data",),
+        ),
+        _block(
+            "rule",
+            "A horizontal line across the page or column",
+            {"weight": {"enum": list(RULE_PX), "description": "thin (the default) or thick"}},
+        ),
     ]
 
 
 def page_schema() -> dict[str, Any]:
     """The JSON Schema (draft 2020-12) of a page file; :func:`check` validates against exactly this."""
     leaves = _leaf_blocks()
-    columns = _block("columns", "Blocks side by side: one list of blocks per column. A columns block must fit "
-                     "on one page", {
-                         "columns": {"type": "array", "minItems": MIN_COLUMNS, "maxItems": MAX_COLUMNS,
-                                     "description": f"{MIN_COLUMNS} to {MAX_COLUMNS} columns, each a list of blocks "
-                                                    "(any block but columns)",
-                                     "items": {"type": "array", "maxItems": MAX_CELL_BLOCKS,
-                                               "items": {"oneOf": leaves}}}}, ("columns",))
+    columns = _block(
+        "columns",
+        "Blocks side by side: one list of blocks per column. A columns block must fit on one page",
+        {
+            "columns": {
+                "type": "array",
+                "minItems": MIN_COLUMNS,
+                "maxItems": MAX_COLUMNS,
+                "description": f"{MIN_COLUMNS} to {MAX_COLUMNS} columns, each a list of blocks (any block but columns)",
+                "items": {"type": "array", "maxItems": MAX_CELL_BLOCKS, "items": {"oneOf": leaves}},
+            }
+        },
+        ("columns",),
+    )
     blocks = [*leaves[:4], columns, leaves[4]]  # in BLOCK_TYPES order
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "prt compose page",
         "description": "A page file for `prt compose` (a file, or - for stdin), at most "
-                       f"{MAX_PAGE_FILE // 1024} KiB: blocks laid out top to bottom on A4, running on to more pages "
-                       f"as needed, up to {MAX_PAGES}. Lengths count characters. Text is printed in Latin letters: "
-                       "accents are printed without their marks, and characters the page font cannot print, such "
-                       "as emoji or Chinese, are refused. Image files must exist and be readable, at most "
-                       f"{MAX_IMAGE_BYTES // (1024 * 1024)} MiB and {MAX_IMAGE_PIXELS // 1_000_000} megapixels "
-                       f"each, and at most {MAX_IMAGES} images per page file.",
+        f"{MAX_PAGE_FILE // 1024} KiB: blocks laid out top to bottom on A4, running on to more pages "
+        f"as needed, up to {MAX_PAGES}. Lengths count characters. Text is printed in Latin letters: "
+        "accents are printed without their marks, and characters the page font cannot print, such "
+        "as emoji or Chinese, are refused. Image files must exist and be readable, at most "
+        f"{MAX_IMAGE_BYTES // (1024 * 1024)} MiB and {MAX_IMAGE_PIXELS // 1_000_000} megapixels "
+        f"each, and at most {MAX_IMAGES} images per page file.",
         "type": "object",
         "properties": {
-            "title": _string("Name of the print job, not printed; by default the first heading", MAX_TITLE,
-                             non_blank=False),
-            "blocks": {"type": "array", "minItems": 1, "maxItems": MAX_BLOCKS,
-                       "description": "The blocks, top to bottom", "items": {"oneOf": blocks}},
+            "title": _string(
+                "Name of the print job, not printed; by default the first heading", MAX_TITLE, non_blank=False
+            ),
+            "blocks": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": MAX_BLOCKS,
+                "description": "The blocks, top to bottom",
+                "items": {"oneOf": blocks},
+            },
         },
         "required": ["blocks"],
         "additionalProperties": False,
-        "examples": [{
-            "title": "Garden party",
-            "blocks": [
-                {"type": "heading", "text": "Garden Party", "align": "center"},
-                {"type": "text", "text": "Saturday from 3 pm, at number 12.\nBring something to share.",
-                 "align": "center", "size": "large"},
-                {"type": "rule"},
-                {"type": "columns", "columns": [
-                    [{"type": "heading", "text": "Menu", "level": 2},
-                     {"type": "text", "text": "Lemonade\nStrawberry cake\nGrilled corn"}],
-                    [{"type": "qr", "data": "https://example.com/rsvp", "size": 35, "caption": "Reply here"}]]},
-            ]}],
+        "examples": [
+            {
+                "title": "Garden party",
+                "blocks": [
+                    {"type": "heading", "text": "Garden Party", "align": "center"},
+                    {
+                        "type": "text",
+                        "text": "Saturday from 3 pm, at number 12.\nBring something to share.",
+                        "align": "center",
+                        "size": "large",
+                    },
+                    {"type": "rule"},
+                    {
+                        "type": "columns",
+                        "columns": [
+                            [
+                                {"type": "heading", "text": "Menu", "level": 2},
+                                {"type": "text", "text": "Lemonade\nStrawberry cake\nGrilled corn"},
+                            ],
+                            [{"type": "qr", "data": "https://example.com/rsvp", "size": 35, "caption": "Reply here"}],
+                        ],
+                    },
+                ],
+            }
+        ],
     }
 
 
@@ -183,12 +256,34 @@ def page_schema() -> dict[str, Any]:
 
 # Every keyword the page schema may use. A new one must be checked in _problem first: the tests compare this
 # checker with a full JSON Schema validator over many page files.
-KEYWORDS = frozenset({"$schema", "title", "description", "examples", "type", "const", "enum", "properties",
-                      "required", "additionalProperties", "items", "minItems", "maxItems", "minLength", "maxLength",
-                      "pattern", "minimum", "maximum", "oneOf"})
+KEYWORDS = frozenset(
+    {
+        "$schema",
+        "title",
+        "description",
+        "examples",
+        "type",
+        "const",
+        "enum",
+        "properties",
+        "required",
+        "additionalProperties",
+        "items",
+        "minItems",
+        "maxItems",
+        "minLength",
+        "maxLength",
+        "pattern",
+        "minimum",
+        "maximum",
+        "oneOf",
+    }
+)
 _TYPE_NAMES = {"object": "an object", "array": "a list", "string": "text", "number": "a number"}
-_PATTERN_PROBLEMS = {NON_BLANK: "has only spaces in it",
-                     NO_LINK: "is a web link: give the path of a local image file (nothing is downloaded)"}
+_PATTERN_PROBLEMS = {
+    NON_BLANK: "has only spaces in it",
+    NO_LINK: "is a web link: give the path of a local image file (nothing is downloaded)",
+}
 
 
 def _is_type(value: Any, kind: str) -> bool:
@@ -225,7 +320,7 @@ def _problem(schema: dict[str, Any], value: Any, where: str) -> str | None:
         if all(isinstance(t, str) for t in tags) and len(set(tags)) == len(tags):
             # Blocks: the alternatives differ in their "type" constant, so the type picks the only one that can match.
             if not isinstance(value, dict):
-                return f"{where} must be a block, e.g. {{\"type\": \"text\", \"text\": \"...\"}}"
+                return f'{where} must be a block, e.g. {{"type": "text", "text": "..."}}'
             if "type" not in value:
                 return f"{where} has no type (one of {', '.join(tags)})"
             kind = value["type"]
@@ -274,8 +369,10 @@ def _problem(schema: dict[str, Any], value: Any, where: str) -> str | None:
         if schema.get("additionalProperties", True) is False:
             extra = [name for name in value if name not in properties]
             if extra:
-                return (f"{where or 'the page'} has unknown field{'s' if len(extra) != 1 else ''} "
-                        f"{', '.join(map(_shown, extra))} (allowed: {', '.join(properties)})")
+                return (
+                    f"{where or 'the page'} has unknown field{'s' if len(extra) != 1 else ''} "
+                    f"{', '.join(map(_shown, extra))} (allowed: {', '.join(properties)})"
+                )
         for name, sub in properties.items():
             if name in value:
                 problem = _problem(sub, value[name], f"{prefix}{name}")
@@ -287,7 +384,7 @@ def _problem(schema: dict[str, Any], value: Any, where: str) -> str | None:
 def problem(data: Any) -> str | None:
     """The first way ``data`` (a parsed page file) breaks the page schema, or None when it passes."""
     if not isinstance(data, dict):
-        return "the page must be a JSON object, e.g. {\"blocks\": [...]}"
+        return 'the page must be a JSON object, e.g. {"blocks": [...]}'
     return _problem(page_schema(), data, "")
 
 
@@ -304,6 +401,7 @@ def check(data: Any, name: str = "the page file") -> None:
 @dataclass
 class Page:
     """A checked page file: its blocks, with every image already decoded (block ``"image"`` key)."""
+
     title: str
     blocks: list[dict[str, Any]]
     inputs: list[Path] = field(default_factory=list)  # the files it was read from: never overwritten by output
@@ -316,6 +414,7 @@ def _reject_constant(name: str) -> Any:
 def load(path: Path) -> Page:
     """Read and check a page file (``-`` reads stdin); refuses (exit code 3) anything that will not print."""
     from prt.booth import STDIN, read_stdin
+
     if str(path) == STDIN:
         name, base, inputs = "page on stdin", Path.cwd(), []
         content = read_stdin(MAX_PAGE_FILE)
@@ -327,8 +426,11 @@ def load(path: Path) -> Page:
         too_big = path.stat().st_size > MAX_PAGE_FILE
         content = b"" if too_big else path.read_bytes()
     if too_big:
-        raise PrinterError(f"{name} is larger than {MAX_PAGE_FILE // 1024} KiB",
-                           hint="put long text in fewer, shorter blocks", exit_code=3)
+        raise PrinterError(
+            f"{name} is larger than {MAX_PAGE_FILE // 1024} KiB",
+            hint="put long text in fewer, shorter blocks",
+            exit_code=3,
+        )
     page = parse(content, name, base)
     page.inputs[:0] = inputs
     return page
@@ -346,8 +448,9 @@ def parse(content: bytes, name: str = "the page file", base: Path | None = None)
     except RecursionError as exc:
         raise PrinterError(f"{name} is not valid JSON: nested too deeply", hint=SCHEMA_HINT, exit_code=3) from exc
     except json.JSONDecodeError as exc:
-        raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=SCHEMA_HINT,
-                           exit_code=3) from exc
+        raise PrinterError(
+            f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=SCHEMA_HINT, exit_code=3
+        ) from exc
     except ValueError as exc:  # NaN or Infinity
         raise PrinterError(f"{name} is not valid JSON: {exc}", hint=SCHEMA_HINT, exit_code=3) from exc
     try:
@@ -373,8 +476,9 @@ def _check_text(value: Any, where: str, name: str) -> None:
         try:
             value.encode("utf-8")
         except UnicodeEncodeError as exc:
-            raise PrinterError(f"{name}: {where or 'the page'} is not valid text", hint=SCHEMA_HINT,
-                               exit_code=3) from exc
+            raise PrinterError(
+                f"{name}: {where or 'the page'} is not valid text", hint=SCHEMA_HINT, exit_code=3
+            ) from exc
     elif isinstance(value, list):
         for i, item in enumerate(value):
             _check_text(item, f"{where}[{i}]", name)
@@ -384,8 +488,7 @@ def _check_text(value: Any, where: str, name: str) -> None:
 
 
 def _too_many_images(name: str, count: int) -> NoReturn:
-    raise PrinterError(f"{name} has {count} images, max {MAX_IMAGES}", hint="split it into several pages",
-                       exit_code=3)
+    raise PrinterError(f"{name} has {count} images, max {MAX_IMAGES}", hint="split it into several pages", exit_code=3)
 
 
 def _image_path(block: dict[str, Any], base: Path) -> Path:
@@ -423,13 +526,17 @@ def _printable_text(text: str, where: str, name: str, keep_newlines: bool = Fals
     unprintable = sorted({c for c in value if _glyphs(c) is None})
     if unprintable:
         shown = ", ".join(f"{c} (U+{ord(c):04X})" for c in unprintable[:10])
-        raise PrinterError(f"{name}: {where} has characters the page font cannot print: {shown}",
-                           hint="write it in Latin letters (accents are printed without their marks)", exit_code=3)
+        raise PrinterError(
+            f"{name}: {where} has characters the page font cannot print: {shown}",
+            hint="write it in Latin letters (accents are printed without their marks)",
+            exit_code=3,
+        )
     return value
 
 
-def _ready(block: dict[str, Any], where: str, base: Path, images: dict[object, tuple[Path, Image.Image]],
-           name: str) -> dict[str, Any]:
+def _ready(
+    block: dict[str, Any], where: str, base: Path, images: dict[object, tuple[Path, Image.Image]], name: str
+) -> dict[str, Any]:
     """A checked block with its text cleaned and its image decoded (once per file, in ``images``: identity to
     the first path naming it and its picture)."""
     ready = dict(block)
@@ -447,8 +554,10 @@ def _ready(block: dict[str, Any], where: str, base: Path, images: dict[object, t
             images[key] = (path, load_image(path, f"{name}: {where}"))
         ready["image"] = images[key][1]
     if kind == "columns":
-        ready["columns"] = [[_ready(b, f"{where}.columns[{c}][{i}]", base, images, name) for i, b in enumerate(cell)]
-                            for c, cell in enumerate(block["columns"])]
+        ready["columns"] = [
+            [_ready(b, f"{where}.columns[{c}][{i}]", base, images, name) for i, b in enumerate(cell)]
+            for c, cell in enumerate(block["columns"])
+        ]
     return ready
 
 
@@ -461,18 +570,27 @@ def load_image(path: Path, where: str) -> Image.Image:
     Kept at most as large as it can print, so many images never sit in memory at full size.
     """
     if not path.is_file():
-        raise PrinterError(f"{where}: image not found: {path}",
-                           hint="check the path; a relative path is read from the page file's folder", exit_code=3)
+        raise PrinterError(
+            f"{where}: image not found: {path}",
+            hint="check the path; a relative path is read from the page file's folder",
+            exit_code=3,
+        )
     size = path.stat().st_size
     if size > MAX_IMAGE_BYTES:
-        raise PrinterError(f"{where}: image {path.name} is larger than {MAX_IMAGE_BYTES // (1024 * 1024)} MiB",
-                           hint="use a smaller copy of the image", exit_code=3)
+        raise PrinterError(
+            f"{where}: image {path.name} is larger than {MAX_IMAGE_BYTES // (1024 * 1024)} MiB",
+            hint="use a smaller copy of the image",
+            exit_code=3,
+        )
     try:
         with Image.open(path, formats=IMAGE_FORMATS) as img:
             if img.width * img.height > MAX_IMAGE_PIXELS:
-                raise PrinterError(f"{where}: image {path.name} is {img.width}x{img.height} pixels, more than "
-                                   f"{MAX_IMAGE_PIXELS // 1_000_000} megapixels",
-                                   hint="use a smaller copy of the image", exit_code=3)
+                raise PrinterError(
+                    f"{where}: image {path.name} is {img.width}x{img.height} pixels, more than "
+                    f"{MAX_IMAGE_PIXELS // 1_000_000} megapixels",
+                    hint="use a smaller copy of the image",
+                    exit_code=3,
+                )
             img.draft("RGB", (CONTENT_W, CONTENT_H))  # JPEG: decode at a reduced size when that is enough
             img.load()
             img = ImageOps.exif_transpose(img)
@@ -482,8 +600,9 @@ def load_image(path: Path, where: str) -> Image.Image:
     except PrinterError:
         raise
     except UnidentifiedImageError as exc:
-        raise PrinterError(f"{where}: cannot read image {path.name}: not a supported image format",
-                           hint=IMAGE_HINT, exit_code=3) from exc
+        raise PrinterError(
+            f"{where}: cannot read image {path.name}: not a supported image format", hint=IMAGE_HINT, exit_code=3
+        ) from exc
     except (OSError, SyntaxError, ValueError, Image.DecompressionBombError) as exc:
         raise PrinterError(f"{where}: cannot read image {path.name}: {exc}", hint=IMAGE_HINT, exit_code=3) from exc
     img.thumbnail((CONTENT_W, CONTENT_H))
@@ -498,6 +617,7 @@ Draw = Callable[[Image.Image, ImageDraw.ImageDraw, int, int], None]  # (page, dr
 @dataclass
 class Piece:
     """What a block is made of on the page: a strip of ``height`` px that is never split across pages."""
+
     height: int
     draw: Draw
     keep_with_next: bool = False  # a heading: start a new page rather than end one with it
@@ -514,8 +634,15 @@ def _lines_piece(lines: list[str], size: int, width: int, align: str, fill, bold
 
     def draw(page: Image.Image, d: ImageDraw.ImageDraw, x: int, y: int) -> None:
         for n, line in enumerate(lines):
-            d.text((x + _x(align, width, font.getlength(line)), y + n * _lead(size)), line, font=font, fill=fill,
-                   stroke_width=bold, stroke_fill=fill)
+            d.text(
+                (x + _x(align, width, font.getlength(line)), y + n * _lead(size)),
+                line,
+                font=font,
+                fill=fill,
+                stroke_width=bold,
+                stroke_fill=fill,
+            )
+
     return Piece(len(lines) * _lead(size), draw, **flags)
 
 
@@ -523,8 +650,9 @@ def _caption_lines(block: dict[str, Any], width: int) -> list[str]:
     return _wrap(_printable(block.get("caption", "")), _font(CAPTION_SIZE), width)
 
 
-def _with_caption(size: tuple[int, int], picture: Callable[[], Image.Image], block: dict[str, Any],
-                  width: int) -> Piece:
+def _with_caption(
+    size: tuple[int, int], picture: Callable[[], Image.Image], block: dict[str, Any], width: int
+) -> Piece:
     """A picture ``size`` px large with its caption under it. The picture is made by ``picture()`` only when the
     piece is drawn, so measuring a page file that will be refused (too many pages) builds no bitmaps."""
     align = block.get("align", "center")
@@ -535,6 +663,7 @@ def _with_caption(size: tuple[int, int], picture: Callable[[], Image.Image], blo
         page.paste(picture(), (round(x + _x(align, width, size[0])), y))
         if below:
             below.draw(page, d, x, y + size[1] + CAPTION_GAP)
+
     return Piece(size[1] + (CAPTION_GAP + below.height if below else 0), draw)
 
 
@@ -552,15 +681,18 @@ def _qr_code(data: str, width: int, where: str) -> tuple[Any, int]:
     """The QR code of ``data`` and the px per module that fit it in ``width`` with its quiet zone; refuses (exit
     code 3) a code whose modules would be too small to scan. Builds no bitmap."""
     import segno
+
     try:
         code = segno.make(data, error="m", micro=False)
     except segno.DataOverflowError as exc:
         raise PrinterError(f"{where}: too much data for a QR code", hint="shorten the data", exit_code=3) from exc
     scale = width // code.symbol_size(scale=1, border=QR_QUIET)[0]
     if scale < QR_MIN_MODULE:
-        raise PrinterError(f"{where}: too much data for a QR code {width / PX_PER_MM:.0f} mm wide",
-                           hint="shorten the data, or give the code more room (a larger size, or fewer columns)",
-                           exit_code=3)
+        raise PrinterError(
+            f"{where}: too much data for a QR code {width / PX_PER_MM:.0f} mm wide",
+            hint="shorten the data, or give the code more room (a larger size, or fewer columns)",
+            exit_code=3,
+        )
     return code, scale
 
 
@@ -590,6 +722,7 @@ def _rule(block: dict[str, Any], width: int) -> Piece:
 
     def draw(page: Image.Image, d: ImageDraw.ImageDraw, x: int, y: int) -> None:
         d.rectangle([x, y, x + width - 1, y + thickness - 1], fill=INK)
+
     return Piece(thickness, draw)
 
 
@@ -614,8 +747,11 @@ def _heading(block: dict[str, Any], width: int, where: str) -> list[Piece]:
         return []
     piece = _lines_piece(lines, size, width, block.get("align", "left"), INK, bold=1, keep_with_next=True)
     if piece.height > CONTENT_H:
-        raise PrinterError(f"{where}: the heading is taller than a page", exit_code=3,
-                           hint="shorten the heading, or move part of it into a text block")
+        raise PrinterError(
+            f"{where}: the heading is taller than a page",
+            exit_code=3,
+            hint="shorten the heading, or move part of it into a text block",
+        )
     return [piece]
 
 
@@ -642,8 +778,11 @@ def _columns(block: dict[str, Any], width: int, where: str) -> Piece:
             stack.append((gap, piece))
             height += gap + piece.height
             if height > CONTENT_H:  # stop measuring: it cannot print
-                raise PrinterError(f"{where}: the columns block is taller than a page", exit_code=3,
-                                   hint="split it into several columns blocks, or move long text out of it")
+                raise PrinterError(
+                    f"{where}: the columns block is taller than a page",
+                    exit_code=3,
+                    hint="split it into several columns blocks, or move long text out of it",
+                )
         stacks.append(stack)
     height = max((sum(gap + p.height for gap, p in stack) for stack in stacks), default=0)
     ink = any(piece.ink for stack in stacks for _, piece in stack)
@@ -655,6 +794,7 @@ def _columns(block: dict[str, Any], width: int, where: str) -> Piece:
                 top += gap
                 piece.draw(page, d, x + c * (cell_w + GUTTER), top)
                 top += piece.height
+
     return Piece(height, draw, ink=ink)
 
 
@@ -688,8 +828,11 @@ def layout(page: Page) -> list[list[tuple[int, Piece]]]:
             need += following[0] + following[1].height
         if sheets[-1] and y + need > BOTTOM:
             if len(sheets) == MAX_PAGES:
-                raise PrinterError(f"the page file needs more than {MAX_PAGES} pages",
-                                   hint="shorten the text or print it in several page files", exit_code=3)
+                raise PrinterError(
+                    f"the page file needs more than {MAX_PAGES} pages",
+                    hint="shorten the text or print it in several page files",
+                    exit_code=3,
+                )
             sheets.append([])
             y = TOP
         if not sheets[-1]:
@@ -700,9 +843,12 @@ def layout(page: Page) -> list[list[tuple[int, Piece]]]:
         sheets[-1].append((y, piece))
         y += piece.height
     if not sheets[0]:
-        raise PrinterError("the page file has nothing to print: its blocks leave the page blank", exit_code=3,
-                           hint="add text, an image, a QR code or a rule; empty columns and text the page font "
-                                "prints as nothing, such as a lone accent mark, do not count")
+        raise PrinterError(
+            "the page file has nothing to print: its blocks leave the page blank",
+            exit_code=3,
+            hint="add text, an image, a QR code or a rule; empty columns and text the page font "
+            "prints as nothing, such as a lone accent mark, do not count",
+        )
     return sheets
 
 

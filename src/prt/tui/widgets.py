@@ -23,8 +23,7 @@ def ink_fills(ink: Ink) -> list[str]:
     return [WHITE if is_dark(c) else c for c in ink_colors(ink.color)] or [WHITE]
 
 
-def render_tanks(inks: list[Ink], height: int = 10, tank_w: int = 6, gap: int = 4,
-                 waste: str | None = None) -> Text:
+def render_tanks(inks: list[Ink], height: int = 10, tank_w: int = 6, gap: int = 4, waste: str | None = None) -> Text:
     """Vertical cartridge tanks side by side, filled from the bottom in eighth-cell steps."""
     out = Text()
     if not inks:
@@ -66,8 +65,11 @@ def render_tanks(inks: list[Ink], height: int = 10, tank_w: int = 6, gap: int = 
         out.append(("" if i == 0 else " " * gap) + f"{word:^{tank_w}}", style=colour)
     # The waste ink pad decides whether the printer keeps working: show it with the inks.
     if waste:
-        sym, colour, word = {"ok": ("●", GREEN, "ok"), "almost-full": ("▲", AMBER, "almost full — service soon"),
-                             "full": ("✗", RED, "full — service required")}.get(waste, ("◆", WHITE, waste))
+        sym, colour, word = {
+            "ok": ("●", GREEN, "ok"),
+            "almost-full": ("▲", AMBER, "almost full — service soon"),
+            "full": ("✗", RED, "full — service required"),
+        }.get(waste, ("◆", WHITE, waste))
         out.append("\n\n")
         out.append("waste ink pad  ")
         out.append(f"{sym} ", style=f"bold {colour}")
@@ -89,10 +91,13 @@ def render_system(info: PrinterInfo | None) -> Text:
         out.append("waiting for the printer…", style="italic")
         return out
     rows = [
-        ("Model", info.make_model), ("Firmware", info.firmware), ("Serial", info.serial),
+        ("Model", info.make_model),
+        ("Firmware", info.firmware),
+        ("Serial", info.serial),
         ("Uptime", _uptime(info.uptime_seconds)),
         ("Pages", f"{info.page_count:,}" if info.page_count is not None else None),
-        ("Host", info.host), ("Driver", info.driver),
+        ("Host", info.host),
+        ("Driver", info.driver),
         ("Speed", f"{info.ppm} ppm" if info.ppm else None),
         ("Duplex", "yes" if info.duplex else ("no" if info.duplex is not None else None)),
     ]
@@ -140,15 +145,17 @@ def render_alerts(st: Status | None) -> Text:
     for i, a in enumerate(st.alerts):
         if i:
             out.append("\n")
-        sym, colour = {Severity.ERROR: ("✗", RED), Severity.WARNING: ("▲", AMBER),
-                       Severity.INFO: ("◆", WHITE)}[a.severity]
+        sym, colour = {Severity.ERROR: ("✗", RED), Severity.WARNING: ("▲", AMBER), Severity.INFO: ("◆", WHITE)}[
+            a.severity
+        ]
         out.append(f"{sym} ", style=f"bold {colour}")
         out.append(escape(a.message))
     return out
 
 
-def render_topbar(name: str, model: str, st: Status | None, printers: list[tuple[str, bool]],
-                  active: int, busy: bool) -> Text:
+def render_topbar(
+    name: str, model: str, st: Status | None, printers: list[tuple[str, bool]], active: int, busy: bool
+) -> Text:
     out = Text()
     out.append(" prt ", style=f"bold {GREEN}")
     out.append("│ ", style=GRAY)

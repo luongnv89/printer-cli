@@ -130,18 +130,28 @@ def parse_morning(text: str, name: str = "morning file", kind: str = "morning fi
         item = _object(item, f"headlines.items[{index}]", {"title", "summary", "source"})
         if "title" not in item:
             raise _bad(f"headlines.items[{index}] needs a title")
-        headlines.append(Headline(
-            _text(item["title"], f"headlines.items[{index}].title", LIMITS["headlines.items[].title"]),
-            _text(item["summary"], f"headlines.items[{index}].summary", LIMITS["headlines.items[].summary"])
-            if "summary" in item else "",
-            _text(item["source"], f"headlines.items[{index}].source", LIMITS["headlines.items[].source"])
-            if "source" in item else ""))
+        headlines.append(
+            Headline(
+                _text(item["title"], f"headlines.items[{index}].title", LIMITS["headlines.items[].title"]),
+                _text(item["summary"], f"headlines.items[{index}].summary", LIMITS["headlines.items[].summary"])
+                if "summary" in item
+                else "",
+                _text(item["source"], f"headlines.items[{index}].source", LIMITS["headlines.items[].source"])
+                if "source" in item
+                else "",
+            )
+        )
 
     return Morning(
         _text(data["title"], "title", LIMITS["title"]) if "title" in data else "The Morning Paper",
         _text(data["date"], "date", LIMITS["date"]) if "date" in data else booth._today(),
         _text(data["byline"], "byline", LIMITS["byline"]) if "byline" in data else "",
-        summary, details, calendar_items, todo_items, tuple(headlines))
+        summary,
+        details,
+        calendar_items,
+        todo_items,
+        tuple(headlines),
+    )
 
 
 def load_morning(path: Path) -> Morning:
@@ -187,14 +197,20 @@ def document(paper: Morning) -> TextGazette:
         if item.source:
             headlines.append(TextBlock(item.source, f"headlines.items[{index}].source", "  — "))
     return TextGazette(
-        masthead="The Morning Gazette", headline=paper.title, kicker="Morning edition", byline=paper.byline,
-        dateline=paper.date, edition="Morning edition", tagline="Weather, calendar, to-dos and headlines",
+        masthead="The Morning Gazette",
+        headline=paper.title,
+        kicker="Morning edition",
+        byline=paper.byline,
+        dateline=paper.date,
+        edition="Morning edition",
+        tagline="Weather, calendar, to-dos and headlines",
         sections=(
             Section("Weather", tuple(weather), "weather"),
             Section("Today", tuple(calendar), "calendar"),
             Section("To do", tuple(todos), "todos"),
             Section("Headlines", tuple(headlines), "headlines"),
-        ))
+        ),
+    )
 
 
 def _string(limit: int) -> dict:
@@ -207,43 +223,92 @@ def morning_schema() -> dict:
     """The JSON Schema (draft 2020-12) of a morning-edition file."""
     example = {
         "title": "The Morning Paper",
-        "weather": {"summary": "Fair and mild, 18°C, clouding over after lunch",
-                    "details": ["Light northwest wind", "Dry until evening"]},
+        "weather": {
+            "summary": "Fair and mild, 18°C, clouding over after lunch",
+            "details": ["Light northwest wind", "Dry until evening"],
+        },
         "calendar": {"items": ["09:00 Team standup", "13:00 Dentist"]},
         "todos": {"items": ["Water the plants", "Post the parcel"]},
-        "headlines": {"items": [{"title": "Local library reopens",
-                                 "summary": "The branch opens again after six months of repairs.",
-                                 "source": "Example News"}]},
+        "headlines": {
+            "items": [
+                {
+                    "title": "Local library reopens",
+                    "summary": "The branch opens again after six months of repairs.",
+                    "source": "Example News",
+                }
+            ]
+        },
     }
-    return {"$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://luongnv.com/schemas/prt-morning.json",
-            "title": "prt morning edition", "type": "object", "additionalProperties": False,
-            "required": ["weather", "calendar", "todos", "headlines"],
-            "properties": {
-                "title": _string(LIMITS["title"]), "date": _string(LIMITS["date"]), "byline": _string(LIMITS["byline"]),
-                "weather": {"type": "object", "additionalProperties": False, "required": ["summary"],
-                            "properties": {"summary": _string(LIMITS["weather.summary"]),
-                                           "details": {"type": "array", "maxItems": MAX_DETAILS,
-                                                       "items": _string(LIMITS["weather.details[]"])}}},
-                "calendar": {"type": "object", "additionalProperties": False, "required": ["items"],
-                             "properties": {"items": {"type": "array", "maxItems": MAX_ITEMS,
-                                                      "items": _string(LIMITS["calendar.items[]"])}}},
-                "todos": {"type": "object", "additionalProperties": False, "required": ["items"],
-                          "properties": {"items": {"type": "array", "maxItems": MAX_ITEMS,
-                                                   "items": _string(LIMITS["todos.items[]"])}}},
-                "headlines": {"type": "object", "additionalProperties": False, "required": ["items"],
-                              "properties": {"items": {"type": "array", "maxItems": MAX_HEADLINES,
-                                                       "items": {"type": "object", "additionalProperties": False,
-                                                                 "required": ["title"],
-                                                                 "properties": {
-                                                                     "title": _string(LIMITS["headlines.items[].title"]),
-                                                                     "summary": _string(LIMITS["headlines.items[].summary"]),
-                                                                     "source": _string(LIMITS["headlines.items[].source"])}}}}},
-            }, "examples": [example]}
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://luongnv.com/schemas/prt-morning.json",
+        "title": "prt morning edition",
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["weather", "calendar", "todos", "headlines"],
+        "properties": {
+            "title": _string(LIMITS["title"]),
+            "date": _string(LIMITS["date"]),
+            "byline": _string(LIMITS["byline"]),
+            "weather": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["summary"],
+                "properties": {
+                    "summary": _string(LIMITS["weather.summary"]),
+                    "details": {
+                        "type": "array",
+                        "maxItems": MAX_DETAILS,
+                        "items": _string(LIMITS["weather.details[]"]),
+                    },
+                },
+            },
+            "calendar": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["items"],
+                "properties": {
+                    "items": {"type": "array", "maxItems": MAX_ITEMS, "items": _string(LIMITS["calendar.items[]"])}
+                },
+            },
+            "todos": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["items"],
+                "properties": {
+                    "items": {"type": "array", "maxItems": MAX_ITEMS, "items": _string(LIMITS["todos.items[]"])}
+                },
+            },
+            "headlines": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["items"],
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "maxItems": MAX_HEADLINES,
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["title"],
+                            "properties": {
+                                "title": _string(LIMITS["headlines.items[].title"]),
+                                "summary": _string(LIMITS["headlines.items[].summary"]),
+                                "source": _string(LIMITS["headlines.items[].source"]),
+                            },
+                        },
+                    }
+                },
+            },
+        },
+        "examples": [example],
+    }
 
 
 def morning_fields() -> tuple:
     """Catalog field rows for the morning file (imported lazily by ``prt.catalog``)."""
     from prt.catalog import Field
+
     return (
         Field("title", "The newspaper's front-page headline (default “The Morning Paper”)", False, LIMITS["title"]),
         Field("date", "The dateline (default: today)", False, LIMITS["date"]),
@@ -253,6 +318,16 @@ def morning_fields() -> tuple:
         Field("calendar.items[]", "Up to 10 appointments or events", True, LIMITS["calendar.items[]"]),
         Field("todos.items[]", "Up to 10 tasks for the day", True, LIMITS["todos.items[]"]),
         Field("headlines.items[].title", "Up to 6 headline titles", True, LIMITS["headlines.items[].title"]),
-        Field("headlines.items[].summary", "An optional summary under each headline", False, LIMITS["headlines.items[].summary"]),
-        Field("headlines.items[].source", "An optional source line under each headline", False, LIMITS["headlines.items[].source"]),
+        Field(
+            "headlines.items[].summary",
+            "An optional summary under each headline",
+            False,
+            LIMITS["headlines.items[].summary"],
+        ),
+        Field(
+            "headlines.items[].source",
+            "An optional source line under each headline",
+            False,
+            LIMITS["headlines.items[].source"],
+        ),
     )

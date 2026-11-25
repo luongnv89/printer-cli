@@ -1,0 +1,8 @@
+# Changes to the hooks, CI, hook scripts, tests and the files that configure them
+# need the owner's review once branch protection requires code-owner review.
+/.pre-commit-config.yaml  @luongnv89
+/.github/workflows/       @luongnv89
+/.github/CODEOWNERS       @luongnv89
+/scripts/                 @luongnv89
+/tests/                   @luongnv89
+/pyproject.toml           @luongnv89

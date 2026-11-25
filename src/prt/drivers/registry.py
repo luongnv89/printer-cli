@@ -37,12 +37,14 @@ def detect(make_model: str) -> str:
 def make_driver(target: Target, timeout: float = 5.0) -> Driver:
     if target.driver == "fake" or target.host == "demo":
         from prt.drivers.fake import FakeDriver
+
         return FakeDriver(target, timeout)
     if target.driver != "auto":
         cls = DRIVERS.get(target.driver)
         if cls is None:
-            raise PrinterError(f"unknown driver '{target.driver}'",
-                               hint="choose one of: " + ", ".join(driver_names()), exit_code=2)
+            raise PrinterError(
+                f"unknown driver '{target.driver}'", hint="choose one of: " + ", ".join(driver_names()), exit_code=2
+            )
         return cls(target, timeout)
     # Auto: one IPP round-trip tells us the make; reuse the fetched attributes.
     probe = IPPDriver(target, timeout)

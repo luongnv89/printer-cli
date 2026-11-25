@@ -65,6 +65,7 @@ def compose(photo: Image.Image) -> tuple[Image.Image, Cuts]:
     page = Image.new("L", (width, height), 255)
     x0, y0 = (width - art_w) // 2, (height - art_h) // 2
     page.paste(art, (x0, y0))
-    ImageDraw.Draw(page).rectangle((x0 - FRAME, y0 - FRAME, x0 + art_w - 1 + FRAME, y0 + art_h - 1 + FRAME),
-                                   outline=0, width=FRAME)
+    ImageDraw.Draw(page).rectangle(
+        (x0 - FRAME, y0 - FRAME, x0 + art_w - 1 + FRAME, y0 + art_h - 1 + FRAME), outline=0, width=FRAME
+    )
     return page.convert("RGB"), {}

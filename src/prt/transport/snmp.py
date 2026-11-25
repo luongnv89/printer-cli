@@ -124,8 +124,9 @@ def decode_response(data: bytes) -> dict[str, Any]:
     return result
 
 
-def get(host: str, oids: list[str], community: str = "public", timeout: float = 2.0,
-        retries: int = 1, port: int = 161) -> dict[str, Any]:
+def get(
+    host: str, oids: list[str], community: str = "public", timeout: float = 2.0, retries: int = 1, port: int = 161
+) -> dict[str, Any]:
     request_id = int.from_bytes(os.urandom(3), "big")
     packet = encode_get(oids, community, request_id)
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:

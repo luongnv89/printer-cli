@@ -61,6 +61,7 @@ with its fields and their character limits. Errors carry a machine-readable `kin
 @dataclass
 class Preview:
     """Pages a preview rendered and a token can print: the JPEG bytes sent to the printer, one job per page."""
+
     kind: str  # what was previewed, e.g. "wizard card"
     pages: list[bytes]
     names: list[str]  # job name of each page
@@ -70,6 +71,7 @@ class Preview:
 @dataclass
 class Result:
     """What a tool returns: ``data`` (JSON) and, for previews, page images (JPEG bytes) to show the agent."""
+
     data: dict[str, Any]
     images: list[bytes] = field(default_factory=list)
 
@@ -92,8 +94,13 @@ class Tools:
     on failure. ``printer`` and ``timeout`` are the defaults ``prt mcp`` was started with (``-p``,
     ``--timeout``); a tool call may name another saved printer."""
 
-    def __init__(self, cfg: Config, printer: str | None = None, timeout: float | None = None,
-                 clock: Callable[[], float] = time.monotonic):
+    def __init__(
+        self,
+        cfg: Config,
+        printer: str | None = None,
+        timeout: float | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ):
         self.cfg = cfg
         self.printer = printer
         self.timeout = timeout
@@ -128,6 +135,7 @@ class Tools:
         model, pages = name, None
         if d is not None and not st.stale:
             from prt.cli import _quick_facts
+
             model, _, _, pages = _quick_facts(d)
         return {"printer": name, "model": model, "page_count": pages, **to_dict(st)}
 
@@ -156,39 +164,57 @@ class Tools:
         for token in [t for t, p in self._previews.items() if now - p.created > TOKEN_TTL]:
             del self._previews[token]
 
-    def _preview_result(self, action: str, style: str, rendered: render.Rendered, kind: str, names: list[str],
-                        shown: int, **extra: Any) -> Result:
+    def _preview_result(
+        self, action: str, style: str, rendered: render.Rendered, kind: str, names: list[str], shown: int, **extra: Any
+    ) -> Result:
         from prt import booth
+
         token = self._remember(Preview(kind, [booth.to_jpeg(p) for p in rendered.pages], names, self.clock()))
         images = [preview_image(page) for page in rendered.pages[:shown]]
-        data = {"action": action, "style": style, **extra, "pages": len(rendered.pages), **rendered.fit(),
-                **rendered.estimate(), "images": len(images), "printed": False, "token": token,
-                "token_expires_in": TOKEN_TTL}
+        data = {
+            "action": action,
+            "style": style,
+            **extra,
+            "pages": len(rendered.pages),
+            **rendered.fit(),
+            **rendered.estimate(),
+            "images": len(images),
+            "printed": False,
+            "token": token,
+            "token_expires_in": TOKEN_TTL,
+        }
         return Result(data, images)
 
     def preview_booth(self, photo: str, style: str = "metro", story: dict[str, Any] | None = None) -> Result:
         """Render a booth page of ``photo`` (a path) without printing it. ``story`` holds any of headline, story,
         kicker, caption and byline; fields left out keep the style's built-in text."""
         from prt import booth
+
         if style not in booth.STYLES:
             raise _usage(f"unknown booth style '{style}'", "choose: " + ", ".join(booth.STYLES))
         if story is not None and not isinstance(story, dict):
-            raise PrinterError("story must be an object", hint='e.g. {"headline": "...", "story": "..."}',
-                               exit_code=3)
+            raise PrinterError("story must be an object", hint='e.g. {"headline": "...", "story": "..."}', exit_code=3)
         path = Path(photo).expanduser()
         image = booth.load_photo(path)
         # Checked as a story file is: unknown fields, text values, limits; left-out fields keep the style's own.
         text = booth.parse_story(json.dumps({**asdict(booth.default_story(style)), **(story or {})}))
         rendered = render.booth_page(image, text, style)
-        return self._preview_result("preview_booth", style, rendered, booth.KINDS[style],
-                                    [f"prt booth {path.name}"], 1, photo=str(path))
+        return self._preview_result(
+            "preview_booth", style, rendered, booth.KINDS[style], [f"prt booth {path.name}"], 1, photo=str(path)
+        )
 
-    def preview_article(self, source: str | None = None, content: str | dict[str, Any] | None = None,
-                        content_type: str | None = None, style: str = "magazine",
-                        max_images: int = DEFAULT_ARTICLE_IMAGES) -> Result:
+    def preview_article(
+        self,
+        source: str | None = None,
+        content: str | dict[str, Any] | None = None,
+        content_type: str | None = None,
+        style: str = "magazine",
+        max_images: int = DEFAULT_ARTICLE_IMAGES,
+    ) -> Result:
         """Render an article as magazine pages without printing it. Give either ``source`` (an http(s) link or a
         saved file) or ``content`` (the article itself: JSON object or text, HTML or plain text)."""
         from prt import article
+
         if style not in article.ARTICLE_STYLES:
             raise _usage(f"unknown article style '{style}'", "choose: " + ", ".join(article.ARTICLE_STYLES))
         if (source is None) == (content is None):
@@ -202,14 +228,27 @@ class Tools:
         else:
             text = article.normalise(_parse_content(content, content_type))
         rendered = render.article_pages(text, style)
-        return self._preview_result("preview_article", style, rendered, article.ARTICLE_STYLES[style].kind,
-                                    render.article_job_names(text.title, len(rendered.pages)),
-                                    max_images, title=text.title)
+        return self._preview_result(
+            "preview_article",
+            style,
+            rendered,
+            article.ARTICLE_STYLES[style].kind,
+            render.article_job_names(text.title, len(rendered.pages)),
+            max_images,
+            title=text.title,
+        )
 
     # --- printing ------------------------------------------------------------------------------------
 
-    def print_file(self, path: str | None = None, token: str | None = None, confirm: bool = False,
-                   copies: int = 1, media: str | None = None, printer: str | None = None) -> dict[str, Any]:
+    def print_file(
+        self,
+        path: str | None = None,
+        token: str | None = None,
+        confirm: bool = False,
+        copies: int = 1,
+        media: str | None = None,
+        printer: str | None = None,
+    ) -> dict[str, Any]:
         """Print what a preview rendered (``token``), or a file (``path``, only with ``confirm``)."""
         if (path is None) == (token is None):
             raise _usage("give either token (from a preview) or path (a file to print)")
@@ -218,9 +257,12 @@ class Tools:
                 raise _usage("copies and media apply to a path; a token prints the previewed pages as they are")
             return self._print_preview(token, printer)
         if not confirm:
-            raise PrinterError("print_file prints a file only with confirm: true — nothing was sent",
-                               hint="preview the page and print its token, or pass confirm: true for this file",
-                               exit_code=2, kind="confirmation_required")
+            raise PrinterError(
+                "print_file prints a file only with confirm: true — nothing was sent",
+                hint="preview the page and print its token, or pass confirm: true for this file",
+                exit_code=2,
+                kind="confirmation_required",
+            )
         if not 1 <= copies <= 99:
             raise _usage("copies must be between 1 and 99")
         file = Path(path).expanduser()
@@ -230,8 +272,11 @@ class Tools:
         d.require(Capability.PRINT)
         pages = guard.job_pages([file], copies)
         with guard.authorize(self.cfg, pages, yes=True) as ticket:
-            job = d.print_file(file, PrintOptions(copies=copies, media=media, job_name=file.name),
-                               before_send=lambda: ticket.attempt(pages or 0))
+            job = d.print_file(
+                file,
+                PrintOptions(copies=copies, media=media, job_name=file.name),
+                before_send=lambda: ticket.attempt(pages or 0),
+            )
         return {"action": "print", "printer": d.target.name, "file": str(file), "copies": copies, "job_id": job}
 
     def _print_preview(self, token: str, printer: str | None) -> dict[str, Any]:
@@ -239,9 +284,12 @@ class Tools:
             self._expire()
             preview = self._previews.get(token)
         if preview is None:
-            raise _usage("unknown or expired preview token — nothing was sent",
-                         "preview again and print with the token it returns (tokens are single-use and last "
-                         f"{TOKEN_TTL // 60} minutes)", kind="invalid_token")
+            raise _usage(
+                "unknown or expired preview token — nothing was sent",
+                "preview again and print with the token it returns (tokens are single-use and last "
+                f"{TOKEN_TTL // 60} minutes)",
+                kind="invalid_token",
+            )
         d = self._driver(printer)
         d.require(Capability.PRINT)
         jobs: list[int] = []
@@ -254,16 +302,26 @@ class Tools:
             except PrinterError as exc:
                 if not jobs:
                     raise
-                raise PrinterError(f"{exc}; pages already queued as job(s) {', '.join(map(str, jobs))}",
-                                   hint=exc.hint, exit_code=exc.exit_code, kind=exc.kind) from exc
-        return {"action": "print", "printer": d.target.name, "kind": preview.kind, "pages": len(preview.pages),
-                "job_ids": jobs}
+                raise PrinterError(
+                    f"{exc}; pages already queued as job(s) {', '.join(map(str, jobs))}",
+                    hint=exc.hint,
+                    exit_code=exc.exit_code,
+                    kind=exc.kind,
+                ) from exc
+        return {
+            "action": "print",
+            "printer": d.target.name,
+            "kind": preview.kind,
+            "pages": len(preview.pages),
+            "job_ids": jobs,
+        }
 
 
 def _parse_content(content: str | dict[str, Any] | None, content_type: str | None):
     """An article from tool-call content: a JSON object, or text that is JSON, HTML or plain text (as stdin is
     read when ``content_type`` is not given)."""
     from prt import article
+
     if isinstance(content, dict):
         if content_type not in (None, "json"):
             raise _usage("content is an object, so content_type can only be json")
@@ -277,8 +335,11 @@ def _parse_content(content: str | dict[str, Any] | None, content_type: str | Non
     else:
         raise PrinterError("content must be text or a JSON object", exit_code=3)
     if len(data) > article.MAX_BYTES:
-        raise PrinterError(f"the article is larger than {article.MAX_BYTES // (1024 * 1024)} MiB",
-                           hint="send just the article", exit_code=3)
+        raise PrinterError(
+            f"the article is larger than {article.MAX_BYTES // (1024 * 1024)} MiB",
+            hint="send just the article",
+            exit_code=3,
+        )
     return article.parse(data, kind, "the article")
 
 
@@ -291,20 +352,25 @@ def _sdk():
         import mcp_types
         from mcp.server.mcpserver import MCPServer
     except ImportError as exc:
-        raise PrinterError("prt mcp needs the MCP Python SDK (mcp 2 or later), which is not installed",
-                           hint=INSTALL_HINT, exit_code=2, kind="missing_dependency") from exc
+        raise PrinterError(
+            "prt mcp needs the MCP Python SDK (mcp 2 or later), which is not installed",
+            hint=INSTALL_HINT,
+            exit_code=2,
+            kind="missing_dependency",
+        ) from exc
     return MCPServer, mcp_types
 
 
 def build_server(tools: Tools):
     """An ``MCPServer`` exposing ``tools``; raises PrinterError (kind ``missing_dependency``) without the SDK."""
     MCPServer, types = _sdk()
-    server = MCPServer("prt", title="printer-cli", instructions=INSTRUCTIONS, version=__version__,
-                       log_level="WARNING")
-    read_only = types.ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True,
-                                      open_world_hint=False)
-    prints = types.ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False,
-                                   open_world_hint=False)
+    server = MCPServer("prt", title="printer-cli", instructions=INSTRUCTIONS, version=__version__, log_level="WARNING")
+    read_only = types.ToolAnnotations(
+        read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False
+    )
+    prints = types.ToolAnnotations(
+        read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False
+    )
 
     # Each tool returns a CallToolResult (text, images, structured content, is_error) built here. Their return
     # types are left unannotated: the SDK then takes the result as it is instead of wrapping it.
@@ -313,14 +379,20 @@ def build_server(tools: Tools):
             out = call()
         except PrinterError as exc:
             error = {"error": exc.to_dict()}
-            return types.CallToolResult(content=[types.TextContent(type="text", text=json.dumps(error))],
-                                        structured_content=error, is_error=True)
+            return types.CallToolResult(
+                content=[types.TextContent(type="text", text=json.dumps(error))],
+                structured_content=error,
+                is_error=True,
+            )
         result = out if isinstance(out, Result) else Result(out)
         content: list[Any] = [types.TextContent(type="text", text=json.dumps(result.data, default=str))]
-        content += [types.ImageContent(type="image", data=base64.b64encode(image).decode("ascii"),
-                                       mime_type="image/jpeg") for image in result.images]
-        return types.CallToolResult(content=content, structured_content=json.loads(json.dumps(result.data,
-                                                                                              default=str)))
+        content += [
+            types.ImageContent(type="image", data=base64.b64encode(image).decode("ascii"), mime_type="image/jpeg")
+            for image in result.images
+        ]
+        return types.CallToolResult(
+            content=content, structured_content=json.loads(json.dumps(result.data, default=str))
+        )
 
     @server.tool(annotations=read_only)
     def status(printer: str | None = None):
@@ -340,10 +412,12 @@ def build_server(tools: Tools):
         character limits, how many photos it takes and a link to a sample page."""
         return answer(tools.list_styles)
 
-    @server.tool(annotations=types.ToolAnnotations(read_only_hint=True, destructive_hint=False,
-                                                   idempotent_hint=False, open_world_hint=False))
-    def preview_booth(photo: str, style: BoothStyleName = "metro",
-                      story: dict[str, str] | None = None):
+    @server.tool(
+        annotations=types.ToolAnnotations(
+            read_only_hint=True, destructive_hint=False, idempotent_hint=False, open_world_hint=False
+        )
+    )
+    def preview_booth(photo: str, style: BoothStyleName = "metro", story: dict[str, str] | None = None):
         """Render a photo as an A4 booth page WITHOUT printing it, and return the page image. `photo` is the path
         of a JPEG, PNG, WebP, GIF, BMP or TIFF file. `style`: metro (colour tabloid), daily (black-and-white
         broadsheet), wizard (fantasy trading card), wanted (pirate poster), certificate (award certificate), sports
@@ -353,11 +427,18 @@ def build_server(tools: Tools):
         and gives a `token`: pass it to print_file to print this exact page."""
         return answer(lambda: tools.preview_booth(photo, style, story))
 
-    @server.tool(annotations=types.ToolAnnotations(read_only_hint=True, destructive_hint=False,
-                                                   idempotent_hint=False, open_world_hint=True))
-    def preview_article(source: str | None = None, content: str | dict[str, Any] | None = None,
-                        content_type: ContentType | None = None, style: ArticleStyleName = "magazine",
-                        max_images: int = DEFAULT_ARTICLE_IMAGES):
+    @server.tool(
+        annotations=types.ToolAnnotations(
+            read_only_hint=True, destructive_hint=False, idempotent_hint=False, open_world_hint=True
+        )
+    )
+    def preview_article(
+        source: str | None = None,
+        content: str | dict[str, Any] | None = None,
+        content_type: ContentType | None = None,
+        style: ArticleStyleName = "magazine",
+        max_images: int = DEFAULT_ARTICLE_IMAGES,
+    ):
         """Render an article as A4 magazine pages WITHOUT printing them, and return the first `max_images` page
         images. Give `source` (an http(s) link to a blog post, news article or X post, or the path of a saved
         JSON, HTML or text file) or `content` (the article itself: an object {"title", "body", "author"?,
@@ -367,8 +448,14 @@ def build_server(tools: Tools):
         return answer(lambda: tools.preview_article(source, content, content_type, style, max_images))
 
     @server.tool(annotations=prints)
-    def print_file(path: str | None = None, token: str | None = None, confirm: bool = False, copies: int = 1,
-                   media: str | None = None, printer: str | None = None):
+    def print_file(
+        path: str | None = None,
+        token: str | None = None,
+        confirm: bool = False,
+        copies: int = 1,
+        media: str | None = None,
+        printer: str | None = None,
+    ):
         """Print on paper. Give `token` from preview_booth or preview_article to print exactly what it showed
         (single use), or `path` of a file (JPEG, PNG; PDF and others via CUPS) together with `confirm: true`.
         Without one of them nothing is printed. `copies` (1-99) and `media` (a4, letter, 4x6, ...) apply to a

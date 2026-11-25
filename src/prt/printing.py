@@ -76,6 +76,7 @@ def sent_directly(path: Path) -> bool:
     Only a job sent directly has a printer job id that can be followed with ``prt jobs wait``.
     """
     from prt.drivers.ipp import DIRECT_FORMATS
+
     return path.suffix.lower() in DIRECT_FORMATS or path.suffix.lower() in IMAGE_EXT
 
 
@@ -113,6 +114,7 @@ def print_file(driver, path: Path, options: PrintOptions, before_send: Callable[
     if ext in IMAGE_EXT:
         try:
             from PIL import Image
+
             with Image.open(path) as img:
                 buf = io.BytesIO()
                 img.convert("RGB").save(buf, "JPEG", quality=95)
@@ -120,13 +122,16 @@ def print_file(driver, path: Path, options: PrintOptions, before_send: Callable[
             raise PrinterError(f"cannot read image {path.name}: {exc}", exit_code=3) from exc
         return send(lambda: driver.submit(buf.getvalue(), "image/jpeg", options))
     if options.direct:
-        raise PrinterError(f"{ext or 'this file type'} cannot be sent directly — the printer only "
-                           "accepts JPEG, PWG-raster and URF", hint="drop --direct to print via CUPS",
-                           exit_code=3)
+        raise PrinterError(
+            f"{ext or 'this file type'} cannot be sent directly — the printer only accepts JPEG, PWG-raster and URF",
+            hint="drop --direct to print via CUPS",
+            exit_code=3,
+        )
     queue = queue_for(driver)
     if not queue:
         raise PrinterError(
             f"the printer cannot take {ext or 'this file'} directly and no CUPS queue was found for it",
             hint="add the printer in System Settings → Printers (or `lpadmin`), or convert to JPEG",
-            exit_code=1)
+            exit_code=1,
+        )
     return send(lambda: cups_print(queue, path, options))

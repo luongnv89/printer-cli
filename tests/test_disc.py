@@ -64,8 +64,14 @@ def printer(monkeypatch):
     def no_disc_tray():
         info = replace(fake.info(), media_sources=["auto", "main", "photo"])
         monkeypatch.setattr(fake, "info", lambda: info)
-    return SimpleNamespace(driver=fake, made=made, requests=requests, no_disc_tray=no_disc_tray,
-                           jobs=lambda: [data for _, _, _, data in requests()])
+
+    return SimpleNamespace(
+        driver=fake,
+        made=made,
+        requests=requests,
+        no_disc_tray=no_disc_tray,
+        jobs=lambda: [data for _, _, _, data in requests()],
+    )
 
 
 def _radius(x, y):
@@ -74,11 +80,13 @@ def _radius(x, y):
 
 def _ring_points(r):
     """Eight pixels at distance ``r`` from the centre of the disc."""
-    return [(round(disc.C + r * math.cos(a)), round(disc.C + r * math.sin(a))) for a in
-            [k * math.pi / 4 for k in range(8)]]
+    return [
+        (round(disc.C + r * math.cos(a)), round(disc.C + r * math.sin(a))) for a in [k * math.pi / 4 for k in range(8)]
+    ]
 
 
 # --- the paper and the media size ---------------------------------------------------------------
+
 
 def test_the_label_is_a_120mm_square_at_300dpi_from_the_disc_tray():
     page, cut = disc.compose(Image.new("RGB", (600, 400), DARK))
@@ -88,6 +96,7 @@ def test_the_label_is_a_120mm_square_at_300dpi_from_the_disc_tray():
 
 # --- the ring: no ink outside it, nor over the hub ----------------------------------------------
 
+
 def test_everything_outside_the_ring_and_over_the_hub_is_white():
     page, _ = disc.compose(Image.new("RGB", (600, 400), DARK))
     for point in [(0, 0), (disc.W - 1, 0), (0, disc.H - 1), (disc.W - 1, disc.H - 1), (disc.C, disc.C)]:
@@ -96,15 +105,24 @@ def test_everything_outside_the_ring_and_over_the_hub_is_white():
         for point in _ring_points(r):
             assert page.getpixel(point) == WHITE, (r, point)
     # Every pixel outside the outer circle or inside the hole, not only a sample of them.
-    assert all(page.getpixel((x, y)) == WHITE for y in range(0, disc.H, 7) for x in range(0, disc.W, 7)
-               if not disc.R_IN - 1 <= _radius(x, y) <= disc.R_OUT + 1)
+    assert all(
+        page.getpixel((x, y)) == WHITE
+        for y in range(0, disc.H, 7)
+        for x in range(0, disc.W, 7)
+        if not disc.R_IN - 1 <= _radius(x, y) <= disc.R_OUT + 1
+    )
 
 
 def test_the_photo_fills_the_ring_up_to_its_edges():
     page, _ = disc.compose(Image.new("RGB", (600, 400), DARK), Disc(title="T"))
     # Just inside the hub's edge and just inside the outer edge, clear of the text.
-    for point in [(disc.C + disc.R_IN + 3, disc.C), (disc.C - disc.R_IN - 3, disc.C), (disc.C, disc.C + disc.R_IN + 3),
-                  (disc.C + disc.R_OUT - 3, disc.C), (disc.C, disc.C + disc.R_OUT - 3)]:
+    for point in [
+        (disc.C + disc.R_IN + 3, disc.C),
+        (disc.C - disc.R_IN - 3, disc.C),
+        (disc.C, disc.C + disc.R_IN + 3),
+        (disc.C + disc.R_OUT - 3, disc.C),
+        (disc.C, disc.C + disc.R_OUT - 3),
+    ]:
         assert page.getpixel(point) != WHITE and sum(page.getpixel(point)) < 300, point
 
 
@@ -122,6 +140,7 @@ def test_the_estimate_counts_only_the_printed_ring():
 
 
 # --- the text -------------------------------------------------------------------------------------
+
 
 def _inked(page, box):
     """Whether ``box`` holds the white handwriting (on a dark photo)."""
@@ -184,24 +203,28 @@ def test_text_of_only_combining_marks_is_drawn_without_crashing(field):
 
 # --- the label file ------------------------------------------------------------------------------
 
+
 def test_disc_file_takes_tracks_as_a_list_or_one_text(tmp_path):
     as_list = disc.load_disc(_disc_file(tmp_path, {"title": "Mix", "tracks": ["One", "  Two  ", ""]}))
     as_text = disc.parse_disc(json.dumps({"title": "Mix", "tracks": "One\n  Two  \n\n"}))
     assert as_list == as_text == Disc(title="Mix", tracks=("One", "Two"))
 
 
-@pytest.mark.parametrize("data, message", [
-    ({"subtitle": "x"}, "missing title"),
-    ({"title": "   "}, "empty title"),
-    ({"title": "x", "songs": []}, "unknown field"),
-    ({"title": "x", "tracks": [1, 2]}, "must be text"),
-    ({"title": "x", "footer": None}, "must be text"),
-    ({"title": "x" * 61}, "title is too long"),
-    ({"title": "x", "tracks": ["t"] * 25}, "25 tracks, more than 24"),
-    ({"title": "x", "tracks": ["t" * 81]}, "track 1 is too long"),
-    ({"title": "x", "tracks": ["Party 🎉"]}, "cannot print"),
-    (["x"], "JSON object"),
-])
+@pytest.mark.parametrize(
+    "data, message",
+    [
+        ({"subtitle": "x"}, "missing title"),
+        ({"title": "   "}, "empty title"),
+        ({"title": "x", "songs": []}, "unknown field"),
+        ({"title": "x", "tracks": [1, 2]}, "must be text"),
+        ({"title": "x", "footer": None}, "must be text"),
+        ({"title": "x" * 61}, "title is too long"),
+        ({"title": "x", "tracks": ["t"] * 25}, "25 tracks, more than 24"),
+        ({"title": "x", "tracks": ["t" * 81]}, "track 1 is too long"),
+        ({"title": "x", "tracks": ["Party 🎉"]}, "cannot print"),
+        (["x"], "JSON object"),
+    ],
+)
 def test_bad_disc_files_are_refused_with_exit_code_3(tmp_path, data, message):
     with pytest.raises(PrinterError, match=message) as err:
         disc.load_disc(_disc_file(tmp_path, data))
@@ -231,6 +254,7 @@ def test_flags_override_the_file_and_track_replaces_the_list():
 
 # --- the schema ----------------------------------------------------------------------------------
 
+
 def _accepted(data) -> bool:
     try:
         disc.parse_disc(json.dumps(data))
@@ -240,27 +264,30 @@ def _accepted(data) -> bool:
     return True
 
 
-@pytest.mark.parametrize("data", [
-    {"title": "Mix"},
-    {"title": "Mix", "subtitle": "", "tracks": [], "footer": ""},
-    {"title": "Mix", "tracks": ["One", "Two"]},
-    {"title": "Mix", "tracks": "One\nTwo"},
-    {"title": "x" * 60, "subtitle": "x" * 80, "footer": "x" * 60, "tracks": ["x" * 80] * 24},
-    {"title": "Mix", "tracks": "\n".join(["x"] * 24)},
-    {"title": "Mix", "tracks": "\n".join(["x"] * 25)},
-    {"title": "Mix", "tracks": ["x"] * 25},
-    {"title": "Mix", "tracks": ["x" * 81]},
-    {"title": "Mix", "tracks": "x" * 81},
-    {"title": "x" * 61},
-    {"title": ""},
-    {"title": "  "},
-    {"subtitle": "x"},
-    {"title": "Mix", "tracks": [1]},
-    {"title": "Mix", "tracks": None},
-    {"title": "Mix", "colour": "red"},
-    {"title": "Café", "tracks": ["Ça va", "Москва", "Straße łódź"]},
-    [],
-])
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"title": "Mix"},
+        {"title": "Mix", "subtitle": "", "tracks": [], "footer": ""},
+        {"title": "Mix", "tracks": ["One", "Two"]},
+        {"title": "Mix", "tracks": "One\nTwo"},
+        {"title": "x" * 60, "subtitle": "x" * 80, "footer": "x" * 60, "tracks": ["x" * 80] * 24},
+        {"title": "Mix", "tracks": "\n".join(["x"] * 24)},
+        {"title": "Mix", "tracks": "\n".join(["x"] * 25)},
+        {"title": "Mix", "tracks": ["x"] * 25},
+        {"title": "Mix", "tracks": ["x" * 81]},
+        {"title": "Mix", "tracks": "x" * 81},
+        {"title": "x" * 61},
+        {"title": ""},
+        {"title": "  "},
+        {"subtitle": "x"},
+        {"title": "Mix", "tracks": [1]},
+        {"title": "Mix", "tracks": None},
+        {"title": "Mix", "colour": "red"},
+        {"title": "Café", "tracks": ["Ça va", "Москва", "Straße łódź"]},
+        [],
+    ],
+)
 def test_schema_agrees_with_the_disc_parser(data):
     assert Draft202012Validator(catalog.schema("disc")).is_valid(data) == _accepted(data)
 
@@ -278,10 +305,15 @@ def test_styles_list_the_disc_label_on_the_disc_tray():
     assert style["paper"] == {"size": "disc", "media": "disc", "tray": "disc"}
     assert style["photos"] == {"min": 1, "max": 1}
     assert [(f["name"], f["required"], f["max_length"]) for f in style["fields"]] == [
-        ("title", True, 60), ("subtitle", False, 80), ("tracks", False, None), ("footer", False, 60)]
+        ("title", True, 60),
+        ("subtitle", False, 80),
+        ("tracks", False, None),
+        ("footer", False, 60),
+    ]
 
 
 # --- prt disc ----------------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("suffix, magic", [(".png", b"\x89PNG"), (".pdf", b"%PDF"), (".jpg", b"\xff\xd8")])
 def test_preview_saves_the_label_and_prints_nothing(capsys, tmp_path, printer, suffix, magic):
@@ -292,21 +324,31 @@ def test_preview_saves_the_label_and_prints_nothing(capsys, tmp_path, printer, s
     assert printer.made == [] and printer.jobs() == [] and guard.used_today() == 0
     data = json.loads(out)
     assert data["estimate"]["summary"].startswith("~1 page (CD/DVD)") and data["estimate"]["ink_percent"] > 0
-    assert without_estimate(out) == {"action": "disc", "file": str(out_file), "bytes": out_file.stat().st_size,
-                                     "title": "Road Trip Mix", "tracks": 8,
-                                     "paper": {"size": "disc", "media": "disc", "tray": "disc"},
-                                     "fits": True, "cut": {}}
+    assert without_estimate(out) == {
+        "action": "disc",
+        "file": str(out_file),
+        "bytes": out_file.stat().st_size,
+        "title": "Road Trip Mix",
+        "tracks": 8,
+        "paper": {"size": "disc", "media": "disc", "tray": "disc"},
+        "fits": True,
+        "cut": {},
+    }
 
 
 def test_preview_png_is_the_composed_label(capsys, tmp_path, printer):
     photo = _photo(tmp_path)
     out_file = tmp_path / "label.png"
-    code, _, err = run(capsys, "disc", str(photo), "--title", "Mix", "--track", "One", "--track", "Two", "-o",
-                       str(out_file))
+    code, _, err = run(
+        capsys, "disc", str(photo), "--title", "Mix", "--track", "One", "--track", "Two", "-o", str(out_file)
+    )
     assert code == 0, err
     from prt import booth
-    expected, _ = disc.compose(booth.load_photo(photo), Disc(title="Mix", subtitle="Summer 2026",
-                                                             tracks=("One", "Two"), footer="For Sam, from Jo"))
+
+    expected, _ = disc.compose(
+        booth.load_photo(photo),
+        Disc(title="Mix", subtitle="Summer 2026", tracks=("One", "Two"), footer="For Sam, from Jo"),
+    )
     assert Image.open(out_file).convert("RGB").tobytes() == expected.tobytes()
 
 
@@ -318,9 +360,13 @@ def test_yes_prints_one_job_through_the_disc_tray(capsys, tmp_path, printer):
     data = without_estimate(out)
     assert data["action"] == "disc" and data["job_id"] and data["paper"]["tray"] == "disc"
     assert len(printer.requests()) == 1
-    assert _media_col(printer.requests()[0]) == {"media-size": {"x-dimension": 12000, "y-dimension": 12000},
-                                                 "media-source": "disc", "media-type": "disc"}
+    assert _media_col(printer.requests()[0]) == {
+        "media-size": {"x-dimension": 12000, "y-dimension": 12000},
+        "media-source": "disc",
+        "media-type": "disc",
+    }
     from prt import booth
+
     assert printer.jobs() == render.disc_label(booth.load_photo(photo), disc.DEFAULT_DISC).jpegs()
     assert guard.used_today() == 1
 
@@ -337,8 +383,9 @@ def test_the_prompt_says_to_load_a_disc_in_the_disc_tray(capsys, tmp_path, print
 def test_a_printer_without_a_disc_tray_is_refused_before_anything_is_sent(capsys, tmp_path, printer):
     printer.no_disc_tray()
     copy = tmp_path / "copy.png"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "disc", str(_photo(tmp_path)), "--save", str(copy),
-                         "--yes")
+    code, out, err = run(
+        capsys, "-p", "demo", "-f", "json", "disc", str(_photo(tmp_path)), "--save", str(copy), "--yes"
+    )
     assert code == 1 and out == ""
     error = _error(err)
     assert error["kind"] == "disc_tray_unavailable" and "no disc tray" in error["message"] and error["hint"]
@@ -382,19 +429,26 @@ def test_disc_file_stdin_and_track_flags(capsys, tmp_path, printer, stdin):
     assert code == 0, err
     assert json.loads(out)["title"] == "Wedding" and json.loads(out)["tracks"] == 2
     stdin(json.dumps({"title": "Game Night", "tracks": "Catan\nCodenames\nPoker"}).encode())
-    code, out, err = run(capsys, "-f", "json", "disc", photo, "--disc-file", "-", "--track", "Chess",
-                         "-o", str(tmp_path / "b.png"))
+    code, out, err = run(
+        capsys, "-f", "json", "disc", photo, "--disc-file", "-", "--track", "Chess", "-o", str(tmp_path / "b.png")
+    )
     assert code == 0, err
     assert json.loads(out)["title"] == "Game Night" and json.loads(out)["tracks"] == 1
     assert printer.made == []
 
 
-@pytest.mark.parametrize("content", [b"{nope", b'{"subtitle": "x"}', b'{"title": "x", "tracks": [1]}',
-                                     b'{"title": "x", "tracks": ["\xf0\x9f\x8e\x89"]}'])
+@pytest.mark.parametrize(
+    "content",
+    [
+        b"{nope",
+        b'{"subtitle": "x"}',
+        b'{"title": "x", "tracks": [1]}',
+        b'{"title": "x", "tracks": ["\xf0\x9f\x8e\x89"]}',
+    ],
+)
 def test_bad_disc_on_stdin_exits_3_and_prints_nothing(capsys, tmp_path, printer, stdin, content):
     stdin(content)
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "disc", str(_photo(tmp_path)), "--disc-file", "-",
-                         "--yes")
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "disc", str(_photo(tmp_path)), "--disc-file", "-", "--yes")
     assert code == 3 and _error(err)["kind"] == "invalid_input" and out == ""
     assert printer.made == [] and guard.used_today() == 0
 
@@ -414,8 +468,9 @@ def test_bad_flags_photo_and_outputs_are_refused_before_anything_is_written(caps
 
 
 def test_a_cut_is_warned_and_reported(capsys, tmp_path, printer):
-    code, out, err = run(capsys, "-f", "json", "disc", str(_photo(tmp_path)), "--title", "W" * 60, "-o",
-                         str(tmp_path / "d.jpg"))
+    code, out, err = run(
+        capsys, "-f", "json", "disc", str(_photo(tmp_path)), "--title", "W" * 60, "-o", str(tmp_path / "d.jpg")
+    )
     assert code == 0 and "title cut to fit the disc label" in err
     data = json.loads(out)
     assert data["fits"] is False and data["cut"]["title"]["given"] == 60

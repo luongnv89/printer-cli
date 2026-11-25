@@ -34,8 +34,9 @@ def printer(monkeypatch):
     made = []
     monkeypatch.setattr("prt.cli.make_driver", lambda target, timeout=5.0: made.append(target) or fake)
     requests = lambda: [r for r in fake.client.requests if r[0] == ipp.OP_PRINT_JOB]  # noqa: E731
-    return SimpleNamespace(driver=fake, made=made, requests=requests,
-                           jobs=lambda: [data for _, _, _, data in requests()])
+    return SimpleNamespace(
+        driver=fake, made=made, requests=requests, jobs=lambda: [data for _, _, _, data in requests()]
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -66,6 +67,7 @@ def _media_col(request):
 
 
 # --- the strip -----------------------------------------------------------------------------------
+
 
 def test_strip_has_the_four_photos_in_order_from_the_top():
     sheet, cut = photocard.strip(_images(), "Hello")
@@ -111,6 +113,7 @@ def test_a_long_caption_is_cut_and_reported():
 
 # --- the instant print ---------------------------------------------------------------------------
 
+
 def test_instant_crops_the_photo_square_in_a_white_frame():
     sheet, cut = photocard.instant(Image.new("RGB", (400, 300), COLOURS[2]), "Lake")
     x0, y0, x1, y1 = photocard.PHOTO_BOX
@@ -124,8 +127,10 @@ def test_instant_caption_is_written_in_the_space_under_the_photo():
     written, _ = photocard.instant(Image.new("RGB", (400, 300)), "Summer at the lake")
     box = photocard.CAPTION_BOX
     assert blank.crop(box).getcolors() == [((box[2] - box[0]) * (box[3] - box[1]), photocard.FRAME)]
-    assert any(abs(r - photocard.PEN[0]) < 20 and abs(b - photocard.PEN[2]) < 20
-               for _, (r, g, b) in written.crop(box).getcolors(1 << 20))
+    assert any(
+        abs(r - photocard.PEN[0]) < 20 and abs(b - photocard.PEN[2]) < 20
+        for _, (r, g, b) in written.crop(box).getcolors(1 << 20)
+    )
 
 
 def test_captions_are_checked_for_length_and_script():
@@ -139,31 +144,44 @@ def test_captions_are_checked_for_length_and_script():
 
 # --- the catalog ---------------------------------------------------------------------------------
 
+
 def test_styles_list_strip_and_instant_on_4x6():
     styles = {s["name"]: s for s in catalog.styles()}
     assert styles["strip"]["photos"] == {"min": 4, "max": 4} and styles["instant"]["photos"] == {"min": 1, "max": 1}
     for name, limit in (("strip", 60), ("instant", 80)):
         assert styles[name]["command"] == name and styles[name]["schema"] is None
         assert styles[name]["paper"] == {"size": "4x6", "media": "4x6", "tray": "photo"}
-        assert styles[name]["fields"] == [{"name": "caption", "description": styles[name]["fields"][0]["description"],
-                                           "required": False, "max_length": limit}]
+        assert styles[name]["fields"] == [
+            {
+                "name": "caption",
+                "description": styles[name]["fields"][0]["description"],
+                "required": False,
+                "max_length": limit,
+            }
+        ]
     assert styles["metro"]["paper"]["size"] == "a4"
 
 
 # --- prt strip / prt instant -----------------------------------------------------------------------
 
+
 def test_strip_preview_saves_the_sheet_and_prints_nothing(capsys, tmp_path, printer):
     out_file = tmp_path / "strip.png"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "strip", *map(str, _photos(tmp_path)), "-o",
-                         str(out_file))
+    code, out, err = run(capsys, "-p", "demo", "-f", "json", "strip", *map(str, _photos(tmp_path)), "-o", str(out_file))
     assert code == 0, err
     assert "not printed" in err and "dashed line" in err
     assert printer.made == [] and printer.jobs() == [] and guard.used_today() == 0
     data = json.loads(out)
     assert data["estimate"]["summary"].startswith("~1 page (4×6)")
-    assert without_estimate(out) == {"action": "strip", "file": str(out_file), "bytes": out_file.stat().st_size,
-                                     "photos": 4, "paper": {"size": "4x6", "media": "4x6", "tray": "photo"},
-                                     "fits": True, "cut": {}}
+    assert without_estimate(out) == {
+        "action": "strip",
+        "file": str(out_file),
+        "bytes": out_file.stat().st_size,
+        "photos": 4,
+        "paper": {"size": "4x6", "media": "4x6", "tray": "photo"},
+        "fits": True,
+        "cut": {},
+    }
     saved = Image.open(out_file)
     assert saved.size == (1200, 1800)
     expected, _ = photocard.strip(photocard.load_photos(_photos(tmp_path)), "24 November 2026")
@@ -172,8 +190,9 @@ def test_strip_preview_saves_the_sheet_and_prints_nothing(capsys, tmp_path, prin
 
 def test_strip_prints_from_the_photo_tray(capsys, tmp_path, printer):
     paths = _photos(tmp_path)
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "strip", *map(str, paths), "--caption", "Booth",
-                         "--mono", "--yes")
+    code, out, err = run(
+        capsys, "-p", "demo", "-f", "json", "strip", *map(str, paths), "--caption", "Booth", "--mono", "--yes"
+    )
     assert code == 0, err
     assert "photo tray" in err
     data = without_estimate(out)
@@ -192,8 +211,17 @@ def test_strip_with_the_wrong_number_of_photos_is_a_usage_error(capsys, tmp_path
 
 
 def test_strip_caption_cut_is_warned(capsys, tmp_path, printer):
-    code, out, err = run(capsys, "-f", "json", "strip", *map(str, _photos(tmp_path)), "--caption", "W" * 60,
-                         "-o", str(tmp_path / "s.jpg"))
+    code, out, err = run(
+        capsys,
+        "-f",
+        "json",
+        "strip",
+        *map(str, _photos(tmp_path)),
+        "--caption",
+        "W" * 60,
+        "-o",
+        str(tmp_path / "s.jpg"),
+    )
     assert code == 0 and "caption cut to fit" in err
     assert json.loads(out)["fits"] is False
 
@@ -201,13 +229,27 @@ def test_strip_caption_cut_is_warned(capsys, tmp_path, printer):
 def test_instant_preview_and_save(capsys, tmp_path, printer):
     photo = _photos(tmp_path, 1)[0]
     out_file, copy = tmp_path / "instant.pdf", tmp_path / "copy.jpg"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "instant", str(photo), "--caption", "Lake", "-o",
-                         str(out_file), "--save", str(copy))
+    code, out, err = run(
+        capsys,
+        "-p",
+        "demo",
+        "-f",
+        "json",
+        "instant",
+        str(photo),
+        "--caption",
+        "Lake",
+        "-o",
+        str(out_file),
+        "--save",
+        str(copy),
+    )
     assert code == 0, err
     assert out_file.read_bytes().startswith(b"%PDF") and Image.open(copy).size == (1200, 1800)
     data = without_estimate(out)
-    assert data["action"] == "instant" and data["saved"] == [{"file": str(copy), "format": "jpeg",
-                                                             "bytes": copy.stat().st_size}]
+    assert data["action"] == "instant" and data["saved"] == [
+        {"file": str(copy), "format": "jpeg", "bytes": copy.stat().st_size}
+    ]
     assert printer.made == [] and guard.used_today() == 0
 
 
@@ -238,6 +280,7 @@ def test_agent_mode_needs_yes_but_preview_does_not(capsys, tmp_path, printer, mo
 
 def test_a_page_cap_refuses_the_print(capsys, tmp_path, printer, monkeypatch):
     from prt.config import Config
+
     cfg = Config.load()
     cfg.max_pages_per_day = 1
     cfg.save()

@@ -36,8 +36,23 @@ def _clean(text: str, keep_newlines: bool) -> str:
 
 # The built-in font (Aileron, via ImageFont.load_default) covers basic Latin only, so accented
 # letters are printed without their marks and a few common symbols get ASCII stand-ins.
-_STAND_INS = {"–": "-", "—": "-", "ß": "ss", "æ": "ae", "Æ": "AE", "œ": "oe", "Œ": "OE", "ø": "o",
-              "Ø": "O", "ł": "l", "Ł": "L", "đ": "d", "Đ": "D", "€": "EUR", "£": "GBP"}
+_STAND_INS = {
+    "–": "-",
+    "—": "-",
+    "ß": "ss",
+    "æ": "ae",
+    "Æ": "AE",
+    "œ": "oe",
+    "Œ": "OE",
+    "ø": "o",
+    "Ø": "O",
+    "ł": "l",
+    "Ł": "L",
+    "đ": "d",
+    "Đ": "D",
+    "€": "EUR",
+    "£": "GBP",
+}
 
 
 @lru_cache(maxsize=1)
@@ -113,8 +128,10 @@ def _wrapped(text: str, font, width: int) -> Iterator[str]:
 
 def _ellipsize(line: str, font, width: int) -> str:
     """End ``line`` with "…" inside ``width``, dropping whole words; only a lone word is cut mid-word."""
+
     def fits(part: str) -> bool:
         return font.getlength(part.rstrip() + ELLIPSIS) <= width
+
     if fits(line):
         return line.rstrip() + ELLIPSIS
     words = line.split()
@@ -123,7 +140,7 @@ def _ellipsize(line: str, font, width: int) -> str:
         if fits(head):
             return head + ELLIPSIS
     word = words[0] if words else ""
-    return word[:_longest(word, fits)] + ELLIPSIS if word and fits(word[:1]) else ELLIPSIS
+    return word[: _longest(word, fits)] + ELLIPSIS if word and fits(word[:1]) else ELLIPSIS
 
 
 @dataclass(frozen=True)
@@ -132,6 +149,7 @@ class Cut:
 
     The printed part fits on its own, so the text cut to its first ``max_fit`` characters fits in the same box.
     """
+
     max_fit: int
     given: int
 
@@ -194,7 +212,7 @@ def _fit(text: str, size: int, min_size: int, width: int, max_lines: int):
         lines = _wrap(text, font, width)
         if len(lines) <= max_lines:
             return font, s, lines, None
-    lines = lines[:max_lines - 1] + [_ellipsize(lines[max_lines - 1], font, width)]
+    lines = lines[: max_lines - 1] + [_ellipsize(lines[max_lines - 1], font, width)]
     return font, s, lines, _cut(text, lines)
 
 
@@ -202,8 +220,17 @@ def _lead(size: int) -> int:
     return round(size * 1.3)
 
 
-def _text_block(d: ImageDraw.ImageDraw, x: int, y: int, lines: list[str], font, size: int, fill,
-                width: int | None = None, bold: int = 0) -> int:
+def _text_block(
+    d: ImageDraw.ImageDraw,
+    x: int,
+    y: int,
+    lines: list[str],
+    font,
+    size: int,
+    fill,
+    width: int | None = None,
+    bold: int = 0,
+) -> int:
     """Draw lines left-aligned at x (or centred within ``width``); returns the y below them."""
     for line in lines:
         dx = (width - font.getlength(line)) / 2 if width else 0
@@ -239,8 +266,18 @@ def _columns_height(text: str, width: int, columns: int, gutter: int, size: int)
     return _rows(len(lines), columns) * _lead(size)
 
 
-def _columns(d: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], columns: int, gutter: int,
-             size: int, min_size: int, fill, rule=None, centre: bool = False) -> Cut | None:
+def _columns(
+    d: ImageDraw.ImageDraw,
+    text: str,
+    box: tuple[int, int, int, int],
+    columns: int,
+    gutter: int,
+    size: int,
+    min_size: int,
+    fill,
+    rule=None,
+    centre: bool = False,
+) -> Cut | None:
     """Flow paragraphs down ``columns`` columns, shrinking the type until it fits, else cutting with "…".
 
     Returns None when the text fits, else the ``Cut`` saying how much of it was printed.
@@ -293,8 +330,9 @@ def _consumed(para: str, lines: list[str]) -> int:
     return pos
 
 
-def flow_columns(paragraphs: list[str], font, col_w: int, rows: int, columns: int,
-                 narrow: tuple[int, int] = (0, 0)) -> tuple[Columns, list[str]]:
+def flow_columns(
+    paragraphs: list[str], font, col_w: int, rows: int, columns: int, narrow: tuple[int, int] = (0, 0)
+) -> tuple[Columns, list[str]]:
     """Fill up to ``columns`` columns of ``rows`` lines with paragraphs, a blank row between paragraphs.
 
     ``narrow`` is (lines, width): the first lines of the first paragraph wrap to that width, leaving room
@@ -317,7 +355,7 @@ def flow_columns(paragraphs: list[str], font, col_w: int, rows: int, columns: in
             lines.append((i, ""))
         n, width = narrow if i == 0 else (0, 0)
         head = _wrap(para, font, width)[:n] if n else []
-        rest = para[_consumed(para, head):].lstrip()
+        rest = para[_consumed(para, head) :].lstrip()
         wrapped = chain(head, _wrapped(rest, font, col_w))
         lines += [(i, line) for line in islice(wrapped, capacity + 1 - len(lines))]
         if next(wrapped, None) is not None:
@@ -341,11 +379,12 @@ def flow_columns(paragraphs: list[str], font, col_w: int, rows: int, columns: in
     done = [text for p, text in lines[:taken] if p == i and text]
     if not done:
         return cols, paras[i:]
-    return cols, [paras[i][_consumed(paras[i], done):].lstrip()] + paras[i + 1:]
+    return cols, [paras[i][_consumed(paras[i], done) :].lstrip()] + paras[i + 1 :]
 
 
-def paginate(paragraphs: list[str], font, col_w: int, columns: int, first_rows: int, rows: int,
-             narrow: tuple[int, int] = (0, 0)) -> Iterator[Columns]:
+def paginate(
+    paragraphs: list[str], font, col_w: int, columns: int, first_rows: int, rows: int, narrow: tuple[int, int] = (0, 0)
+) -> Iterator[Columns]:
     """Lay the text out page by page: ``first_rows`` lines per column on page one, ``rows`` after.
 
     Every word lands on exactly one page; ``narrow`` applies to the first page only (see ``flow_columns``).
@@ -360,8 +399,19 @@ def paginate(paragraphs: list[str], font, col_w: int, columns: int, first_rows: 
         yield cols
 
 
-def draw_columns(d: ImageDraw.ImageDraw, cols: Columns, x0: int, y0: int, col_w: int, gutter: int, font,
-                 size: int, fill, rule=None, indent: tuple[int, int] = (0, 0)) -> None:
+def draw_columns(
+    d: ImageDraw.ImageDraw,
+    cols: Columns,
+    x0: int,
+    y0: int,
+    col_w: int,
+    gutter: int,
+    font,
+    size: int,
+    fill,
+    rule=None,
+    indent: tuple[int, int] = (0, 0),
+) -> None:
     """Draw columns from ``flow_columns``; ``indent`` (lines, px) shifts the first lines of the first column.
 
     ``rule`` draws a thin line of that colour between the columns in use.

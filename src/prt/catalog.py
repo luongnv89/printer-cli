@@ -14,8 +14,22 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
-from prt import (article, bingo, booth, card, colourin, comic, compose, disc, morning, photocard, postcard, puzzle,
-                 recipe, vintage)
+from prt import (
+    article,
+    bingo,
+    booth,
+    card,
+    colourin,
+    comic,
+    compose,
+    disc,
+    morning,
+    photocard,
+    postcard,
+    puzzle,
+    recipe,
+    vintage,
+)
 from prt.drivers.base import PrinterError
 from prt.paper import PAPERS
 
@@ -28,6 +42,7 @@ NON_BLANK = r"\S"  # a required text must have more than spaces in it
 @dataclass(frozen=True)
 class Field:
     """One text field of an input file, as a style prints it."""
+
     name: str
     description: str
     required: bool = False
@@ -37,6 +52,7 @@ class Field:
 @dataclass(frozen=True)
 class Style:
     """One look a print command can give its page(s)."""
+
     name: str  # unique across commands
     command: str  # the prt command that prints it
     args: tuple[str, ...]  # what to add to the command to pick this style; () for its default
@@ -50,11 +66,20 @@ class Style:
     paper: str = "a4"  # the sheet it prints on (see prt.paper.PAPERS)
 
     def to_dict(self) -> dict[str, Any]:
-        return {"name": self.name, "command": self.command, "args": list(self.args), "default": not self.args,
-                "kind": self.kind, "description": self.description, "schema": self.schema,
-                "fields": [asdict(f) for f in self.fields],
-                "photos": {"min": self.photos[0], "max": self.photos[1]}, "max_pages": self.max_pages,
-                "paper": PAPERS[self.paper].to_dict(), "sample": SAMPLES + self.sample}
+        return {
+            "name": self.name,
+            "command": self.command,
+            "args": list(self.args),
+            "default": not self.args,
+            "kind": self.kind,
+            "description": self.description,
+            "schema": self.schema,
+            "fields": [asdict(f) for f in self.fields],
+            "photos": {"min": self.photos[0], "max": self.photos[1]},
+            "max_pages": self.max_pages,
+            "paper": PAPERS[self.paper].to_dict(),
+            "sample": SAMPLES + self.sample,
+        }
 
 
 # --- what each field is on each style -------------------------------------------------------------
@@ -113,19 +138,19 @@ GAZETTE_ROLES = {**NEWSPAPER_ROLES, "caption": "Line under the lead photo"}
 STORY_ROLES = {  # every booth style at once, for the style-independent story schema
     "headline": "Headline; the name on wizard, wanted, certificate, sports and missing, the film title on movie",
     "story": "Story text, or the lore / description on wizard and wanted, the citation on certificate, the stats on "
-             "sports, the description on missing, the credits on movie; a newline starts a new paragraph",
+    "sports, the description on missing, the credits on movie; a newline starts a new paragraph",
     "kicker": "Small label above the headline; the card type on wizard, the 'Dead or alive' line on wanted, the "
-              "title on certificate, the team on sports, the question on missing, the tagline on movie",
+    "title on certificate, the team on sports, the question on missing, the tagline on movie",
     "caption": "Line under the photo; the subtitle on wizard, the reward line on wanted and missing, the award on "
-               "certificate, the position on sports, the release line on movie",
+    "certificate, the position on sports, the release line on movie",
     "byline": "Author line, e.g. 'By Jo Smith'; the footer on wizard, wanted and sports, the signature on "
-              "certificate, the tear-off tabs on missing, the rating on movie",
+    "certificate, the tear-off tabs on missing, the rating on movie",
 }
 CARD_ROLES = {
     "greeting": "Greeting on the front, under the photo, e.g. 'Happy Birthday!'",
     "verse": "Verse on the inside right; a newline starts a new line, a blank line a new stanza",
     "message": "Short note on the inside left; when empty that panel is left blank to write on. A newline starts a "
-               "new paragraph",
+    "new paragraph",
     "signature": "Line under the verse, e.g. 'With love, Jo'",
     "back": "Small line on the back of the card",
 }
@@ -133,11 +158,16 @@ CARD_ROLES = {
 COMIC_ROLES = {
     "title": ("Title above the panels, in large handwriting (--title)", "title"),
     "byline": ("Line under the title, e.g. 'by Jo and Sam' (--byline)", "byline"),
-    "panels[].caption": ("A panel's narration caption, in a yellow box in its top-left corner, e.g. 'Meanwhile...'",
-                         "caption"),
-    "panels[].bubbles[].text": ("The words in one bubble; each panel takes up to "
-                                f"{comic.MAX_BUBBLES} bubbles, placed by their position and tail, as speech or "
-                                "thought", "text"),
+    "panels[].caption": (
+        "A panel's narration caption, in a yellow box in its top-left corner, e.g. 'Meanwhile...'",
+        "caption",
+    ),
+    "panels[].bubbles[].text": (
+        "The words in one bubble; each panel takes up to "
+        f"{comic.MAX_BUBBLES} bubbles, placed by their position and tail, as speech or "
+        "thought",
+        "text",
+    ),
 }
 ARTICLE_ROLES = {
     "title": "Headline; when empty the source, else 'Untitled', is printed",
@@ -148,53 +178,65 @@ ARTICLE_ROLES = {
 }
 ARTICLE_REQUIRED = ("title", "body")  # as article.parse refuses a file without them
 STRIP_ROLES = {"caption": "Handwritten line under the four frames (--caption); today's date when not given"}
-INSTANT_ROLES = {"caption": "Handwritten caption under the photo (--caption); today's date when not given, empty "
-                            "to leave the space blank to write on"}
+INSTANT_ROLES = {
+    "caption": "Handwritten caption under the photo (--caption); today's date when not given, empty "
+    "to leave the space blank to write on"
+}
 POSTCARD_ROLES = {
     "greeting": "Handwritten line across the foot of the photo on the front, e.g. 'Greetings from Lisbon'; when "
-                "empty the photo is printed alone",
+    "empty the photo is printed alone",
     "message": "The message, in handwriting on the left of the back; a newline starts a new paragraph",
     "signature": "Line under the message, e.g. 'Love, Jo'",
     "address": f"The address, written on the ruled lines on the right of the back: one line of text per line, up to "
-               f"{postcard.ADDRESS_LINES}; when empty the lines are left blank to write on",
+    f"{postcard.ADDRESS_LINES}; when empty the lines are left blank to write on",
 }
 DISC_ROLES = {
     "title": "The title, in large handwriting above the hub, e.g. 'Road Trip Mix'; on two lines when it is long",
     "subtitle": "Line under the title, e.g. 'Summer 2026'",
     "tracks": f"The track list, in two columns either side of the hub, the first half on the left, each track on one "
-              f"line as written (number them yourself): a list of texts, or one text with a newline between tracks; "
-              f"up to {disc.MAX_TRACKS} tracks of up to {disc.MAX_TRACK} characters each",
+    f"line as written (number them yourself): a list of texts, or one text with a newline between tracks; "
+    f"up to {disc.MAX_TRACKS} tracks of up to {disc.MAX_TRACK} characters each",
     "footer": "Small line at the foot of the label, e.g. 'For Sam, from Jo'",
 }
 BINGO_ROLES = {
     "title": "The title at the top of every card, in large handwriting; by default '<Theme> Bingo' from --theme",
     "free": f"The text of the free centre square; '{bingo.DEFAULT_FREE}' when not given",
     "words": f"The words and short phrases the cards are dealt from, each different: at least {bingo.MIN_WORDS}, "
-             f"up to {bingo.MAX_WORDS}, of up to {bingo.MAX_WORD} characters each; each card takes "
-             f"{bingo.PER_CARD} of them, and no two cards in a run take the same set",
+    f"up to {bingo.MAX_WORDS}, of up to {bingo.MAX_WORD} characters each; each card takes "
+    f"{bingo.PER_CARD} of them, and no two cards in a run take the same set",
 }
-PUZZLE_TITLE = (f"The title at the top of the page, in large handwriting; '<Theme> Word Search', 'Sudoku', "
-                "'Crossword' or 'Maze' when not given (--title overrides it)")
+PUZZLE_TITLE = (
+    "The title at the top of the page, in large handwriting; '<Theme> Word Search', 'Sudoku', "
+    "'Crossword' or 'Maze' when not given (--title overrides it)"
+)
 PUZZLE_ROLES = {  # by puzzle kind: field name: (description, max length)
     "sudoku": {"title": (PUZZLE_TITLE, puzzle.LIMITS["title"])},
-    "wordsearch": {"title": (PUZZLE_TITLE, puzzle.LIMITS["title"]),
-                   "words": (f"The words to hide, {puzzle.MIN_SEARCH_WORDS} to {puzzle.MAX_SEARCH_WORDS}, each "
-                             f"{puzzle.MIN_LETTERS} to {puzzle.MAX_LETTERS} letters (spaces, hyphens and apostrophes "
-                             "are left out of the grid) and all different; listed under the grid as written",
-                             puzzle.MAX_SEARCH_WORD)},
-    "crossword": {"title": (PUZZLE_TITLE, puzzle.LIMITS["title"]),
-                  "entries[].answer": (f"An answer, 2 to {puzzle.MAX_ANSWER} letters; spaces, hyphens and "
-                                       "apostrophes are left out of the grid and shown in the letter count after "
-                                       "the clue, e.g. (4,6)", puzzle.MAX_ANSWER_TEXT),
-                  "entries[].clue": ("The clue printed for the answer, under the grid by its number",
-                                     puzzle.MAX_CLUE)},
+    "wordsearch": {
+        "title": (PUZZLE_TITLE, puzzle.LIMITS["title"]),
+        "words": (
+            f"The words to hide, {puzzle.MIN_SEARCH_WORDS} to {puzzle.MAX_SEARCH_WORDS}, each "
+            f"{puzzle.MIN_LETTERS} to {puzzle.MAX_LETTERS} letters (spaces, hyphens and apostrophes "
+            "are left out of the grid) and all different; listed under the grid as written",
+            puzzle.MAX_SEARCH_WORD,
+        ),
+    },
+    "crossword": {
+        "title": (PUZZLE_TITLE, puzzle.LIMITS["title"]),
+        "entries[].answer": (
+            f"An answer, 2 to {puzzle.MAX_ANSWER} letters; spaces, hyphens and "
+            "apostrophes are left out of the grid and shown in the letter count after "
+            "the clue, e.g. (4,6)",
+            puzzle.MAX_ANSWER_TEXT,
+        ),
+        "entries[].clue": ("The clue printed for the answer, under the grid by its number", puzzle.MAX_CLUE),
+    },
     "maze": {"title": (PUZZLE_TITLE, puzzle.LIMITS["title"])},
 }
 RECIPE_ROLES = {
     "title": "The recipe's name, in handwriting at the top of the card",
     "ingredients": "The ingredients, one per item: a list of texts, or one text with a newline between items",
     "steps": "The method, one step per item, numbered on the card: a list of texts, or one text with a newline "
-             "between items",
+    "between items",
     "servings": "Yield, e.g. 'Serves 4', under the title",
     "time": "Times, e.g. 'Prep 15 min · Cook 30 min', under the title",
     "source": "Site or book, in the card's footer",
@@ -212,13 +254,15 @@ def card_fields() -> tuple[Field, ...]:
 
 
 def comic_fields() -> tuple[Field, ...]:
-    return tuple(Field(name, description, False, comic.LIMITS[limit])
-                 for name, (description, limit) in COMIC_ROLES.items())
+    return tuple(
+        Field(name, description, False, comic.LIMITS[limit]) for name, (description, limit) in COMIC_ROLES.items()
+    )
 
 
 def postcard_fields() -> tuple[Field, ...]:
-    return tuple(Field(name, POSTCARD_ROLES[name], name in postcard.REQUIRED, postcard.LIMITS[name])
-                 for name in postcard.FIELDS)
+    return tuple(
+        Field(name, POSTCARD_ROLES[name], name in postcard.REQUIRED, postcard.LIMITS[name]) for name in postcard.FIELDS
+    )
 
 
 def disc_fields() -> tuple[Field, ...]:
@@ -232,13 +276,15 @@ def bingo_fields() -> tuple[Field, ...]:
 
 def puzzle_fields(kind: str) -> tuple[Field, ...]:
     required = {"words", "entries[].answer", "entries[].clue"}
-    return tuple(Field(name, description, name in required, limit)
-                 for name, (description, limit) in PUZZLE_ROLES[kind].items())
+    return tuple(
+        Field(name, description, name in required, limit) for name, (description, limit) in PUZZLE_ROLES[kind].items()
+    )
 
 
 def recipe_fields() -> tuple[Field, ...]:
-    return tuple(Field(name, RECIPE_ROLES[name], name in recipe.REQUIRED, recipe.LIMITS.get(name))
-                 for name in recipe.FIELDS)
+    return tuple(
+        Field(name, RECIPE_ROLES[name], name in recipe.REQUIRED, recipe.LIMITS.get(name)) for name in recipe.FIELDS
+    )
 
 
 def article_fields() -> tuple[Field, ...]:
@@ -250,107 +296,309 @@ def article_fields() -> tuple[Field, ...]:
 BOOTH = {  # style: (description, roles, sample)
     "metro": ("Colour tabloid front page, two columns", NEWSPAPER_ROLES, "booth-metro.jpg"),
     "daily": ("Black-and-white broadsheet front page, three columns", NEWSPAPER_ROLES, "booth-daily.jpg"),
-    "wizard": ("Ornate trading card: arched gold portrait frame, name ribbon and lore box", WIZARD_ROLES,
-               "booth-wizard.jpg"),
-    "wanted": ("Weathered parchment pirate poster with the name and a reward line", WANTED_ROLES,
-               "booth-wanted.jpg"),
-    "certificate": ("Award certificate: ivory paper in a green-and-gold border, oval portrait, name, award, "
-                    "citation, date and signature lines and a gold seal", CERTIFICATE_ROLES,
-                    "booth-certificate.jpg"),
-    "sports": ("Sports trading card: royal-blue card with stripes, full-width photo, star badge, the name on a "
-               "slanted red bar and a stats box", SPORTS_ROLES, "booth-sports.jpg"),
-    "missing": ("Missing-pet poster: huge red MISSING, the question, the photo, name, reward, description and "
-                "tear-off tabs with the contact", MISSING_ROLES, "booth-missing.jpg"),
-    "movie": ("Movie poster: dark poster with a tagline, the photo fading into the title, stars, a release line, "
-              "credits and a rating box", MOVIE_ROLES, "booth-movie.jpg"),
+    "wizard": (
+        "Ornate trading card: arched gold portrait frame, name ribbon and lore box",
+        WIZARD_ROLES,
+        "booth-wizard.jpg",
+    ),
+    "wanted": ("Weathered parchment pirate poster with the name and a reward line", WANTED_ROLES, "booth-wanted.jpg"),
+    "certificate": (
+        "Award certificate: ivory paper in a green-and-gold border, oval portrait, name, award, "
+        "citation, date and signature lines and a gold seal",
+        CERTIFICATE_ROLES,
+        "booth-certificate.jpg",
+    ),
+    "sports": (
+        "Sports trading card: royal-blue card with stripes, full-width photo, star badge, the name on a "
+        "slanted red bar and a stats box",
+        SPORTS_ROLES,
+        "booth-sports.jpg",
+    ),
+    "missing": (
+        "Missing-pet poster: huge red MISSING, the question, the photo, name, reward, description and "
+        "tear-off tabs with the contact",
+        MISSING_ROLES,
+        "booth-missing.jpg",
+    ),
+    "movie": (
+        "Movie poster: dark poster with a tagline, the photo fading into the title, stars, a release line, "
+        "credits and a rating box",
+        MOVIE_ROLES,
+        "booth-movie.jpg",
+    ),
 }
-CARD_DESCRIPTION = ("Quarter-fold greeting card on one A4 sheet: the photo in a gold frame and the greeting on the "
-                    "front, a message inside left, the verse and signature inside right, a line on the back; folds "
-                    "into an A6 card with every panel the right way up")
+CARD_DESCRIPTION = (
+    "Quarter-fold greeting card on one A4 sheet: the photo in a gold frame and the greeting on the "
+    "front, a message inside left, the verse and signature inside right, a line on the back; folds "
+    "into an A6 card with every panel the right way up"
+)
 ARTICLE = {  # style: (description, sample)
     "magazine": ("Bold headline, three columns, colour accents", "article-magazine.jpg"),
     "classic-magazine": ("Ivory page, centred single column, drop cap, ornaments", "article-classic.jpg"),
 }
-COMIC_DESCRIPTION = ("Comic page on A4: an optional handwritten title, then 3 to 6 photos as panels in black "
-                     "borders (rows of one or two), each with up to three speech or thought bubbles whose tails point "
-                     "at the speaker and an optional yellow narration caption")
-STRIP_DESCRIPTION = ("Photo-booth strip on 4×6 photo paper: four photos in a column with a handwritten caption, "
-                     "printed twice side by side; cut along the dashed line for two 2×6 in strips")
-INSTANT_DESCRIPTION = ("Instant photo on 4×6 photo paper, Polaroid-style: the photo cropped square in a wide white "
-                       "frame, with a handwritten caption under it")
-COLOUR_IN_DESCRIPTION = ("Colouring page on A4: the photo turned into black outlines on white, its shapes mostly "
-                         "closed so each can be coloured in, fitted whole in a frame; upright for a portrait photo, on "
-                         "its side for a landscape one, and printed with black ink only")
-POSTCARD_DESCRIPTION = ("Two-sided postcard on 4×6 photo paper, read on its side: the photo on the front with an "
-                        "optional handwritten greeting, and on the back the message and signature, a stamp box and "
-                        "four address lines; printed in one two-sided job, or front then back with the card turned "
-                        "over by hand")
-DISC_DESCRIPTION = ("Disc label on a printable 12 cm CD or DVD, through the disc tray: the photo fills the printable "
-                    f"ring ({disc.OUTER_D_MM} mm across, a {disc.INNER_D_MM} mm hole round the hub), the title and "
-                    "subtitle in handwriting above the hub, the tracks in two columns either side of it and a footer "
-                    "line at the foot; left blank outside the ring, but for a faint JPEG haze at its edges")
-BINGO_DESCRIPTION = ("Bingo card on A4, one per player: the title in handwriting, a row of coloured B-I-N-G-O "
-                     "letters and a 5×5 grid of words round a free centre square; every card in a run holds a "
-                     "different set of words, dealt from a bundled theme or a words file")
+COMIC_DESCRIPTION = (
+    "Comic page on A4: an optional handwritten title, then 3 to 6 photos as panels in black "
+    "borders (rows of one or two), each with up to three speech or thought bubbles whose tails point "
+    "at the speaker and an optional yellow narration caption"
+)
+STRIP_DESCRIPTION = (
+    "Photo-booth strip on 4×6 photo paper: four photos in a column with a handwritten caption, "
+    "printed twice side by side; cut along the dashed line for two 2×6 in strips"
+)
+INSTANT_DESCRIPTION = (
+    "Instant photo on 4×6 photo paper, Polaroid-style: the photo cropped square in a wide white "
+    "frame, with a handwritten caption under it"
+)
+COLOUR_IN_DESCRIPTION = (
+    "Colouring page on A4: the photo turned into black outlines on white, its shapes mostly "
+    "closed so each can be coloured in, fitted whole in a frame; upright for a portrait photo, on "
+    "its side for a landscape one, and printed with black ink only"
+)
+POSTCARD_DESCRIPTION = (
+    "Two-sided postcard on 4×6 photo paper, read on its side: the photo on the front with an "
+    "optional handwritten greeting, and on the back the message and signature, a stamp box and "
+    "four address lines; printed in one two-sided job, or front then back with the card turned "
+    "over by hand"
+)
+DISC_DESCRIPTION = (
+    "Disc label on a printable 12 cm CD or DVD, through the disc tray: the photo fills the printable "
+    f"ring ({disc.OUTER_D_MM} mm across, a {disc.INNER_D_MM} mm hole round the hub), the title and "
+    "subtitle in handwriting above the hub, the tracks in two columns either side of it and a footer "
+    "line at the foot; left blank outside the ring, but for a faint JPEG haze at its edges"
+)
+BINGO_DESCRIPTION = (
+    "Bingo card on A4, one per player: the title in handwriting, a row of coloured B-I-N-G-O "
+    "letters and a 5×5 grid of words round a free centre square; every card in a run holds a "
+    "different set of words, dealt from a bundled theme or a words file"
+)
 PUZZLE = {  # kind: (description, schema)
-    "sudoku": ("Sudoku on A4: a 9×9 grid with exactly one solution, rows A to I and columns 1 to 9 labelled; easy, "
-               "medium or hard by how many digits are given", None),
-    "wordsearch": ("Word search on A4: words from a bundled theme or a words file hidden in a square of letters "
-                   "(10, 13 or 15 across by difficulty), listed under it", "wordsearch"),
-    "crossword": ("Crossword on A4: prt lays the answers of a crossword file out so they cross, numbers the squares "
-                  "and lists the Across and Down clues under the grid", "crossword"),
-    "maze": ("Maze on A4: one way through from Start at the top left to Finish at the bottom right; easy, medium "
-             "or hard by its size", None),
+    "sudoku": (
+        "Sudoku on A4: a 9×9 grid with exactly one solution, rows A to I and columns 1 to 9 labelled; easy, "
+        "medium or hard by how many digits are given",
+        None,
+    ),
+    "wordsearch": (
+        "Word search on A4: words from a bundled theme or a words file hidden in a square of letters "
+        "(10, 13 or 15 across by difficulty), listed under it",
+        "wordsearch",
+    ),
+    "crossword": (
+        "Crossword on A4: prt lays the answers of a crossword file out so they cross, numbers the squares "
+        "and lists the Across and Down clues under the grid",
+        "crossword",
+    ),
+    "maze": (
+        "Maze on A4: one way through from Start at the top left to Finish at the bottom right; easy, medium "
+        "or hard by its size",
+        None,
+    ),
 }
-RECIPE_DESCRIPTION = ("6×4 in index card on 4×6 photo paper: the title in handwriting over a red rule, the "
-                      "ingredients and numbered steps on blue lines in two columns; runs on to more cards when needed")
+RECIPE_DESCRIPTION = (
+    "6×4 in index card on 4×6 photo paper: the title in handwriting over a red rule, the "
+    "ingredients and numbered steps on blue lines in two columns; runs on to more cards when needed"
+)
 GAZETTE_KIND = "vintage newspaper"
 GAZETTE_DESCRIPTION = "Cream paper and one ink, a blackletter masthead and ruled columns; every photo is printed"
 
 
 def _build() -> tuple[Style, ...]:
     # Iterating the commands' own tables means a style added there and not here fails at import, in the tests.
-    out = [Style(name, "booth", () if name == "metro" else ("--style", name), booth.KINDS[name], BOOTH[name][0],
-                 "story", story_fields(BOOTH[name][1]), (1, 1), 1, BOOTH[name][2]) for name in booth.STYLES]
+    out = [
+        Style(
+            name,
+            "booth",
+            () if name == "metro" else ("--style", name),
+            booth.KINDS[name],
+            BOOTH[name][0],
+            "story",
+            story_fields(BOOTH[name][1]),
+            (1, 1),
+            1,
+            BOOTH[name][2],
+        )
+        for name in booth.STYLES
+    ]
     out.append(Style("card", "card", (), card.KIND, CARD_DESCRIPTION, "card", card_fields(), (1, 1), 1, "card.jpg"))
-    out.append(Style("comic", "comic", (), comic.KIND, COMIC_DESCRIPTION, "comic", comic_fields(),
-                     (comic.MIN_PANELS, comic.MAX_PANELS), 1, "comic.jpg"))
-    out.append(Style("strip", "strip", (), photocard.STRIP_KIND, STRIP_DESCRIPTION, None,
-                     (Field("caption", STRIP_ROLES["caption"], False, photocard.STRIP_CAPTION_LIMIT),),
-                     (photocard.FRAMES, photocard.FRAMES), 1, "strip.jpg", paper="4x6"))
-    out.append(Style("instant", "instant", (), photocard.INSTANT_KIND, INSTANT_DESCRIPTION, None,
-                     (Field("caption", INSTANT_ROLES["caption"], False, photocard.INSTANT_CAPTION_LIMIT),),
-                     (1, 1), 1, "instant.jpg", paper="4x6"))
-    out.append(Style("colour-in", "colour-in", (), colourin.KIND, COLOUR_IN_DESCRIPTION, None, (), (1, 1), 1,
-                     "colour-in.jpg"))
-    out.append(Style("postcard", "postcard", (), postcard.KIND, POSTCARD_DESCRIPTION, "postcard", postcard_fields(),
-                     (1, 1), len(postcard.SIDES), "postcard.jpg", paper="4x6"))
-    out.append(Style("disc", "disc", (), disc.KIND, DISC_DESCRIPTION, "disc", disc_fields(), (1, 1), 1, "disc.jpg",
-                     paper="disc"))
-    out += [Style(name, "article", () if name == "magazine" else ("--style", name),
-                  article.ARTICLE_STYLES[name].kind, ARTICLE[name][0], "article", article_fields(), (0, 0),
-                  article.MAX_PAGES, ARTICLE[name][1]) for name in article.ARTICLE_STYLES]
-    out.append(Style("recipe", "recipe", (), recipe.KIND, RECIPE_DESCRIPTION, "recipe", recipe_fields(), (0, 0),
-                     recipe.MAX_CARDS, "recipe.jpg", paper="4x6"))
-    out.append(Style("bingo", "bingo", (), bingo.KIND, BINGO_DESCRIPTION, "bingo", bingo_fields(), (0, 0),
-                     bingo.MAX_CARDS, "bingo.jpg"))
-    out += [Style(kind, "puzzle", (kind,), puzzle.NAMES[kind], PUZZLE[kind][0], PUZZLE[kind][1], puzzle_fields(kind),
-                  (0, 0), 1, f"puzzle-{kind}.jpg") for kind in puzzle.KINDS]
-    gazette: dict[str, Any] = {"command": "gazette", "kind": GAZETTE_KIND, "schema": "gazette",
-                               "fields": story_fields(GAZETTE_ROLES), "photos": (1, vintage.MAX_PHOTOS),
-                               "max_pages": vintage.MAX_PAGES}
-    out += [Style("gazette", args=(), description=f"{GAZETTE_DESCRIPTION}. Upright A4: the lead photo above the "
-                  "story, plates two abreast", sample="gazette.jpg", **gazette),
-            Style("gazette-landscape", args=("--landscape",), description=f"{GAZETTE_DESCRIPTION}. A4 on its side: "
-                  "the lead photo beside the story, plates three abreast", sample="gazette-landscape.jpg",
-                  **gazette)]
-    out.append(Style("gazette-morning", "gazette", ("--edition", "morning"), "morning newspaper",
-                     "The Morning Gazette on one upright A4 page: weather, calendar, to-dos and headlines from a "
-                     "morning JSON file, in the same cream-paper vintage typography", "morning",
-                     morning.morning_fields(), (0, 0), 1, "gazette-morning.jpg"))
-    out.append(Style("commit-receipt", "receipt", (), "commit receipt",
-                     "The Commit Receipt on one upright A4 page: the current repository's day or week of commits, "
-                     "grouped by day in ruled columns", None, (), (0, 0), 1, "commit-receipt.jpg"))
+    out.append(
+        Style(
+            "comic",
+            "comic",
+            (),
+            comic.KIND,
+            COMIC_DESCRIPTION,
+            "comic",
+            comic_fields(),
+            (comic.MIN_PANELS, comic.MAX_PANELS),
+            1,
+            "comic.jpg",
+        )
+    )
+    out.append(
+        Style(
+            "strip",
+            "strip",
+            (),
+            photocard.STRIP_KIND,
+            STRIP_DESCRIPTION,
+            None,
+            (Field("caption", STRIP_ROLES["caption"], False, photocard.STRIP_CAPTION_LIMIT),),
+            (photocard.FRAMES, photocard.FRAMES),
+            1,
+            "strip.jpg",
+            paper="4x6",
+        )
+    )
+    out.append(
+        Style(
+            "instant",
+            "instant",
+            (),
+            photocard.INSTANT_KIND,
+            INSTANT_DESCRIPTION,
+            None,
+            (Field("caption", INSTANT_ROLES["caption"], False, photocard.INSTANT_CAPTION_LIMIT),),
+            (1, 1),
+            1,
+            "instant.jpg",
+            paper="4x6",
+        )
+    )
+    out.append(
+        Style("colour-in", "colour-in", (), colourin.KIND, COLOUR_IN_DESCRIPTION, None, (), (1, 1), 1, "colour-in.jpg")
+    )
+    out.append(
+        Style(
+            "postcard",
+            "postcard",
+            (),
+            postcard.KIND,
+            POSTCARD_DESCRIPTION,
+            "postcard",
+            postcard_fields(),
+            (1, 1),
+            len(postcard.SIDES),
+            "postcard.jpg",
+            paper="4x6",
+        )
+    )
+    out.append(
+        Style(
+            "disc", "disc", (), disc.KIND, DISC_DESCRIPTION, "disc", disc_fields(), (1, 1), 1, "disc.jpg", paper="disc"
+        )
+    )
+    out += [
+        Style(
+            name,
+            "article",
+            () if name == "magazine" else ("--style", name),
+            article.ARTICLE_STYLES[name].kind,
+            ARTICLE[name][0],
+            "article",
+            article_fields(),
+            (0, 0),
+            article.MAX_PAGES,
+            ARTICLE[name][1],
+        )
+        for name in article.ARTICLE_STYLES
+    ]
+    out.append(
+        Style(
+            "recipe",
+            "recipe",
+            (),
+            recipe.KIND,
+            RECIPE_DESCRIPTION,
+            "recipe",
+            recipe_fields(),
+            (0, 0),
+            recipe.MAX_CARDS,
+            "recipe.jpg",
+            paper="4x6",
+        )
+    )
+    out.append(
+        Style(
+            "bingo",
+            "bingo",
+            (),
+            bingo.KIND,
+            BINGO_DESCRIPTION,
+            "bingo",
+            bingo_fields(),
+            (0, 0),
+            bingo.MAX_CARDS,
+            "bingo.jpg",
+        )
+    )
+    out += [
+        Style(
+            kind,
+            "puzzle",
+            (kind,),
+            puzzle.NAMES[kind],
+            PUZZLE[kind][0],
+            PUZZLE[kind][1],
+            puzzle_fields(kind),
+            (0, 0),
+            1,
+            f"puzzle-{kind}.jpg",
+        )
+        for kind in puzzle.KINDS
+    ]
+    gazette: dict[str, Any] = {
+        "command": "gazette",
+        "kind": GAZETTE_KIND,
+        "schema": "gazette",
+        "fields": story_fields(GAZETTE_ROLES),
+        "photos": (1, vintage.MAX_PHOTOS),
+        "max_pages": vintage.MAX_PAGES,
+    }
+    out += [
+        Style(
+            "gazette",
+            args=(),
+            description=f"{GAZETTE_DESCRIPTION}. Upright A4: the lead photo above the story, plates two abreast",
+            sample="gazette.jpg",
+            **gazette,
+        ),
+        Style(
+            "gazette-landscape",
+            args=("--landscape",),
+            description=f"{GAZETTE_DESCRIPTION}. A4 on its side: the lead photo beside the story, plates three abreast",
+            sample="gazette-landscape.jpg",
+            **gazette,
+        ),
+    ]
+    out.append(
+        Style(
+            "gazette-morning",
+            "gazette",
+            ("--edition", "morning"),
+            "morning newspaper",
+            "The Morning Gazette on one upright A4 page: weather, calendar, to-dos and headlines from a "
+            "morning JSON file, in the same cream-paper vintage typography",
+            "morning",
+            morning.morning_fields(),
+            (0, 0),
+            1,
+            "gazette-morning.jpg",
+        )
+    )
+    out.append(
+        Style(
+            "commit-receipt",
+            "receipt",
+            (),
+            "commit receipt",
+            "The Commit Receipt on one upright A4 page: the current repository's day or week of commits, "
+            "grouped by day in ruled columns",
+            None,
+            (),
+            (0, 0),
+            1,
+            "commit-receipt.jpg",
+        )
+    )
     return tuple(out)
 
 
@@ -370,11 +618,13 @@ _SCHEMAS: dict[str, tuple[str, SchemaBuilder]] = {}  # name: (what it describes,
 
 def register_schema(name: str, summary: str) -> Callable[[SchemaBuilder], SchemaBuilder]:
     """Add a schema to ``prt schema``: decorate a function that returns it; ``summary`` says what it describes."""
+
     def add(build: SchemaBuilder) -> SchemaBuilder:
         if name in _SCHEMAS:
             raise ValueError(f"schema {name!r} is already registered")
         _SCHEMAS[name] = (summary, build)
         return build
+
     return add
 
 
@@ -393,9 +643,11 @@ def schema(name: str) -> dict[str, Any]:
     return _SCHEMAS[name][1]()
 
 
-TEXT_NOTE = ("Lengths count characters, with each run of spaces as one. Text is printed in Latin letters: accents "
-             "are printed without their marks, and characters the page font cannot print, such as emoji or "
-             "Chinese, are refused.")
+TEXT_NOTE = (
+    "Lengths count characters, with each run of spaces as one. Text is printed in Latin letters: accents "
+    "are printed without their marks, and characters the page font cannot print, such as emoji or "
+    "Chinese, are refused."
+)
 
 
 def _text(field: Field, non_blank: bool | None = None) -> dict[str, Any]:
@@ -410,41 +662,70 @@ def _text(field: Field, non_blank: bool | None = None) -> dict[str, Any]:
 
 def _story_schema(title: str, description: str, roles: dict[str, str], example: booth.Story) -> dict[str, Any]:
     fields = story_fields(roles)
-    return {"$schema": JSON_SCHEMA, "title": title, "description": f"{description} {TEXT_NOTE}", "type": "object",
-            "properties": {f.name: _text(f) for f in fields}, "required": [f.name for f in fields if f.required],
-            "additionalProperties": False, "examples": [asdict(example)]}
+    return {
+        "$schema": JSON_SCHEMA,
+        "title": title,
+        "description": f"{description} {TEXT_NOTE}",
+        "type": "object",
+        "properties": {f.name: _text(f) for f in fields},
+        "required": [f.name for f in fields if f.required],
+        "additionalProperties": False,
+        "examples": [asdict(example)],
+    }
 
 
 @register_schema("story", "photo booth story file: prt booth PHOTO --story-file story.json")
 def story_schema() -> dict[str, Any]:
-    return _story_schema("prt booth story", "The story file of `prt booth --story-file` (a file, or - for stdin), "
-                         f"for every style ({', '.join(booth.STYLES)}); at most {booth.MAX_STORY_FILE // 1024} KiB.",
-                         STORY_ROLES, booth.DEFAULT_STORY)
+    return _story_schema(
+        "prt booth story",
+        "The story file of `prt booth --story-file` (a file, or - for stdin), "
+        f"for every style ({', '.join(booth.STYLES)}); at most {booth.MAX_STORY_FILE // 1024} KiB.",
+        STORY_ROLES,
+        booth.DEFAULT_STORY,
+    )
 
 
 @register_schema("article", "article JSON file: prt article article.json (or JSON piped to prt article -)")
 def article_schema() -> dict[str, Any]:
     props = {f.name: _text(f, non_blank=False) for f in article_fields()}  # an empty title is allowed
     paragraph = {"type": "string", "pattern": r"[^\s?-]"}  # a paragraph of only dashes or "?" is dropped
-    props["body"] = {"description": ARTICLE_ROLES["body"], "anyOf": [
-        paragraph, {"type": "array", "items": {"type": "string"}, "contains": paragraph}]}
-    return {"$schema": JSON_SCHEMA, "title": "prt article",
-            "description": "An article for `prt article`, saved as a .json file or piped to `prt article -`; at "
-                           f"most {article.MAX_BYTES // (1024 * 1024)} MiB, and at most {article.MAX_PAGES} pages "
-                           "once laid out. Text is printed in Latin letters: an article mostly in another script "
-                           "is refused, and emoji are left out.",
-            "type": "object", "properties": props, "required": list(ARTICLE_REQUIRED), "additionalProperties": False,
-            "examples": [{"title": "A Short Walk", "author": "A. Writer", "source": "Example Blog",
-                          "url": "https://example.com/walk",
-                          "body": ["The first paragraph.", "The second paragraph."]}]}
+    props["body"] = {
+        "description": ARTICLE_ROLES["body"],
+        "anyOf": [paragraph, {"type": "array", "items": {"type": "string"}, "contains": paragraph}],
+    }
+    return {
+        "$schema": JSON_SCHEMA,
+        "title": "prt article",
+        "description": "An article for `prt article`, saved as a .json file or piped to `prt article -`; at "
+        f"most {article.MAX_BYTES // (1024 * 1024)} MiB, and at most {article.MAX_PAGES} pages "
+        "once laid out. Text is printed in Latin letters: an article mostly in another script "
+        "is refused, and emoji are left out.",
+        "type": "object",
+        "properties": props,
+        "required": list(ARTICLE_REQUIRED),
+        "additionalProperties": False,
+        "examples": [
+            {
+                "title": "A Short Walk",
+                "author": "A. Writer",
+                "source": "Example Blog",
+                "url": "https://example.com/walk",
+                "body": ["The first paragraph.", "The second paragraph."],
+            }
+        ],
+    }
 
 
 @register_schema("gazette", "vintage gazette story file: prt gazette PHOTO... --story-file story.json")
 def gazette_schema() -> dict[str, Any]:
-    return _story_schema("prt gazette story", "The story file of `prt gazette --story-file` (a file, or - for "
-                         f"stdin); at most {booth.MAX_STORY_FILE // 1024} KiB. The photos, 1 to "
-                         f"{vintage.MAX_PHOTOS}, are given on the command line.", GAZETTE_ROLES,
-                         vintage.DEFAULT_GAZETTE_STORY)
+    return _story_schema(
+        "prt gazette story",
+        "The story file of `prt gazette --story-file` (a file, or - for "
+        f"stdin); at most {booth.MAX_STORY_FILE // 1024} KiB. The photos, 1 to "
+        f"{vintage.MAX_PHOTOS}, are given on the command line.",
+        GAZETTE_ROLES,
+        vintage.DEFAULT_GAZETTE_STORY,
+    )
 
 
 @register_schema("morning", "morning-edition file: prt gazette --edition morning --edition-file morning.json")
@@ -461,80 +742,139 @@ def page_schema() -> dict[str, Any]:
 @register_schema("card", "greeting card file: prt card PHOTO --card-file card.json")
 def card_schema() -> dict[str, Any]:
     fields = card_fields()
-    return {"$schema": JSON_SCHEMA, "title": "prt card",
-            "description": "The card file of `prt card --card-file` (a file, or - for stdin); at most "
-                           f"{card.MAX_CARD_FILE // 1024} KiB. The photo is given on the command line. {TEXT_NOTE} "
-                           "In the verse each newline counts as a character, and a run of blank lines counts as one "
-                           "blank line.",
-            "type": "object", "properties": {f.name: _text(f) for f in fields},
-            "required": [f.name for f in fields if f.required], "additionalProperties": False,
-            "examples": [asdict(card.DEFAULT_CARD)]}
+    return {
+        "$schema": JSON_SCHEMA,
+        "title": "prt card",
+        "description": "The card file of `prt card --card-file` (a file, or - for stdin); at most "
+        f"{card.MAX_CARD_FILE // 1024} KiB. The photo is given on the command line. {TEXT_NOTE} "
+        "In the verse each newline counts as a character, and a run of blank lines counts as one "
+        "blank line.",
+        "type": "object",
+        "properties": {f.name: _text(f) for f in fields},
+        "required": [f.name for f in fields if f.required],
+        "additionalProperties": False,
+        "examples": [asdict(card.DEFAULT_CARD)],
+    }
 
 
 @register_schema("comic", "comic file: prt comic PHOTO... --comic-file comic.json")
 def comic_schema() -> dict[str, Any]:
     fields = {f.name: f for f in comic_fields()}
-    bubble = {"type": "object", "description": "One bubble over the panel's photo.",
-              "properties": {
-                  "text": _text(fields["panels[].bubbles[].text"], non_blank=True),
-                  "position": {"enum": list(comic.POSITIONS),
-                               "description": "Where the bubble sits: in the top or bottom band of the panel, at the "
-                                              "left, in the middle (top, bottom) or at the right. Bubbles in one band "
-                                              "share its width, from left to right. When left out, the panel's first "
-                                              "bubble goes top-left, the second top-right and the third "
-                                              "bottom-right"},
-                  "tail": {"enum": list(comic.TAILS), "default": "center",
-                           "description": "Where the tail points, out of the band into the panel (down from a top "
-                                          "bubble, up from a bottom one): towards the left, the middle or the right, "
-                                          "at the speaker; none for no tail"},
-                  "kind": {"enum": list(comic.BUBBLE_KINDS), "default": "speech",
-                           "description": "speech: an oval with a pointed tail; thought: a cloud with a trail of "
-                                          "puffs"}},
-              "required": ["text"], "additionalProperties": False}
-    panel = {"type": "object", "description": "One panel: the photo given in the same place on the command line.",
-             "properties": {"caption": _text(fields["panels[].caption"]),
-                            "bubbles": {"type": "array", "items": bubble, "maxItems": comic.MAX_BUBBLES}},
-             "additionalProperties": False}
-    return {"$schema": JSON_SCHEMA, "title": "prt comic",
-            "description": "The comic file of `prt comic --comic-file` (a file, or - for stdin); at most "
-                           f"{comic.MAX_COMIC_FILE // 1024} KiB. One panel per photo, {comic.MIN_PANELS} to "
-                           f"{comic.MAX_PANELS}, in the order the photos are given on the command line. The text is "
-                           "written in a handwriting font that has Latin and Cyrillic letters: accents are printed, "
-                           "and characters it cannot print, such as emoji or Chinese, are refused. Lengths count "
-                           "characters, with each run of spaces as one; a newline counts as a space. Text too long "
-                           "for its bubble is cut with … and named in the fit report.",
-            "type": "object",
-            "properties": {"title": _text(fields["title"]), "byline": _text(fields["byline"]),
-                           "panels": {"type": "array", "items": panel, "minItems": comic.MIN_PANELS,
-                                      "maxItems": comic.MAX_PANELS}},
-            "required": ["panels"], "additionalProperties": False,
-            "examples": [comic.to_dict(comic.DEFAULT_COMIC)]}
+    bubble = {
+        "type": "object",
+        "description": "One bubble over the panel's photo.",
+        "properties": {
+            "text": _text(fields["panels[].bubbles[].text"], non_blank=True),
+            "position": {
+                "enum": list(comic.POSITIONS),
+                "description": "Where the bubble sits: in the top or bottom band of the panel, at the "
+                "left, in the middle (top, bottom) or at the right. Bubbles in one band "
+                "share its width, from left to right. When left out, the panel's first "
+                "bubble goes top-left, the second top-right and the third "
+                "bottom-right",
+            },
+            "tail": {
+                "enum": list(comic.TAILS),
+                "default": "center",
+                "description": "Where the tail points, out of the band into the panel (down from a top "
+                "bubble, up from a bottom one): towards the left, the middle or the right, "
+                "at the speaker; none for no tail",
+            },
+            "kind": {
+                "enum": list(comic.BUBBLE_KINDS),
+                "default": "speech",
+                "description": "speech: an oval with a pointed tail; thought: a cloud with a trail of puffs",
+            },
+        },
+        "required": ["text"],
+        "additionalProperties": False,
+    }
+    panel = {
+        "type": "object",
+        "description": "One panel: the photo given in the same place on the command line.",
+        "properties": {
+            "caption": _text(fields["panels[].caption"]),
+            "bubbles": {"type": "array", "items": bubble, "maxItems": comic.MAX_BUBBLES},
+        },
+        "additionalProperties": False,
+    }
+    return {
+        "$schema": JSON_SCHEMA,
+        "title": "prt comic",
+        "description": "The comic file of `prt comic --comic-file` (a file, or - for stdin); at most "
+        f"{comic.MAX_COMIC_FILE // 1024} KiB. One panel per photo, {comic.MIN_PANELS} to "
+        f"{comic.MAX_PANELS}, in the order the photos are given on the command line. The text is "
+        "written in a handwriting font that has Latin and Cyrillic letters: accents are printed, "
+        "and characters it cannot print, such as emoji or Chinese, are refused. Lengths count "
+        "characters, with each run of spaces as one; a newline counts as a space. Text too long "
+        "for its bubble is cut with … and named in the fit report.",
+        "type": "object",
+        "properties": {
+            "title": _text(fields["title"]),
+            "byline": _text(fields["byline"]),
+            "panels": {"type": "array", "items": panel, "minItems": comic.MIN_PANELS, "maxItems": comic.MAX_PANELS},
+        },
+        "required": ["panels"],
+        "additionalProperties": False,
+        "examples": [comic.to_dict(comic.DEFAULT_COMIC)],
+    }
 
 
 @register_schema("recipe", "recipe JSON file: prt recipe recipe.json (or JSON piped to prt recipe -)")
 def recipe_schema() -> dict[str, Any]:
     props: dict[str, Any] = {f.name: _text(f) for f in recipe_fields() if f.name not in ("ingredients", "steps")}
-    item = {"type": "string", "maxLength": recipe.MAX_ITEM, "pattern": r"[^\s?-]"}  # an item of only dashes or "?" is dropped
+    item = {
+        "type": "string",
+        "maxLength": recipe.MAX_ITEM,
+        "pattern": r"[^\s?-]",
+    }  # an item of only dashes or "?" is dropped
     for name in ("ingredients", "steps"):
-        props[name] = {"description": RECIPE_ROLES[name], "anyOf": [
-            {"type": "string", "pattern": r"[^\s?-]"},
-            {"type": "array", "items": {"type": "string", "maxLength": recipe.MAX_ITEM},
-             "maxItems": recipe.MAX_ITEMS, "contains": item}]}
-    return {"$schema": JSON_SCHEMA, "title": "prt recipe",
-            "description": "A recipe for `prt recipe`, saved as a .json file or piped to `prt recipe -`; at most "
-                           f"{recipe.MAX_BYTES // (1024 * 1024)} MiB, at most {recipe.MAX_ITEMS} ingredients and "
-                           f"{recipe.MAX_ITEMS} steps of up to {recipe.MAX_ITEM} characters each, and at most "
-                           f"{recipe.MAX_CARDS} cards once laid out (the same limits hold for items given as one "
-                           "text, one item per line). Text is printed in Latin letters: a recipe mostly in another "
-                           "script is refused, and emoji are left out.",
-            "type": "object", "properties": props, "required": list(recipe.REQUIRED), "additionalProperties": False,
-            "examples": [{"title": "Lemon Drizzle Cake", "servings": "Serves 8", "time": "Prep 15 min · Cook 45 min",
-                          "ingredients": ["225 g butter, softened", "225 g caster sugar", "4 eggs",
-                                          "225 g self-raising flour", "1 lemon, zest and juice"],
-                          "steps": ["Heat the oven to 180°C and line a loaf tin.",
-                                    "Beat the butter and sugar, then the eggs, one at a time.",
-                                    "Fold in the flour and zest, and bake for 45 minutes.",
-                                    "Pour the lemon juice mixed with sugar over the warm cake."]}]}
+        props[name] = {
+            "description": RECIPE_ROLES[name],
+            "anyOf": [
+                {"type": "string", "pattern": r"[^\s?-]"},
+                {
+                    "type": "array",
+                    "items": {"type": "string", "maxLength": recipe.MAX_ITEM},
+                    "maxItems": recipe.MAX_ITEMS,
+                    "contains": item,
+                },
+            ],
+        }
+    return {
+        "$schema": JSON_SCHEMA,
+        "title": "prt recipe",
+        "description": "A recipe for `prt recipe`, saved as a .json file or piped to `prt recipe -`; at most "
+        f"{recipe.MAX_BYTES // (1024 * 1024)} MiB, at most {recipe.MAX_ITEMS} ingredients and "
+        f"{recipe.MAX_ITEMS} steps of up to {recipe.MAX_ITEM} characters each, and at most "
+        f"{recipe.MAX_CARDS} cards once laid out (the same limits hold for items given as one "
+        "text, one item per line). Text is printed in Latin letters: a recipe mostly in another "
+        "script is refused, and emoji are left out.",
+        "type": "object",
+        "properties": props,
+        "required": list(recipe.REQUIRED),
+        "additionalProperties": False,
+        "examples": [
+            {
+                "title": "Lemon Drizzle Cake",
+                "servings": "Serves 8",
+                "time": "Prep 15 min · Cook 45 min",
+                "ingredients": [
+                    "225 g butter, softened",
+                    "225 g caster sugar",
+                    "4 eggs",
+                    "225 g self-raising flour",
+                    "1 lemon, zest and juice",
+                ],
+                "steps": [
+                    "Heat the oven to 180°C and line a loaf tin.",
+                    "Beat the butter and sugar, then the eggs, one at a time.",
+                    "Fold in the flour and zest, and bake for 45 minutes.",
+                    "Pour the lemon juice mixed with sugar over the warm cake.",
+                ],
+            }
+        ],
+    }
 
 
 @register_schema("postcard", "postcard file: prt postcard PHOTO --postcard-file postcard.json")
@@ -542,18 +882,28 @@ def postcard_schema() -> dict[str, Any]:
     props = {f.name: _text(f) for f in postcard_fields()}
     # At most ADDRESS_LINES lines: the address may not hold more newlines than that.
     props["address"]["pattern"] = rf"^[^\n]*(\n[^\n]*){{0,{postcard.ADDRESS_LINES - 1}}}$"
-    return {"$schema": JSON_SCHEMA, "title": "prt postcard",
-            "description": "The postcard file of `prt postcard --postcard-file` (a file, or - for stdin); at most "
-                           f"{postcard.MAX_POSTCARD_FILE // 1024} KiB. The photo is given on the command line. The "
-                           "text is written in a handwriting font that has Latin, Greek and Cyrillic letters: accents "
-                           "are printed, and characters it cannot print, such as emoji or Chinese, are refused. "
-                           "Lengths count characters, with each run of spaces as one; in the message and the address "
-                           "each newline counts as a character, and blank lines are dropped.",
-            "type": "object", "properties": props,
-            "required": [f.name for f in postcard_fields() if f.required], "additionalProperties": False,
-            "examples": [asdict(postcard.DEFAULT_POSTCARD),
-                         {"message": "Made it to the coast!\nThe sea is cold but the chips are perfect.",
-                          "signature": "Love, Jo", "address": "Sam Lee\n4 Elm Road\nLeeds LS6 1AB"}]}
+    return {
+        "$schema": JSON_SCHEMA,
+        "title": "prt postcard",
+        "description": "The postcard file of `prt postcard --postcard-file` (a file, or - for stdin); at most "
+        f"{postcard.MAX_POSTCARD_FILE // 1024} KiB. The photo is given on the command line. The "
+        "text is written in a handwriting font that has Latin, Greek and Cyrillic letters: accents "
+        "are printed, and characters it cannot print, such as emoji or Chinese, are refused. "
+        "Lengths count characters, with each run of spaces as one; in the message and the address "
+        "each newline counts as a character, and blank lines are dropped.",
+        "type": "object",
+        "properties": props,
+        "required": [f.name for f in postcard_fields() if f.required],
+        "additionalProperties": False,
+        "examples": [
+            asdict(postcard.DEFAULT_POSTCARD),
+            {
+                "message": "Made it to the coast!\nThe sea is cold but the chips are perfect.",
+                "signature": "Love, Jo",
+                "address": "Sam Lee\n4 Elm Road\nLeeds LS6 1AB",
+            },
+        ],
+    }
 
 
 @register_schema("disc", "disc label file: prt disc PHOTO --disc-file disc.json")
@@ -562,91 +912,176 @@ def disc_schema() -> dict[str, Any]:
     track = {"type": "string", "maxLength": disc.MAX_TRACK}
     # As one text, the tracks are split at each newline: at most MAX_TRACKS lines. As a list, each item is a track.
     lines = rf"^[^\n]{{0,{disc.MAX_TRACK}}}(\n[^\n]{{0,{disc.MAX_TRACK}}}){{0,{disc.MAX_TRACKS - 1}}}$"
-    props["tracks"] = {"description": DISC_ROLES["tracks"], "anyOf": [
-        {"type": "string", "pattern": lines},
-        {"type": "array", "items": track, "maxItems": disc.MAX_TRACKS}]}
-    return {"$schema": JSON_SCHEMA, "title": "prt disc",
-            "description": "The label file of `prt disc --disc-file` (a file, or - for stdin); at most "
-                           f"{disc.MAX_DISC_FILE // 1024} KiB. The photo is given on the command line. The text is "
-                           "written in a handwriting font that has Latin and Cyrillic letters: accents are "
-                           "printed, and characters it cannot print, such as emoji or Chinese, are refused. Lengths "
-                           f"count characters, with each run of spaces as one. At most {disc.MAX_TRACKS} tracks, or "
-                           "lines when the tracks are one text; empty ones are dropped.",
-            "type": "object", "properties": props,
-            "required": [f.name for f in disc_fields() if f.required], "additionalProperties": False,
-            "examples": [{**asdict(disc.DEFAULT_DISC), "tracks": list(disc.DEFAULT_DISC.tracks)},
-                         {"title": "Anna & Ben", "subtitle": "Our wedding · 12 June 2026",
-                          "tracks": "First dance\nCake cutting\nThe last song"}]}
+    props["tracks"] = {
+        "description": DISC_ROLES["tracks"],
+        "anyOf": [{"type": "string", "pattern": lines}, {"type": "array", "items": track, "maxItems": disc.MAX_TRACKS}],
+    }
+    return {
+        "$schema": JSON_SCHEMA,
+        "title": "prt disc",
+        "description": "The label file of `prt disc --disc-file` (a file, or - for stdin); at most "
+        f"{disc.MAX_DISC_FILE // 1024} KiB. The photo is given on the command line. The text is "
+        "written in a handwriting font that has Latin and Cyrillic letters: accents are "
+        "printed, and characters it cannot print, such as emoji or Chinese, are refused. Lengths "
+        f"count characters, with each run of spaces as one. At most {disc.MAX_TRACKS} tracks, or "
+        "lines when the tracks are one text; empty ones are dropped.",
+        "type": "object",
+        "properties": props,
+        "required": [f.name for f in disc_fields() if f.required],
+        "additionalProperties": False,
+        "examples": [
+            {**asdict(disc.DEFAULT_DISC), "tracks": list(disc.DEFAULT_DISC.tracks)},
+            {
+                "title": "Anna & Ben",
+                "subtitle": "Our wedding · 12 June 2026",
+                "tracks": "First dance\nCake cutting\nThe last song",
+            },
+        ],
+    }
 
 
 @register_schema("bingo", "bingo words file: prt bingo --words-file words.json")
 def bingo_schema() -> dict[str, Any]:
     fields = {f.name: f for f in bingo_fields()}
     word = {"type": "string", "maxLength": bingo.MAX_WORD, "pattern": NON_BLANK}
-    return {"$schema": JSON_SCHEMA, "title": "prt bingo",
-            "description": "The words file of `prt bingo --words-file` (a file, or - for stdin); at most "
-                           f"{bingo.MAX_BINGO_FILE // 1024} KiB. Each card holds {bingo.PER_CARD} of the words round "
-                           f"the free centre square, so a file needs at least {bingo.MIN_WORDS}, every one different "
-                           "(ignoring case and spacing). The text is written in a handwriting font that has Latin "
-                           "and Cyrillic letters: accents are printed, and characters it cannot print, such as emoji "
-                           "or Chinese, are refused. Lengths count characters, with each run of spaces as one.",
-            "type": "object",
-            "properties": {"title": _text(fields["title"]), "free": _text(fields["free"]),
-                           "words": {"type": "array", "description": fields["words"].description, "items": word,
-                                     "minItems": bingo.MIN_WORDS, "maxItems": bingo.MAX_WORDS,
-                                     "uniqueItems": True}},
-            "required": ["words"], "additionalProperties": False,
-            "examples": [{"title": "Garden Bingo", "free": "SUN",
-                          "words": ["Bee", "Butterfly", "Ladybird", "Snail", "Worm", "Robin", "Daisy", "Rose",
-                                    "Tulip", "Sunflower", "Watering can", "Wheelbarrow", "Spade", "Shed", "Pond",
-                                    "Frog", "Bird bath", "Bench", "Hedge", "Apple tree", "Spider web", "Squirrel",
-                                    "Hose", "Gnome", "Bird feeder", "Swing", "Cat on the fence", "Bumblebee"]}]}
+    return {
+        "$schema": JSON_SCHEMA,
+        "title": "prt bingo",
+        "description": "The words file of `prt bingo --words-file` (a file, or - for stdin); at most "
+        f"{bingo.MAX_BINGO_FILE // 1024} KiB. Each card holds {bingo.PER_CARD} of the words round "
+        f"the free centre square, so a file needs at least {bingo.MIN_WORDS}, every one different "
+        "(ignoring case and spacing). The text is written in a handwriting font that has Latin "
+        "and Cyrillic letters: accents are printed, and characters it cannot print, such as emoji "
+        "or Chinese, are refused. Lengths count characters, with each run of spaces as one.",
+        "type": "object",
+        "properties": {
+            "title": _text(fields["title"]),
+            "free": _text(fields["free"]),
+            "words": {
+                "type": "array",
+                "description": fields["words"].description,
+                "items": word,
+                "minItems": bingo.MIN_WORDS,
+                "maxItems": bingo.MAX_WORDS,
+                "uniqueItems": True,
+            },
+        },
+        "required": ["words"],
+        "additionalProperties": False,
+        "examples": [
+            {
+                "title": "Garden Bingo",
+                "free": "SUN",
+                "words": [
+                    "Bee",
+                    "Butterfly",
+                    "Ladybird",
+                    "Snail",
+                    "Worm",
+                    "Robin",
+                    "Daisy",
+                    "Rose",
+                    "Tulip",
+                    "Sunflower",
+                    "Watering can",
+                    "Wheelbarrow",
+                    "Spade",
+                    "Shed",
+                    "Pond",
+                    "Frog",
+                    "Bird bath",
+                    "Bench",
+                    "Hedge",
+                    "Apple tree",
+                    "Spider web",
+                    "Squirrel",
+                    "Hose",
+                    "Gnome",
+                    "Bird feeder",
+                    "Swing",
+                    "Cat on the fence",
+                    "Bumblebee",
+                ],
+            }
+        ],
+    }
 
 
-PUZZLE_NOTE = ("The grid takes Latin letters only, in capitals and without their accents. Titles and clues may "
-               "hold accents, and characters the page fonts cannot print, such as emoji or Chinese, are refused. "
-               "Lengths count characters, with each run of spaces as one.")
+PUZZLE_NOTE = (
+    "The grid takes Latin letters only, in capitals and without their accents. Titles and clues may "
+    "hold accents, and characters the page fonts cannot print, such as emoji or Chinese, are refused. "
+    "Lengths count characters, with each run of spaces as one."
+)
 
 
 @register_schema("wordsearch", "word search words file: prt puzzle wordsearch --words-file words.json")
 def wordsearch_schema() -> dict[str, Any]:
     fields = {f.name: f for f in puzzle_fields("wordsearch")}
     word = {"type": "string", "maxLength": puzzle.MAX_SEARCH_WORD, "pattern": NON_BLANK}
-    return {"$schema": JSON_SCHEMA, "title": "prt puzzle wordsearch",
-            "description": "The words file of `prt puzzle wordsearch --words-file` (a file, or - for stdin); at most "
-                           f"{puzzle.MAX_PUZZLE_FILE // 1024} KiB. Every word is hidden in the grid. A word may hold "
-                           "only letters, spaces, hyphens and apostrophes, and no two words may have the same "
-                           "letters (ignoring case, spaces and accents), which the schema cannot check. "
-                           + PUZZLE_NOTE,
-            "type": "object",
-            "properties": {"title": _text(fields["title"]),
-                           "words": {"type": "array", "description": fields["words"].description, "items": word,
-                                     "minItems": puzzle.MIN_SEARCH_WORDS, "maxItems": puzzle.MAX_SEARCH_WORDS,
-                                     "uniqueItems": True}},
-            "required": ["words"], "additionalProperties": False,
-            "examples": [{"title": "Garden Word Search",
-                          "words": ["Daisy", "Tulip", "Robin", "Snail", "Watering can", "Sunflower", "Bee", "Pond"]}]}
+    return {
+        "$schema": JSON_SCHEMA,
+        "title": "prt puzzle wordsearch",
+        "description": "The words file of `prt puzzle wordsearch --words-file` (a file, or - for stdin); at most "
+        f"{puzzle.MAX_PUZZLE_FILE // 1024} KiB. Every word is hidden in the grid. A word may hold "
+        "only letters, spaces, hyphens and apostrophes, and no two words may have the same "
+        "letters (ignoring case, spaces and accents), which the schema cannot check. " + PUZZLE_NOTE,
+        "type": "object",
+        "properties": {
+            "title": _text(fields["title"]),
+            "words": {
+                "type": "array",
+                "description": fields["words"].description,
+                "items": word,
+                "minItems": puzzle.MIN_SEARCH_WORDS,
+                "maxItems": puzzle.MAX_SEARCH_WORDS,
+                "uniqueItems": True,
+            },
+        },
+        "required": ["words"],
+        "additionalProperties": False,
+        "examples": [
+            {
+                "title": "Garden Word Search",
+                "words": ["Daisy", "Tulip", "Robin", "Snail", "Watering can", "Sunflower", "Bee", "Pond"],
+            }
+        ],
+    }
 
 
 @register_schema("crossword", "crossword file: prt puzzle crossword --crossword-file crossword.json")
 def crossword_schema() -> dict[str, Any]:
     fields = {f.name: f for f in puzzle_fields("crossword")}
-    entry = {"type": "object", "description": "One answer and its clue.",
-             "properties": {"answer": _text(fields["entries[].answer"], non_blank=True),
-                            "clue": _text(fields["entries[].clue"], non_blank=True)},
-             "required": ["answer", "clue"], "additionalProperties": False}
-    return {"$schema": JSON_SCHEMA, "title": "prt puzzle crossword",
-            "description": "The crossword file of `prt puzzle crossword --crossword-file` (a file, or - for stdin); "
-                           f"at most {puzzle.MAX_PUZZLE_FILE // 1024} KiB. prt lays the answers out so that each "
-                           "crosses another, in a grid of at most "
-                           f"{puzzle.MAX_CROSSWORD}×{puzzle.MAX_CROSSWORD} squares, and numbers them; the layout "
-                           "depends on the entries alone. An answer may hold only letters, spaces, hyphens and "
-                           "apostrophes, no two answers may have the same letters, and an answer that shares no "
-                           "letter it can cross with the others is refused: the schema cannot check these. "
-                           + PUZZLE_NOTE,
-            "type": "object",
-            "properties": {"title": _text(fields["title"]),
-                           "entries": {"type": "array", "items": entry, "minItems": puzzle.MIN_ENTRIES,
-                                       "maxItems": puzzle.MAX_ENTRIES}},
-            "required": ["entries"], "additionalProperties": False,
-            "examples": [puzzle.to_dict(puzzle.DEFAULT_CROSSWORD)]}
+    entry = {
+        "type": "object",
+        "description": "One answer and its clue.",
+        "properties": {
+            "answer": _text(fields["entries[].answer"], non_blank=True),
+            "clue": _text(fields["entries[].clue"], non_blank=True),
+        },
+        "required": ["answer", "clue"],
+        "additionalProperties": False,
+    }
+    return {
+        "$schema": JSON_SCHEMA,
+        "title": "prt puzzle crossword",
+        "description": "The crossword file of `prt puzzle crossword --crossword-file` (a file, or - for stdin); "
+        f"at most {puzzle.MAX_PUZZLE_FILE // 1024} KiB. prt lays the answers out so that each "
+        "crosses another, in a grid of at most "
+        f"{puzzle.MAX_CROSSWORD}×{puzzle.MAX_CROSSWORD} squares, and numbers them; the layout "
+        "depends on the entries alone. An answer may hold only letters, spaces, hyphens and "
+        "apostrophes, no two answers may have the same letters, and an answer that shares no "
+        "letter it can cross with the others is refused: the schema cannot check these. " + PUZZLE_NOTE,
+        "type": "object",
+        "properties": {
+            "title": _text(fields["title"]),
+            "entries": {
+                "type": "array",
+                "items": entry,
+                "minItems": puzzle.MIN_ENTRIES,
+                "maxItems": puzzle.MAX_ENTRIES,
+            },
+        },
+        "required": ["entries"],
+        "additionalProperties": False,
+        "examples": [puzzle.to_dict(puzzle.DEFAULT_CROSSWORD)],
+    }

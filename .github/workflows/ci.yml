@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A new push to a PR cancels its superseded run. Other events have no PR number,
+# fall back to their unique run ID, and are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # PRs are where bypassed commits enter. Gating the job on `pull_request` also
+  # avoids `github.event.before`, which is all zeros on a branch's first push.
+  hooks:
+    name: Verify hooks were not bypassed
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UV_PYTHON: '3.11'
+    strategy:
+      fail-fast: false
+      matrix:
+        # The one run-time visibility test: a pull_request payload always carries
+        # the repository. Public repos run free: one parallel leg per stage.
+        # Anything not provably public pays per job: one leg, commit stage first.
+        stages: ${{ fromJSON(github.event.repository.visibility == 'public' && '["pre-commit", "pre-push"]' || '["pre-commit pre-push"]') }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # A diff-scoped run needs BOTH endpoints in the object store, and
+          # checkout defaults to fetch-depth 1 — without this the base SHA is
+          # missing and `--from-ref` dies on a bad object.
+          fetch-depth: 0
+          # Blobless: every commit and tree, file contents only for this commit.
+          filter: blob:none
+
+      # The floor version (requires-python >= 3.11): a pull request's hooks
+      # catch code only a newer Python accepts.
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      # uv's cache is seeded by the default-branch matrix (same lockfile).
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+
+      # The dev group holds every hook tool, pytest-xdist included.
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Cache pre-commit environments
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      # A PR must not loosen the rules that judge it. When it changes hook
+      # config, a workflow or a hook script, run the stage(s) with the base
+      # branch's config first, before any hook the PR controls can run.
+      - name: Re-run the base branch's hooks if the PR changes them
+        run: |
+          export GIT_NO_REPLACE_OBJECTS=1
+          pip install pre-commit
+          base="${{ github.event.pull_request.base.sha }}"
+          gate="$RUNNER_TEMP/base-hook-gate.py"
+          git show "$base:scripts/base-hook-gate.py" > "$gate" 2>/dev/null || cp scripts/base-hook-gate.py "$gate"
+          python "$gate" --base "$base" ${{ matrix.stages || 'pre-commit pre-push' }}
+
+      # The ONLY overlap with pre-commit, and it costs seconds because the run is
+      # scoped to the diff. Every stage must run in some leg — `pre-commit run`
+      # alone executes commit-stage hooks and silently skips the pre-push suite and E2E.
+      - name: Run the hook stage(s) over the PR diff
+        run: |
+          pip install pre-commit
+          base="${{ github.event.pull_request.base.sha }}"
+          for stage in ${{ matrix.stages || 'pre-commit pre-push' }}; do
+            pre-commit run --hook-stage "$stage" --from-ref "$base" --to-ref HEAD
+          done
+
+  # Every supported Python on each merge (free on a public repo): the full-suite
+  # backstop, the coverage summary, and the job that seeds the caches every PR restores.
+  matrix-test:
+    name: Tests (Python ${{ matrix.python-version }})
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13', '3.14', '3.15']
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          uv sync --locked
+          uv run --locked python --version
+
+      # -n auto: one worker per runner CPU (4 on a public runner).
+      - name: Run tests with coverage
+        run: uv run --locked pytest -n auto --cov=prt -q
+
+      # Coverage stays on GitHub: no third-party upload.
+      - name: Coverage summary
+        if: matrix.python-version == '3.11'
+        run: uv run --locked coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+
+      # The 3.11 leg seeds the guard's pre-commit cache from the default branch
+      # (same interpreter, same key).
+      - if: matrix.python-version == '3.11'
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ env.pythonLocation }}-${{ hashFiles('.pre-commit-config.yaml') }}
+      - if: matrix.python-version == '3.11'
+        run: pip install pre-commit && pre-commit install-hooks

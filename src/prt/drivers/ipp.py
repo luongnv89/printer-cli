@@ -14,8 +14,7 @@ import httpx
 
 from prt import media
 from prt.drivers.base import Driver, PrinterError, Unreachable
-from prt.models import (Alert, Capability, Ink, Job, PrinterInfo, PrintOptions, ScanSettings,
-                        Severity, Status, Tray)
+from prt.models import Alert, Capability, Ink, Job, PrinterInfo, PrintOptions, ScanSettings, Severity, Status, Tray
 from prt.transport import ipp
 from prt.transport.ipp import Attr, IPPClient, IPPError, as_list
 
@@ -49,16 +48,14 @@ IGNORED_REASONS = {"none", ""}
 QUALITY = {"draft": 3, "normal": 4, "high": 5}
 
 # Formats the printer can take directly; anything else goes through CUPS (see prt.printing).
-DIRECT_FORMATS = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".pwg": "image/pwg-raster",
-                  ".urf": "image/urf"}
+DIRECT_FORMATS = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".pwg": "image/pwg-raster", ".urf": "image/urf"}
 
 
 def parse_reason(reason: str) -> Alert | None:
     if reason in IGNORED_REASONS:
         return None
     base, severity = reason, Severity.ERROR  # RFC 8011: no suffix means error
-    for suffix, sev in (("-report", Severity.INFO), ("-warning", Severity.WARNING),
-                        ("-error", Severity.ERROR)):
+    for suffix, sev in (("-report", Severity.INFO), ("-warning", Severity.WARNING), ("-error", Severity.ERROR)):
         if reason.endswith(suffix):
             base, severity = reason[: -len(suffix)], sev
             break
@@ -90,13 +87,13 @@ def _int(v: Any) -> int | None:
 class IPPDriver(Driver):
     name = "ipp"
     vendor = "generic"
-    capabilities = frozenset({Capability.INFO, Capability.STATUS, Capability.JOBS,
-                              Capability.PRINT, Capability.SCAN, Capability.IDENTIFY})
+    capabilities = frozenset(
+        {Capability.INFO, Capability.STATUS, Capability.JOBS, Capability.PRINT, Capability.SCAN, Capability.IDENTIFY}
+    )
 
     def __init__(self, target, timeout: float = 5.0, client: IPPClient | None = None):
         super().__init__(target, timeout)
-        self.client = client or IPPClient(target.host, target.ipp_port, target.ipp_path,
-                                          target.ipp_tls, timeout)
+        self.client = client or IPPClient(target.host, target.ipp_port, target.ipp_path, target.ipp_tls, timeout)
         self._attrs_cache: dict[str, Any] | None = None
         self._fresh = False  # True right after auto-detection fetched attributes
 
@@ -161,11 +158,16 @@ class IPPDriver(Driver):
                 lvl = None  # -1 unknown, -2 unknown, -3 "some remaining"
             elif lvl is not None and high and high != 100:
                 lvl = round(lvl * 100 / high)
-            inks.append(Ink(
-                name=str(n), color=str(colors[i]) if i < len(colors) else "#888888",
-                level=lvl, low=_int(lows[i]) if i < len(lows) else 15, high=100,
-                kind=str(kinds[i]) if i < len(kinds) else "ink-cartridge",
-            ))
+            inks.append(
+                Ink(
+                    name=str(n),
+                    color=str(colors[i]) if i < len(colors) else "#888888",
+                    level=lvl,
+                    low=_int(lows[i]) if i < len(lows) else 15,
+                    high=100,
+                    kind=str(kinds[i]) if i < len(kinds) else "ink-cartridge",
+                )
+            )
         return inks
 
     def parse_trays(self, a: dict[str, Any]) -> list[Tray]:
@@ -206,11 +208,21 @@ class IPPDriver(Driver):
         # Name the specific cartridges behind a generic "supply low" reason.
         for ink in inks:
             if ink.state == "replace":
-                alerts.append(Alert(f"ink-{ink.short.lower()}", Severity.ERROR,
-                                    f"{ink.name.replace(' ink', '')} {ink.level}% — replace cartridge"))
+                alerts.append(
+                    Alert(
+                        f"ink-{ink.short.lower()}",
+                        Severity.ERROR,
+                        f"{ink.name.replace(' ink', '')} {ink.level}% — replace cartridge",
+                    )
+                )
             elif ink.state == "low":
-                alerts.append(Alert(f"ink-{ink.short.lower()}", Severity.WARNING,
-                                    f"{ink.name.replace(' ink', '')} {ink.level}% — low"))
+                alerts.append(
+                    Alert(
+                        f"ink-{ink.short.lower()}",
+                        Severity.WARNING,
+                        f"{ink.name.replace(' ink', '')} {ink.level}% — low",
+                    )
+                )
         if any(ink.state in ("low", "replace") for ink in inks):
             alerts = [al for al in alerts if not al.code.startswith("marker-supply-low")]
         alerts.sort(key=lambda al: [Severity.ERROR, Severity.WARNING, Severity.INFO].index(al.severity))
@@ -224,8 +236,12 @@ class IPPDriver(Driver):
         return Status(
             state=ipp.PRINTER_STATES.get(_int(a.get("printer-state")) or 0, "unknown"),
             accepting=bool(a.get("printer-is-accepting-jobs", True)),
-            inks=inks, trays=self.parse_trays(a), alerts=alerts, reasons=reasons,
-            waste=waste, queued_jobs=_int(a.get("queued-job-count")) or 0,
+            inks=inks,
+            trays=self.parse_trays(a),
+            alerts=alerts,
+            reasons=reasons,
+            waste=waste,
+            queued_jobs=_int(a.get("queued-job-count")) or 0,
         )
 
     def parse_info(self, a: dict[str, Any]) -> PrinterInfo:
@@ -233,14 +249,20 @@ class IPPDriver(Driver):
         make_model = str(a.get("printer-make-and-model") or a.get("printer-info") or self.target.name)
         sides = as_list(a.get("sides-supported"))
         return PrinterInfo(
-            name=self.target.name, make_model=make_model,
+            name=self.target.name,
+            make_model=make_model,
             vendor=(dev.get("MFG") or make_model.split()[0]).title() if make_model else "Unknown",
-            host=self.target.host, driver=self.name, model=dev.get("MDL"),
-            serial=self._serial(a), firmware=a.get("printer-firmware-string-version"),
+            host=self.target.host,
+            driver=self.name,
+            model=dev.get("MDL"),
+            serial=self._serial(a),
+            firmware=a.get("printer-firmware-string-version"),
             uuid=str(a.get("printer-uuid") or "").removeprefix("urn:uuid:") or None,
             uptime_seconds=_int(a.get("printer-up-time")),
-            color=a.get("color-supported"), duplex=any(str(s).startswith("two-sided") for s in sides),
-            ppm=_int(a.get("pages-per-minute")), ppm_color=_int(a.get("pages-per-minute-color")),
+            color=a.get("color-supported"),
+            duplex=any(str(s).startswith("two-sided") for s in sides),
+            ppm=_int(a.get("pages-per-minute")),
+            ppm_color=_int(a.get("pages-per-minute-color")),
             formats=[str(f) for f in as_list(a.get("document-format-supported"))],
             media=[m for m in (media.friendly(str(k)) for k in as_list(a.get("media-supported"))) if m],
             media_sources=[str(s) for s in as_list(a.get("media-source-supported"))],
@@ -249,8 +271,10 @@ class IPPDriver(Driver):
             uris=[str(u) for u in as_list(a.get("printer-uri-supported"))],
             admin_url=a.get("printer-more-info"),
             capabilities=sorted(c.value for c in self.capabilities),
-            extra={"kind": [str(k) for k in as_list(a.get("printer-kind"))],
-                   "command_sets": dev.get("CMD", "").split(",") if dev.get("CMD") else []},
+            extra={
+                "kind": [str(k) for k in as_list(a.get("printer-kind"))],
+                "command_sets": dev.get("CMD", "").split(",") if dev.get("CMD") else [],
+            },
         )
 
     # --- Driver API -----------------------------------------------------------
@@ -265,13 +289,25 @@ class IPPDriver(Driver):
         which = ["not-completed", "completed"] if include_completed else ["not-completed"]
         seen: dict[int, Job] = {}
         for w in which:
-            resp = self._call(self.client.request, ipp.OP_GET_JOBS, operation_attrs=[
-                Attr("which-jobs", ipp.KEYWORD, w),
-                Attr("requested-attributes", ipp.KEYWORD, ["job-id", "job-name", "job-state",
-                                                          "job-originating-user-name",
-                                                          "job-impressions-completed",
-                                                          "time-at-creation"]),
-            ])
+            resp = self._call(
+                self.client.request,
+                ipp.OP_GET_JOBS,
+                operation_attrs=[
+                    Attr("which-jobs", ipp.KEYWORD, w),
+                    Attr(
+                        "requested-attributes",
+                        ipp.KEYWORD,
+                        [
+                            "job-id",
+                            "job-name",
+                            "job-state",
+                            "job-originating-user-name",
+                            "job-impressions-completed",
+                            "time-at-creation",
+                        ],
+                    ),
+                ],
+            )
             for j in resp.groups_of(ipp.TAG_JOB):
                 job = self._job(j)
                 seen.setdefault(job.id, job)
@@ -279,20 +315,28 @@ class IPPDriver(Driver):
 
     @staticmethod
     def _job(j: dict[str, Any]) -> Job:
-        return Job(id=_int(j.get("job-id")) or 0, name=str(j.get("job-name") or "untitled"),
-                   state=ipp.JOB_STATES.get(_int(j.get("job-state")) or 0, "unknown"),
-                   user=j.get("job-originating-user-name"),
-                   pages=_int(j.get("job-impressions-completed")),
-                   created=_int(j.get("time-at-creation")))
+        return Job(
+            id=_int(j.get("job-id")) or 0,
+            name=str(j.get("job-name") or "untitled"),
+            state=ipp.JOB_STATES.get(_int(j.get("job-state")) or 0, "unknown"),
+            user=j.get("job-originating-user-name"),
+            pages=_int(j.get("job-impressions-completed")),
+            created=_int(j.get("time-at-creation")),
+        )
 
     def cancel_job(self, job_id: int) -> None:
-        self._call(self.client.request, ipp.OP_CANCEL_JOB,
-                   operation_attrs=[Attr("job-id", ipp.INTEGER, job_id),
-                                    Attr("requesting-user-name", ipp.NAME, "prt")])
+        self._call(
+            self.client.request,
+            ipp.OP_CANCEL_JOB,
+            operation_attrs=[Attr("job-id", ipp.INTEGER, job_id), Attr("requesting-user-name", ipp.NAME, "prt")],
+        )
 
     def identify(self) -> None:
-        self._call(self.client.request, ipp.OP_IDENTIFY_PRINTER,
-                   operation_attrs=[Attr("identify-actions", ipp.KEYWORD, "flash")])
+        self._call(
+            self.client.request,
+            ipp.OP_IDENTIFY_PRINTER,
+            operation_attrs=[Attr("identify-actions", ipp.KEYWORD, "flash")],
+        )
 
     def submit(self, data: bytes, mime: str, options: PrintOptions) -> int:
         """Send document bytes straight to the printer with IPP Print-Job."""
@@ -303,8 +347,10 @@ class IPPDriver(Driver):
                 kw = media.resolve_alias(options.media)
                 size = media.size_of(kw)
                 if size:
-                    col["media-size"] = (ipp.BEG_COLLECTION, {"x-dimension": (ipp.INTEGER, size[0]),
-                                                              "y-dimension": (ipp.INTEGER, size[1])})
+                    col["media-size"] = (
+                        ipp.BEG_COLLECTION,
+                        {"x-dimension": (ipp.INTEGER, size[0]), "y-dimension": (ipp.INTEGER, size[1])},
+                    )
             if options.tray:
                 col["media-source"] = (ipp.KEYWORD, options.tray)
             if options.media_type:
@@ -317,19 +363,28 @@ class IPPDriver(Driver):
             job_attrs.append(Attr("print-quality", ipp.ENUM, QUALITY[options.quality]))
         if options.sides_keyword:
             job_attrs.append(Attr("sides", ipp.KEYWORD, options.sides_keyword))
-        resp = self._call(self.client.request, ipp.OP_PRINT_JOB, operation_attrs=[
-            Attr("requesting-user-name", ipp.NAME, "prt"),
-            Attr("job-name", ipp.NAME, options.job_name or "prt job"),
-            Attr("document-format", ipp.MIME, mime),
-        ], job_attrs=job_attrs, data=data, timeout=max(self.timeout, 60))
+        resp = self._call(
+            self.client.request,
+            ipp.OP_PRINT_JOB,
+            operation_attrs=[
+                Attr("requesting-user-name", ipp.NAME, "prt"),
+                Attr("job-name", ipp.NAME, options.job_name or "prt job"),
+                Attr("document-format", ipp.MIME, mime),
+            ],
+            job_attrs=job_attrs,
+            data=data,
+            timeout=max(self.timeout, 60),
+        )
         return _int(resp.group(ipp.TAG_JOB).get("job-id")) or 0
 
     def print_file(self, path: Path, options: PrintOptions, before_send: Callable[[], None] | None = None) -> int:
         from prt import printing
+
         return printing.print_file(self, path, options, before_send)
 
     def scan(self, settings: ScanSettings, progress=None) -> bytes:
         from prt.transport.escl import ESCLClient
+
         client = ESCLClient.for_target(self.target, self.timeout)
         try:
             return client.scan(settings, progress=progress)

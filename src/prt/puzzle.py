@@ -54,6 +54,7 @@ class Puzzle:
     """One puzzle, ready to draw: its ``kind`` (see :data:`KINDS`), its title, how it was made (``seed`` and
     ``difficulty``, None for a crossword) and ``solution``, the answers as plain JSON data. ``layout`` holds what
     the page draws (the givens, the letter grid, the numbered cells or the maze walls)."""
+
     kind: str
     title: str
     seed: int | None
@@ -95,8 +96,11 @@ def check_title(title: str | None, kind: str) -> str:
 
 def _check_text(name: str, value: str, limit: int, exit_code: int) -> None:
     if len(value) > limit:
-        raise PrinterError(f"{name} is too long ({len(value)} characters, max {limit})",
-                           hint=f"shorten the {name}", exit_code=exit_code)
+        raise PrinterError(
+            f"{name} is too long ({len(value)} characters, max {limit})",
+            hint=f"shorten the {name}",
+            exit_code=exit_code,
+        )
     _check_printable(name, value, "hand", exit_code)
 
 
@@ -105,8 +109,11 @@ def _check_printable(name: str, value: str, role: str, exit_code: int) -> None:
     unprintable = sorted({c for c in value if c != "?" and _char_in(face, c) == "?"})
     if unprintable:
         shown = ", ".join(f"{c} (U+{ord(c):04X})" for c in unprintable[:10])
-        raise PrinterError(f"{name} has characters the page font cannot print: {shown}",
-                           hint="write it in Latin letters (no emoji)", exit_code=exit_code)
+        raise PrinterError(
+            f"{name} has characters the page font cannot print: {shown}",
+            hint="write it in Latin letters (no emoji)",
+            exit_code=exit_code,
+        )
 
 
 def letters_of(text: str) -> str:
@@ -138,8 +145,9 @@ def _read(path: Path, what: str) -> tuple[str, str]:
         too_big = path.stat().st_size > MAX_PUZZLE_FILE
         content = b"" if too_big else path.read_bytes()
     if too_big:
-        raise PrinterError(f"{name} is larger than {MAX_PUZZLE_FILE // 1024} KiB", hint=f"a {what} is short",
-                           exit_code=3)
+        raise PrinterError(
+            f"{name} is larger than {MAX_PUZZLE_FILE // 1024} KiB", hint=f"a {what} is short", exit_code=3
+        )
     try:
         return content.decode("utf-8"), name
     except UnicodeDecodeError as exc:
@@ -150,14 +158,18 @@ def _object(text: str, name: str, fields: tuple[str, ...], expected: str) -> dic
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise PrinterError(f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=expected,
-                           exit_code=3) from exc
+        raise PrinterError(
+            f"{name} is not valid JSON: {exc.msg} (line {exc.lineno})", hint=expected, exit_code=3
+        ) from exc
     if not isinstance(data, dict):
         raise PrinterError(f"{name} must hold a JSON object", hint=expected, exit_code=3)
     unknown = sorted(set(data) - set(fields))
     if unknown:
-        raise PrinterError(f"unknown field(s) in {name}: {', '.join(unknown)}",
-                           hint="allowed fields: " + ", ".join(fields), exit_code=3)
+        raise PrinterError(
+            f"unknown field(s) in {name}: {', '.join(unknown)}",
+            hint="allowed fields: " + ", ".join(fields),
+            exit_code=3,
+        )
     if "title" in data and not isinstance(data["title"], str):
         raise PrinterError(f"title in {name} must be text", hint=expected, exit_code=3)
     return data
@@ -257,20 +269,36 @@ def sudoku(seed: int, difficulty: str = DEFAULT_DIFFICULTY, title: str = TITLES[
             puzzle[i] = full[i]
 
     def rows(cells: list[int]) -> list[str]:
-        return ["".join(str(v) if v else "." for v in cells[r * 9:r * 9 + 9]) for r in range(9)]
+        return ["".join(str(v) if v else "." for v in cells[r * 9 : r * 9 + 9]) for r in range(9)]
 
-    solution = {"rows": "ABCDEFGHI", "columns": "123456789", "puzzle": rows(puzzle), "grid": rows(full),
-                "blanks": 81 - givens}
+    solution = {
+        "rows": "ABCDEFGHI",
+        "columns": "123456789",
+        "puzzle": rows(puzzle),
+        "grid": rows(full),
+        "blanks": 81 - givens,
+    }
     return Puzzle("sudoku", title, seed, difficulty, solution, SudokuLayout(tuple(puzzle)))
 
 
 # --- word search ---------------------------------------------------------------------------------------------------
 
 # The directions words may run in, by difficulty: easy reads only forwards and down, hard any of the eight ways.
-DIRECTIONS = {"right": (0, 1), "down": (1, 0), "down-right": (1, 1), "up-right": (-1, 1), "left": (0, -1),
-              "up": (-1, 0), "up-left": (-1, -1), "down-left": (1, -1)}
-SEARCH_DIRECTIONS = {"easy": ("right", "down"), "medium": ("right", "down", "down-right", "up-right"),
-                     "hard": tuple(DIRECTIONS)}
+DIRECTIONS = {
+    "right": (0, 1),
+    "down": (1, 0),
+    "down-right": (1, 1),
+    "up-right": (-1, 1),
+    "left": (0, -1),
+    "up": (-1, 0),
+    "up-left": (-1, -1),
+    "down-left": (1, -1),
+}
+SEARCH_DIRECTIONS = {
+    "easy": ("right", "down"),
+    "medium": ("right", "down", "down-right", "up-right"),
+    "hard": tuple(DIRECTIONS),
+}
 SEARCH_SIZE = {"easy": 10, "medium": 13, "hard": 15}  # squares across and down
 SEARCH_WORDS = {"easy": 8, "medium": 12, "hard": 16}  # words hidden from a theme
 MAX_SEARCH = 15  # the largest grid; a words file's longest word sets the size when longer than the difficulty's
@@ -285,6 +313,7 @@ SEARCH_EXPECTED = 'expected {"title": "...", "words": ["...", "...", "..."]}'
 @dataclass(frozen=True)
 class WordList:
     """The words a word search hides, as they are listed under the grid, and its title ("" for the default)."""
+
     words: tuple[str, ...]
     title: str = ""
 
@@ -293,28 +322,42 @@ def check_words(words: list[str], name: str, exit_code: int) -> tuple[str, ...]:
     """Normalise whitespace and check every word: :data:`MIN_LETTERS` to :data:`MAX_LETTERS` letters, nothing but
     letters, spaces, hyphens and apostrophes, and no two with the same letters."""
     if not MIN_SEARCH_WORDS <= len(words) <= MAX_SEARCH_WORDS:
-        raise PrinterError(f"{name} has {len(words)} words; a word search takes {MIN_SEARCH_WORDS} to "
-                           f"{MAX_SEARCH_WORDS}", hint="list fewer or more words", exit_code=exit_code)
+        raise PrinterError(
+            f"{name} has {len(words)} words; a word search takes {MIN_SEARCH_WORDS} to {MAX_SEARCH_WORDS}",
+            hint="list fewer or more words",
+            exit_code=exit_code,
+        )
     out: list[str] = []
     seen: dict[str, int] = {}
     for i, raw in enumerate(words):
         where = f"words[{i}]"
         word = _clean(raw, keep_newlines=False)
         if len(word) > MAX_SEARCH_WORD:
-            raise PrinterError(f"{where} is too long ({len(word)} characters, max {MAX_SEARCH_WORD})",
-                               hint="shorten it", exit_code=exit_code)
+            raise PrinterError(
+                f"{where} is too long ({len(word)} characters, max {MAX_SEARCH_WORD})",
+                hint="shorten it",
+                exit_code=exit_code,
+            )
         if not _only_letters(word):
-            raise PrinterError(f"{where} ({word!r}) has characters other than letters, spaces, hyphens and "
-                               "apostrophes", hint="a word search hides letters only: spell numbers out",
-                               exit_code=exit_code)
+            raise PrinterError(
+                f"{where} ({word!r}) has characters other than letters, spaces, hyphens and apostrophes",
+                hint="a word search hides letters only: spell numbers out",
+                exit_code=exit_code,
+            )
         letters = letters_of(word)
         if not MIN_LETTERS <= len(letters) <= MAX_LETTERS:
-            raise PrinterError(f"{where} ({word!r}) has {len(letters)} letters; each word needs {MIN_LETTERS} to "
-                               f"{MAX_LETTERS}", hint="leave it out or pick another word", exit_code=exit_code)
+            raise PrinterError(
+                f"{where} ({word!r}) has {len(letters)} letters; each word needs {MIN_LETTERS} to {MAX_LETTERS}",
+                hint="leave it out or pick another word",
+                exit_code=exit_code,
+            )
         _check_printable(where, word, "body", exit_code)
         if letters in seen:
-            raise PrinterError(f"{where} repeats words[{seen[letters]}] ({word!r})",
-                               hint="every word must be different: leave the repeat out", exit_code=exit_code)
+            raise PrinterError(
+                f"{where} repeats words[{seen[letters]}] ({word!r})",
+                hint="every word must be different: leave the repeat out",
+                exit_code=exit_code,
+            )
         seen[letters] = i
         out.append(word)
     return tuple(out)
@@ -340,11 +383,16 @@ def theme_words(theme: str) -> tuple[str, str]:
     """The bundled theme ``theme`` names (the bingo themes) and its title, e.g. ``("space", "Space Word Search")``;
     an unknown theme exits with code 2, kind ``unknown_theme``."""
     from prt import bingo
+
     key = bingo.theme_key(theme)
     if key not in bingo.THEMES:
-        raise PrinterError(f"unknown word search theme: {theme}",
-                           hint=f"choose one of: {', '.join(bingo.THEMES)}; or give your own words with "
-                                "--words-file FILE (or - for stdin)", exit_code=2, kind="unknown_theme")
+        raise PrinterError(
+            f"unknown word search theme: {theme}",
+            hint=f"choose one of: {', '.join(bingo.THEMES)}; or give your own words with "
+            "--words-file FILE (or - for stdin)",
+            exit_code=2,
+            kind="unknown_theme",
+        )
     return key, f"{key.title()} Word Search"
 
 
@@ -352,8 +400,9 @@ def _search_size(words: tuple[str, ...], difficulty: str) -> int:
     return max(SEARCH_SIZE[difficulty], *(len(letters_of(w)) for w in words))
 
 
-def _place_words(letters: list[str], size: int, directions: tuple[str, ...], rng: random.Random,
-                 required: bool) -> list[tuple[int, int, int, str]] | None:
+def _place_words(
+    letters: list[str], size: int, directions: tuple[str, ...], rng: random.Random, required: bool
+) -> list[tuple[int, int, int, str]] | None:
     """Hide ``letters`` in a ``size`` grid, longest first, each where it fits (crossing others on a shared letter).
     Returns (index, row, col, direction) per hidden word, or None when ``required`` and one would not fit."""
     grid: dict[tuple[int, int], str] = {}
@@ -388,8 +437,13 @@ class SearchLayout:
     words: tuple[str, ...]  # as listed under the grid, alphabetically
 
 
-def wordsearch(seed: int, difficulty: str = DEFAULT_DIFFICULTY, words: WordList | None = None,
-               theme: str | None = None, title: str | None = None) -> Puzzle:
+def wordsearch(
+    seed: int,
+    difficulty: str = DEFAULT_DIFFICULTY,
+    words: WordList | None = None,
+    theme: str | None = None,
+    title: str | None = None,
+) -> Puzzle:
     """A word search: the words of ``words`` (a checked words file; all of them are hidden) or else
     :data:`SEARCH_WORDS` of the bundled ``theme`` (picked at random), hidden in a square of letters running in the
     difficulty's :data:`SEARCH_DIRECTIONS`, the other squares filled with random letters."""
@@ -397,11 +451,12 @@ def wordsearch(seed: int, difficulty: str = DEFAULT_DIFFICULTY, words: WordList 
     key = None
     if words is None:
         from prt import bingo
+
         key, default_title = theme_words(theme or bingo.DEFAULT_THEME)
         size = SEARCH_SIZE[difficulty]
         pool = [w for w in bingo.THEMES[key] if MIN_LETTERS <= len(letters_of(w)) <= size]
         rng.shuffle(pool)
-        chosen = pool[:SEARCH_WORDS[difficulty]]
+        chosen = pool[: SEARCH_WORDS[difficulty]]
     else:
         named = _clean(theme or "", keep_newlines=False)
         if named:
@@ -412,10 +467,12 @@ def wordsearch(seed: int, difficulty: str = DEFAULT_DIFFICULTY, words: WordList 
         while sum(len(letters_of(w)) for w in chosen) > SEARCH_FILL * size * size and size < MAX_SEARCH:
             size += 1
         if sum(len(letters_of(w)) for w in chosen) > SEARCH_FILL * size * size:
-            raise PrinterError(f"the words have {sum(len(letters_of(w)) for w in chosen)} letters, too many for a "
-                               f"{MAX_SEARCH}×{MAX_SEARCH} word search",
-                               hint=f"use fewer or shorter words (at most {int(SEARCH_FILL * MAX_SEARCH ** 2)} "
-                                    "letters in all)", exit_code=3)
+            raise PrinterError(
+                f"the words have {sum(len(letters_of(w)) for w in chosen)} letters, too many for a "
+                f"{MAX_SEARCH}×{MAX_SEARCH} word search",
+                hint=f"use fewer or shorter words (at most {int(SEARCH_FILL * MAX_SEARCH**2)} letters in all)",
+                exit_code=3,
+            )
     letters = [letters_of(w) for w in chosen]
     placed = None
     for _ in range(50):  # a fresh try from an empty grid; with the grid at most half full one always works
@@ -423,8 +480,11 @@ def wordsearch(seed: int, difficulty: str = DEFAULT_DIFFICULTY, words: WordList 
         if placed is not None:
             break
     if placed is None:
-        raise PrinterError("the words could not all be hidden in the grid",
-                           hint="use fewer or shorter words, or --difficulty hard", exit_code=3)
+        raise PrinterError(
+            "the words could not all be hidden in the grid",
+            hint="use fewer or shorter words, or --difficulty hard",
+            exit_code=3,
+        )
     grid = [[""] * size for _ in range(size)]
     hidden = []
     for index, r, c, name in sorted(placed):
@@ -433,8 +493,16 @@ def wordsearch(seed: int, difficulty: str = DEFAULT_DIFFICULTY, words: WordList 
         for k, ch in enumerate(letters[index]):
             grid[r + dr * k][c + dc * k] = ch
             cells.append([r + dr * k + 1, c + dc * k + 1])
-        hidden.append({"word": chosen[index], "letters": letters[index], "row": r + 1, "col": c + 1,
-                       "direction": name, "cells": cells})
+        hidden.append(
+            {
+                "word": chosen[index],
+                "letters": letters[index],
+                "row": r + 1,
+                "col": c + 1,
+                "direction": name,
+                "cells": cells,
+            }
+        )
     alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     rows = tuple("".join(ch or rng.choice(alphabet) for ch in row) for row in grid)
     listed = tuple(sorted((h["word"] for h in hidden), key=str.casefold))
@@ -466,17 +534,20 @@ class CrosswordFile:
     title: str = ""
 
 
-DEFAULT_CROSSWORD = CrosswordFile(title="Space Crossword", entries=(
-    Entry("Moon", "It goes round the Earth once a month"),
-    Entry("Rocket", "It carries astronauts up into space"),
-    Entry("Astronaut", "A person who travels into space"),
-    Entry("Saturn", "The planet with the brightest rings"),
-    Entry("Star", "The Sun is one of these"),
-    Entry("Orbit", "The path one body takes round another"),
-    Entry("Comet", "An icy visitor with a long glowing tail"),
-    Entry("Mars", "The red planet"),
-    Entry("Telescope", "You look through it to see far-off stars"),
-))
+DEFAULT_CROSSWORD = CrosswordFile(
+    title="Space Crossword",
+    entries=(
+        Entry("Moon", "It goes round the Earth once a month"),
+        Entry("Rocket", "It carries astronauts up into space"),
+        Entry("Astronaut", "A person who travels into space"),
+        Entry("Saturn", "The planet with the brightest rings"),
+        Entry("Star", "The Sun is one of these"),
+        Entry("Orbit", "The path one body takes round another"),
+        Entry("Comet", "An icy visitor with a long glowing tail"),
+        Entry("Mars", "The red planet"),
+        Entry("Telescope", "You look through it to see far-off stars"),
+    ),
+)
 
 
 def check_crossword(file: CrosswordFile, name: str, exit_code: int) -> CrosswordFile:
@@ -484,8 +555,11 @@ def check_crossword(file: CrosswordFile, name: str, exit_code: int) -> Crossword
     2 to :data:`MAX_ANSWER` letters (spaces, hyphens and apostrophes allowed, and left out of the grid) and no two
     the same, each clue up to :data:`MAX_CLUE` characters, and every character printable."""
     if not MIN_ENTRIES <= len(file.entries) <= MAX_ENTRIES:
-        raise PrinterError(f"{name} has {len(file.entries)} entries; a crossword takes {MIN_ENTRIES} to "
-                           f"{MAX_ENTRIES}", hint="add or remove entries", exit_code=exit_code)
+        raise PrinterError(
+            f"{name} has {len(file.entries)} entries; a crossword takes {MIN_ENTRIES} to {MAX_ENTRIES}",
+            hint="add or remove entries",
+            exit_code=exit_code,
+        )
     entries = []
     seen: dict[str, int] = {}
     for i, entry in enumerate(file.entries):
@@ -493,26 +567,40 @@ def check_crossword(file: CrosswordFile, name: str, exit_code: int) -> Crossword
         answer = _clean(entry.answer, keep_newlines=False)
         clue = _clean(entry.clue, keep_newlines=False)
         if len(answer) > MAX_ANSWER_TEXT:
-            raise PrinterError(f"{where}.answer is too long ({len(answer)} characters, max {MAX_ANSWER_TEXT})",
-                               hint="shorten it", exit_code=exit_code)
+            raise PrinterError(
+                f"{where}.answer is too long ({len(answer)} characters, max {MAX_ANSWER_TEXT})",
+                hint="shorten it",
+                exit_code=exit_code,
+            )
         if not _only_letters(answer):
-            raise PrinterError(f"{where}.answer ({answer!r}) has characters other than letters, spaces, hyphens and "
-                               "apostrophes", hint="a crossword answer is letters only: spell numbers out",
-                               exit_code=exit_code)
+            raise PrinterError(
+                f"{where}.answer ({answer!r}) has characters other than letters, spaces, hyphens and apostrophes",
+                hint="a crossword answer is letters only: spell numbers out",
+                exit_code=exit_code,
+            )
         letters = letters_of(answer)
         if not 2 <= len(letters) <= MAX_ANSWER:
-            raise PrinterError(f"{where}.answer ({answer!r}) has {len(letters)} letters; an answer needs 2 to "
-                               f"{MAX_ANSWER}", hint="pick another answer", exit_code=exit_code)
+            raise PrinterError(
+                f"{where}.answer ({answer!r}) has {len(letters)} letters; an answer needs 2 to {MAX_ANSWER}",
+                hint="pick another answer",
+                exit_code=exit_code,
+            )
         if not clue:
             raise PrinterError(f"{where}.clue is empty", hint="write a clue for every answer", exit_code=exit_code)
         if len(clue) > MAX_CLUE:
-            raise PrinterError(f"{where}.clue is too long ({len(clue)} characters, max {MAX_CLUE})",
-                               hint="shorten the clue", exit_code=exit_code)
+            raise PrinterError(
+                f"{where}.clue is too long ({len(clue)} characters, max {MAX_CLUE})",
+                hint="shorten the clue",
+                exit_code=exit_code,
+            )
         _check_printable(f"{where}.clue", clue, "body", exit_code)
         _check_printable(f"{where}.answer", answer, "body", exit_code)
         if letters in seen:
-            raise PrinterError(f"{where}.answer repeats entries[{seen[letters]}].answer ({answer!r})",
-                               hint="every answer must be different", exit_code=exit_code)
+            raise PrinterError(
+                f"{where}.answer repeats entries[{seen[letters]}].answer ({answer!r})",
+                hint="every answer must be different",
+                exit_code=exit_code,
+            )
         seen[letters] = i
         entries.append(Entry(answer, clue))
     return CrosswordFile(tuple(entries), file.title)
@@ -538,8 +626,11 @@ def parse_crossword(text: str, name: str = "crossword file") -> CrosswordFile:
             raise PrinterError(f"{where} must be an object", hint=CROSSWORD_EXPECTED, exit_code=3)
         unknown = sorted(set(item) - set(ENTRY_FIELDS))
         if unknown:
-            raise PrinterError(f"unknown field(s) in {where}: {', '.join(unknown)}",
-                               hint="allowed fields: " + ", ".join(ENTRY_FIELDS), exit_code=3)
+            raise PrinterError(
+                f"unknown field(s) in {where}: {', '.join(unknown)}",
+                hint="allowed fields: " + ", ".join(ENTRY_FIELDS),
+                exit_code=3,
+            )
         for key in ENTRY_FIELDS:
             if not isinstance(item.get(key), str):
                 raise PrinterError(f"{where}.{key} must be text", hint=CROSSWORD_EXPECTED, exit_code=3)
@@ -550,8 +641,13 @@ def parse_crossword(text: str, name: str = "crossword file") -> CrosswordFile:
 Placement = tuple[int, int, bool]  # row, col, across
 
 
-def _fits(board: dict[tuple[int, int], tuple[str, set[bool]]], word: str, r: int, c: int, across: bool,
-          ) -> int | None:
+def _fits(
+    board: dict[tuple[int, int], tuple[str, set[bool]]],
+    word: str,
+    r: int,
+    c: int,
+    across: bool,
+) -> int | None:
     """How many letters ``word`` at (r, c) shares with the board, or None when it cannot go there: a letter
     clashes, it runs on into another word, it lies alongside one, or it would make the grid too big."""
     dr, dc = (0, 1) if across else (1, 0)
@@ -610,10 +706,12 @@ def _arrange(words: list[str], order: list[int]) -> dict[int, Placement]:
                         crossings = _fits(board, word, r, c, across)
                         if not crossings:
                             continue
-                        cells = list(board) + [(r + (0 if across else j), c + (j if across else 0))
-                                               for j in range(len(word))]
-                        area = ((max(x for x, _ in cells) - min(x for x, _ in cells) + 1)
-                                * (max(y for _, y in cells) - min(y for _, y in cells) + 1))
+                        cells = list(board) + [
+                            (r + (0 if across else j), c + (j if across else 0)) for j in range(len(word))
+                        ]
+                        area = (max(x for x, _ in cells) - min(x for x, _ in cells) + 1) * (
+                            max(y for _, y in cells) - min(y for _, y in cells) + 1
+                        )
                         score = (crossings, -area)
                         if best is None or score > best[0]:
                             best = (score, (r, c, across))
@@ -667,8 +765,11 @@ def crossword(file: CrosswordFile = DEFAULT_CROSSWORD, title: str | None = None)
     missing = [k for k in range(len(words)) if k not in best]
     if missing:
         named = ", ".join(f"entries[{k}] ({file.entries[k].answer!r})" for k in missing[:5])
-        raise PrinterError(f"the crossword cannot be laid out: {named} cannot cross the other answers",
-                           hint="add an answer that shares a letter with it, or leave it out", exit_code=3)
+        raise PrinterError(
+            f"the crossword cannot be laid out: {named} cannot cross the other answers",
+            hint="add an answer that shares a letter with it, or leave it out",
+            exit_code=3,
+        )
     min_r = min(r for r, _, _ in best.values())
     min_c = min(c for _, c, _ in best.values())
     letters: dict[tuple[int, int], str] = {}
@@ -690,9 +791,17 @@ def crossword(file: CrosswordFile = DEFAULT_CROSSWORD, title: str | None = None)
             entry = file.entries[index]
             way = "across" if across else "down"
             clues[way].append((numbers[cell], entry.clue, _enumeration(entry.answer)))
-            solution[way].append({"number": numbers[cell], "answer": words[index], "written": entry.answer,
-                                  "clue": entry.clue, "row": cell[0] + 1, "col": cell[1] + 1,
-                                  "length": len(words[index])})
+            solution[way].append(
+                {
+                    "number": numbers[cell],
+                    "answer": words[index],
+                    "written": entry.answer,
+                    "clue": entry.clue,
+                    "row": cell[0] + 1,
+                    "col": cell[1] + 1,
+                    "length": len(words[index]),
+                }
+            )
     solution["grid"] = ["".join(letters.get((r, c), ".") for c in range(cols)) for r in range(rows)]
     layout = CrosswordLayout(rows, cols, letters, numbers, clues)
     return Puzzle("crossword", title or file.title or TITLES["crossword"], None, None, solution, layout)
@@ -721,8 +830,11 @@ def maze(seed: int, difficulty: str = DEFAULT_DIFFICULTY, title: str = TITLES["m
     stack = [(0, 0)]
     while stack:
         r, c = stack[-1]
-        nexts = [(r + dr, c + dc) for dr, dc in ((0, 1), (1, 0), (0, -1), (-1, 0))
-                 if 0 <= r + dr < rows and 0 <= c + dc < cols and (r + dr, c + dc) not in seen]
+        nexts = [
+            (r + dr, c + dc)
+            for dr, dc in ((0, 1), (1, 0), (0, -1), (-1, 0))
+            if 0 <= r + dr < rows and 0 <= c + dc < cols and (r + dr, c + dc) not in seen
+        ]
         if not nexts:
             stack.pop()
             continue
@@ -746,8 +858,13 @@ def maze(seed: int, difficulty: str = DEFAULT_DIFFICULTY, title: str = TITLES["m
         path.append(cell)
         cell = came[cell]
     path.reverse()
-    solution = {"rows": rows, "cols": cols, "start": [1, 1], "finish": [rows, cols],
-                "path": [[r + 1, c + 1] for r, c in path]}
+    solution = {
+        "rows": rows,
+        "cols": cols,
+        "start": [1, 1],
+        "finish": [rows, cols],
+        "path": [[r + 1, c + 1] for r, c in path],
+    }
     pairs = frozenset(tuple(sorted(pair)) for pair in open_)
     return Puzzle("maze", title, seed, difficulty, solution, MazeLayout(cols, rows, pairs, tuple(path)))
 
@@ -787,22 +904,27 @@ def _sudoku_page(d: ImageDraw.ImageDraw, layout: SudokuLayout) -> None:
     for i, v in enumerate(layout.givens):
         if v:
             r, c = divmod(i, 9)
-            d.text((x0 + c * cell + cell / 2, y0 + r * cell + cell / 2 + 2), str(v), font=digit, fill=INK,
-                   anchor="mm")
+            d.text((x0 + c * cell + cell / 2, y0 + r * cell + cell / 2 + 2), str(v), font=digit, fill=INK, anchor="mm")
     for k in range(10):
         width = 6 if k % 3 == 0 else 2
         d.line((x0 + k * cell, y0, x0 + k * cell, y0 + size), fill=LINE, width=width)
         d.line((x0, y0 + k * cell, x0 + size, y0 + k * cell), fill=LINE, width=width)
     hint = fonts.face("hand", 38)
-    d.text((W / 2, y0 + size + 90), "Fill every row, column and 3×3 box with the digits 1 to 9.", font=hint,
-           fill=GREY, anchor="mm")
+    d.text(
+        (W / 2, y0 + size + 90),
+        "Fill every row, column and 3×3 box with the digits 1 to 9.",
+        font=hint,
+        fill=GREY,
+        anchor="mm",
+    )
 
 
 LIST_INDENT = 20  # an item's indent inside its column of the word list
 
 
-def _columns(d: ImageDraw.ImageDraw, items: list[str], top: int, bottom: int, columns: int, role: str,
-             size: int, min_size: int) -> Cuts:
+def _columns(
+    d: ImageDraw.ImageDraw, items: list[str], top: int, bottom: int, columns: int, role: str, size: int, min_size: int
+) -> Cuts:
     """``items`` in ``columns`` columns between ``top`` and ``bottom``, each on one line inside its column,
     as large as fits: the type shrinks (``size`` down to ``min_size``) for the rows and the widest item to
     hold, then the columns widen (fewer of them) when an item still is too wide. An item too long even for
@@ -813,17 +935,21 @@ def _columns(d: ImageDraw.ImageDraw, items: list[str], top: int, bottom: int, co
         per = -(-len(items) // cols)
         for s in range(size, min_size - 1, -2):
             font, lead = fonts.face(role, s), round(s * 1.35)
-            if (per * lead <= bottom - top
-                    and all(font.getlength(_printable_face(item, font)) <= width - LIST_INDENT
-                            for item in items)):
+            if per * lead <= bottom - top and all(
+                font.getlength(_printable_face(item, font)) <= width - LIST_INDENT for item in items
+            ):
                 fitted = font, lead, width, per
                 break
         if fitted:
             break
     if fitted is None:
         # Even a column of its own cannot take an item: keep the asked-for columns and cut it below.
-        fitted = fonts.face(role, min_size), round(min_size * 1.35), (W - 2 * MARGIN) // columns, \
-            -(-len(items) // columns)
+        fitted = (
+            fonts.face(role, min_size),
+            round(min_size * 1.35),
+            (W - 2 * MARGIN) // columns,
+            -(-len(items) // columns),
+        )
     font, lead, width, per = fitted
     cut: Cuts = {}
     for k, item in enumerate(items):
@@ -831,8 +957,7 @@ def _columns(d: ImageDraw.ImageDraw, items: list[str], top: int, bottom: int, co
         shown = _printable_face(item, font)
         if font.getlength(shown) > width - LIST_INDENT:
             ellipsized = _ellipsize(shown, font, width - LIST_INDENT)
-            cut[f"words[{k}]"] = _in_source(_cut(shown, [ellipsized]), item,
-                                            lambda c: _printable_face(c, font))
+            cut[f"words[{k}]"] = _in_source(_cut(shown, [ellipsized]), item, lambda c: _printable_face(c, font))
             shown = ellipsized
         d.text((MARGIN + col * width + LIST_INDENT, top + row * lead), shown, font=font, fill=INK)
     return cut
@@ -850,10 +975,14 @@ def _search_page(d: ImageDraw.ImageDraw, layout: SearchLayout) -> Cuts:
     d.rounded_rectangle((x0 - 14, y0 - 14, x0 + side + 14, y0 + side + 14), radius=18, outline=LINE, width=4)
     top = y0 + side + 70
     hint = fonts.face("hand", 38)
-    d.text((W / 2, top), f"Find the {len(layout.words)} words. Circle each one you find.", font=hint, fill=GREY,
-           anchor="mm")
-    return _columns(d, list(layout.words), top + 50, FOOT - 60, 3 if len(layout.words) <= 15 else 4,
-                    "body", 40, 22)
+    d.text(
+        (W / 2, top),
+        f"Find the {len(layout.words)} words. Circle each one you find.",
+        font=hint,
+        fill=GREY,
+        anchor="mm",
+    )
+    return _columns(d, list(layout.words), top + 50, FOOT - 60, 3 if len(layout.words) <= 15 else 4, "body", 40, 22)
 
 
 CLUE_INDENT = 50
@@ -872,8 +1001,12 @@ def _clue_blocks(layout: CrosswordLayout, font, width: int) -> list[tuple[str, l
             continue
         blocks.append((way.title(), []))
         for number, clue, enumeration in layout.clues[way]:
-            blocks.append((str(number), _wrap(_printable_face(f"{clue} {enumeration}", font), font,
-                                              width - CLUE_INDENT - CLUE_GUTTER)))
+            blocks.append(
+                (
+                    str(number),
+                    _wrap(_printable_face(f"{clue} {enumeration}", font), font, width - CLUE_INDENT - CLUE_GUTTER),
+                )
+            )
     return blocks
 
 
@@ -921,7 +1054,7 @@ def _crossword_page(d: ImageDraw.ImageDraw, layout: CrosswordLayout) -> None:
     cell, size, blocks, flow = _crossword_fit(layout)
     x0, y0 = (W - cell * layout.cols) // 2, BODY_TOP + 10
     number = fonts.face("body", max(14, round(cell * 0.3)))
-    for (r, c) in layout.letters:
+    for r, c in layout.letters:
         box = (x0 + c * cell, y0 + r * cell, x0 + (c + 1) * cell, y0 + (r + 1) * cell)
         d.rectangle(box, outline=LINE, width=3)
         if (r, c) in layout.numbers:
@@ -977,8 +1110,9 @@ def compose(puzzle: Puzzle) -> tuple[Image.Image, Cuts]:
     page = Image.new("RGB", (W, H), (255, 255, 255))
     d = ImageDraw.Draw(page)
     cut = _title(d, puzzle.title)
-    more = {"sudoku": _sudoku_page, "wordsearch": _search_page, "crossword": _crossword_page,
-            "maze": _maze_page}[puzzle.kind](d, puzzle.layout)
+    more = {"sudoku": _sudoku_page, "wordsearch": _search_page, "crossword": _crossword_page, "maze": _maze_page}[
+        puzzle.kind
+    ](d, puzzle.layout)
     if more:
         cut.update(more)
     _foot(d, puzzle)

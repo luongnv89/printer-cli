@@ -43,9 +43,16 @@ class Discovered:
         return "-".join(base.split())[:24] or "printer"
 
     def to_target(self, name: str | None = None) -> Target:
-        return Target(name=name or self.suggested_name(), host=self.host, ipp_port=self.ipp_port,
-                      ipp_path=self.ipp_path, ipp_tls=self.ipp_tls, scan_port=self.scan_port,
-                      scan_tls=self.scan_tls, scan_path=self.scan_path)
+        return Target(
+            name=name or self.suggested_name(),
+            host=self.host,
+            ipp_port=self.ipp_port,
+            ipp_path=self.ipp_path,
+            ipp_tls=self.ipp_tls,
+            scan_port=self.scan_port,
+            scan_tls=self.scan_tls,
+            scan_path=self.scan_path,
+        )
 
 
 def _txt(info) -> dict[str, str]:
@@ -57,8 +64,15 @@ def _txt(info) -> dict[str, str]:
     return out
 
 
-def merge(found: dict[str, Discovered], service: str, instance: str, host: str,
-          port: int, addresses: list[str], txt: dict[str, str]) -> None:
+def merge(
+    found: dict[str, Discovered],
+    service: str,
+    instance: str,
+    host: str,
+    port: int,
+    addresses: list[str],
+    txt: dict[str, str],
+) -> None:
     """Fold one DNS-SD record into the per-device table (keyed by UUID, else host)."""
     key = (txt.get("uuid") or host).lower()
     d = found.get(key)
@@ -112,8 +126,7 @@ def discover(timeout: float = 3.0) -> list[Discovered]:
             if not info or not info.server:
                 continue
             instance = name.removesuffix("." + type_)
-            merge(found, type_, instance, info.server.rstrip("."), info.port or 0,
-                  info.parsed_addresses(), _txt(info))
+            merge(found, type_, instance, info.server.rstrip("."), info.port or 0, info.parsed_addresses(), _txt(info))
         for b in browsers:
             b.cancel()
     finally:

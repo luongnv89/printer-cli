@@ -79,20 +79,30 @@ def _paper_only(page, band):
 
 def _longest_story(prefix=""):
     """Every field at its limit, and every field holding characters some bundled face lacks."""
-    return booth.check_story(Story(headline=(prefix + "H" * LIMITS["headline"])[:LIMITS["headline"]],
-                                   story=prefix + "A" * 200 + "\n" + "Wide paragraph.\n" * 140,
-                                   kicker=(prefix + "W" * LIMITS["kicker"])[:LIMITS["kicker"]],
-                                   caption=(prefix + "c " * 100)[:LIMITS["caption"]],
-                                   byline=(prefix + "B" * LIMITS["byline"])[:LIMITS["byline"]]), 2)
+    return booth.check_story(
+        Story(
+            headline=(prefix + "H" * LIMITS["headline"])[: LIMITS["headline"]],
+            story=prefix + "A" * 200 + "\n" + "Wide paragraph.\n" * 140,
+            kicker=(prefix + "W" * LIMITS["kicker"])[: LIMITS["kicker"]],
+            caption=(prefix + "c " * 100)[: LIMITS["caption"]],
+            byline=(prefix + "B" * LIMITS["byline"])[: LIMITS["byline"]],
+        ),
+        2,
+    )
 
 
 def _overfull_story():
     """Every field too wide for its place, so each one ends in "…" drawn in its own face."""
-    return booth.check_story(Story(headline=(DIVERGENT + "W" * LIMITS["headline"])[:LIMITS["headline"]],
-                                   story=DIVERGENT + "A" * 200 + "\n" + "Wide paragraph.\n" * 140,
-                                   kicker=("Ǆ " + "㎑" * LIMITS["kicker"])[:LIMITS["kicker"]],  # ㎑ prints as "kHz"
-                                   caption=(DIVERGENT + "W" * LIMITS["caption"])[:LIMITS["caption"]],
-                                   byline=(DIVERGENT + "W" * LIMITS["byline"])[:LIMITS["byline"]]), 2)
+    return booth.check_story(
+        Story(
+            headline=(DIVERGENT + "W" * LIMITS["headline"])[: LIMITS["headline"]],
+            story=DIVERGENT + "A" * 200 + "\n" + "Wide paragraph.\n" * 140,
+            kicker=("Ǆ " + "㎑" * LIMITS["kicker"])[: LIMITS["kicker"]],  # ㎑ prints as "kHz"
+            caption=(DIVERGENT + "W" * LIMITS["caption"])[: LIMITS["caption"]],
+            byline=(DIVERGENT + "W" * LIMITS["byline"])[: LIMITS["byline"]],
+        ),
+        2,
+    )
 
 
 # --- bundled fonts ---------------------------------------------------------------------------
@@ -156,6 +166,7 @@ def strict_drawing(monkeypatch):
                 return original(*args, **kwargs)
             fallbacks.append(name)
             raise AssertionError(f"{name} called while rendering the gazette")
+
         return recorder
 
     for module in (testpage, layout, booth):
@@ -211,8 +222,9 @@ def admitted():
     """
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(layout, "_font", lru_cache(maxsize=None)(testpage._font))
-        return [chr(c) for c in range(0x20, 0x10000)
-                if not 0xD800 <= c <= 0xDFFF and layout._glyphs(chr(c)) is not None]
+        return [
+            chr(c) for c in range(0x20, 0x10000) if not 0xD800 <= c <= 0xDFFF and layout._glyphs(chr(c)) is not None
+        ]
 
 
 def _latin(c: str) -> bool:
@@ -333,14 +345,21 @@ def test_too_long_text_is_cut_and_named():
 @pytest.mark.parametrize("landscape", [False, True])
 def test_cut_fields_report_how_much_was_printed(landscape):
     photos = [Image.new("RGB", (400, 300), "grey")] * 3
-    story = booth.check_story(Story(headline="W" * LIMITS["headline"], story="Wide paragraph.\n" * 140,
-                                    kicker="W" * LIMITS["kicker"], caption="Wide caption words " * 10,
-                                    byline="W" * LIMITS["byline"]), 2)
+    story = booth.check_story(
+        Story(
+            headline="W" * LIMITS["headline"],
+            story="Wide paragraph.\n" * 140,
+            kicker="W" * LIMITS["kicker"],
+            caption="Wide caption words " * 10,
+            byline="W" * LIMITS["byline"],
+        ),
+        2,
+    )
     cut = vintage.compose_pages(photos, story, landscape=landscape)[2]
     assert {"headline", "story"} <= set(cut) and len(cut) >= 3
     for name, fit in cut.items():
         assert fit.given == len(getattr(story, name)) and 0 < fit.max_fit < fit.given, name
-        shorter = replace(story, **{name: getattr(story, name)[:fit.max_fit]})
+        shorter = replace(story, **{name: getattr(story, name)[: fit.max_fit]})
         assert name not in vintage.compose_pages(photos, shorter, landscape=landscape)[2], name
 
 
@@ -357,13 +376,14 @@ def test_the_figure_number_is_not_counted_as_caption():
 def test_cut_counts_the_characters_given_not_their_capitals_or_stand_ins(landscape):
     # "ß" prints as "SS" in the capitals of the headline; a separate accent mark prints as nothing.
     photos = [Image.new("RGB", (400, 300), "grey")] * 3
-    story = booth.check_story(Story(headline="Straßeß " * 15, byline="€ß" * 40,
-                                    story=("Die Straße kostet € 5. Cafe\u0301. " * 90)[:2500]), 2)
+    story = booth.check_story(
+        Story(headline="Straßeß " * 15, byline="€ß" * 40, story=("Die Straße kostet € 5. Cafe\u0301. " * 90)[:2500]), 2
+    )
     cut = vintage.compose_pages(photos, story, landscape=landscape)[2]
     assert {"headline", "story"} <= set(cut)
     for name, fit in cut.items():
         assert fit.given == len(getattr(story, name)) and 0 < fit.max_fit <= fit.given, name
-        shorter = replace(story, **{name: getattr(story, name)[:fit.max_fit]})
+        shorter = replace(story, **{name: getattr(story, name)[: fit.max_fit]})
         assert name not in vintage.compose_pages(photos, shorter, landscape=landscape)[2], name
 
 
@@ -444,8 +464,10 @@ def test_downscaling_leaves_the_other_styles_untouched(tmp_path, monkeypatch):
     vintage.compose_pages([vintage._downscale(photo, vintage.LEAD_LIMIT)])
     assert photo.size == (2000, 1500) and photo.tobytes() == before
     for style in booth.STYLES:
-        assert booth.compose(photo, None, style)[0].tobytes() == \
-            booth.compose(booth.load_photo(path), None, style)[0].tobytes(), style
+        assert (
+            booth.compose(photo, None, style)[0].tobytes()
+            == booth.compose(booth.load_photo(path), None, style)[0].tobytes()
+        ), style
 
 
 def test_large_photos_are_shrunk_one_at_a_time(capsys, tmp_path, monkeypatch, printer):
@@ -485,8 +507,14 @@ def test_one_photo_prints_one_page(capsys, tmp_path, printer):
     photo = _photo(tmp_path)
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "gazette", str(photo), "--yes")
     assert code == 0 and printer.jobs() == _expected_pages([photo])
-    assert without_estimate(out) == {"action": "gazette", "photos": 1, "pages": 1, "fits": True, "cut": {},
-                                      "job_ids": [101]}
+    assert without_estimate(out) == {
+        "action": "gazette",
+        "photos": 1,
+        "pages": 1,
+        "fits": True,
+        "cut": {},
+        "job_ids": [101],
+    }
     assert "1 page queued as job 101" in err
 
 
@@ -497,9 +525,14 @@ def test_scanned_letter_becomes_a_gazette_on_the_demo_printer(capsys, tmp_path, 
     code, _, _ = run(capsys, "-p", "demo", "scan", "--format", "jpeg", "-o", str(letter))
     assert code == 0
     from prt.drivers.fake import DEMO_LETTER
-    story = {"kicker": "Letters to the editor", "headline": "Bake Sale Raises 212 Euros for Library Roof",
-             "byline": "From a letter by Margot Lane", "caption": "The letter as it reached our desk.",
-             "story": "\n".join(DEMO_LETTER[1:])}
+
+    story = {
+        "kicker": "Letters to the editor",
+        "headline": "Bake Sale Raises 212 Euros for Library Roof",
+        "byline": "From a letter by Margot Lane",
+        "caption": "The letter as it reached our desk.",
+        "story": "\n".join(DEMO_LETTER[1:]),
+    }
     (tmp_path / "story.json").write_text(json.dumps(story))
     args = ["-p", "demo", "-f", "json", "gazette", str(letter), "--story-file", str(tmp_path / "story.json")]
     code, out, _ = run(capsys, *args, "--preview", str(tmp_path / "edition.pdf"))
@@ -512,8 +545,14 @@ def test_scanned_letter_becomes_a_gazette_on_the_demo_printer(capsys, tmp_path, 
     assert printer.jobs() == []
     code, out, _ = run(capsys, *args, "--yes")
     assert code == 0 and len(printer.jobs()) == 1
-    assert without_estimate(out) == {"action": "gazette", "photos": 1, "pages": 1, "fits": True, "cut": {},
-                                     "job_ids": [101]}
+    assert without_estimate(out) == {
+        "action": "gazette",
+        "photos": 1,
+        "pages": 1,
+        "fits": True,
+        "cut": {},
+        "job_ids": [101],
+    }
 
 
 def test_several_photos_print_one_job_per_page(capsys, tmp_path, printer):
@@ -521,8 +560,14 @@ def test_several_photos_print_one_job_per_page(capsys, tmp_path, printer):
     code, out, err = run(capsys, "-p", "demo", "-f", "json", "gazette", *map(str, photos), "--yes")
     expected = _expected_pages(photos)
     assert code == 0 and len(expected) == 2 and printer.jobs() == expected
-    assert without_estimate(out) == {"action": "gazette", "photos": 4, "pages": 2, "fits": True, "cut": {},
-                               "job_ids": [101, 102]}
+    assert without_estimate(out) == {
+        "action": "gazette",
+        "photos": 4,
+        "pages": 2,
+        "fits": True,
+        "cut": {},
+        "job_ids": [101, 102],
+    }
     assert "2 pages queued as jobs 101, 102" in err
 
 
@@ -552,20 +597,27 @@ def test_needs_yes_without_a_terminal(capsys, tmp_path, monkeypatch, printer):
 
 def test_preview_writes_numbered_images_and_never_creates_a_driver(capsys, tmp_path, printer):
     out_file = tmp_path / "page.png"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "gazette", *map(str, _trip(tmp_path, 4)), "-o",
-                         str(out_file))
+    code, out, err = run(
+        capsys, "-p", "demo", "-f", "json", "gazette", *map(str, _trip(tmp_path, 4)), "-o", str(out_file)
+    )
     files = [tmp_path / "page-1.png", tmp_path / "page-2.png"]
     assert code == 0 and "not printed" in err and printer.made == []
-    assert without_estimate(out) == {"action": "gazette", "photos": 4, "pages": 2, "fits": True, "cut": {},
-                               "files": [{"file": str(f), "format": "png", "bytes": f.stat().st_size}
-                                         for f in files]}
+    assert without_estimate(out) == {
+        "action": "gazette",
+        "photos": 4,
+        "pages": 2,
+        "fits": True,
+        "cut": {},
+        "files": [{"file": str(f), "format": "png", "bytes": f.stat().st_size} for f in files],
+    }
     assert all(Image.open(f).size == A4_150DPI for f in files) and not out_file.exists()
 
 
 def test_save_keeps_a_pdf_and_prints(capsys, tmp_path, printer):
     copy = tmp_path / "copy.pdf"
-    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "gazette", *map(str, _trip(tmp_path, 4)), "--save",
-                       str(copy), "--yes")
+    code, out, _ = run(
+        capsys, "-p", "demo", "-f", "json", "gazette", *map(str, _trip(tmp_path, 4)), "--save", str(copy), "--yes"
+    )
     assert code == 0 and len(printer.jobs()) == 2 and b"/Count 2" in copy.read_bytes()
     assert json.loads(out)["saved"] == [{"file": str(copy), "format": "pdf", "bytes": copy.stat().st_size}]
 
@@ -573,8 +625,7 @@ def test_save_keeps_a_pdf_and_prints(capsys, tmp_path, printer):
 def test_story_flags_override_the_default(capsys, tmp_path, printer):
     photo = _photo(tmp_path)
     headline = 'Café «Noir» & "Friends" <b>'
-    code, _, _ = run(capsys, "-p", "demo", "gazette", str(photo), "--headline", headline, "--byline", "By Zoë",
-                     "--yes")
+    code, _, _ = run(capsys, "-p", "demo", "gazette", str(photo), "--headline", headline, "--byline", "By Zoë", "--yes")
     story = booth.with_overrides(vintage.DEFAULT_GAZETTE_STORY, headline=headline, byline="By Zoë")
     assert story.headline == headline
     assert code == 0 and printer.jobs() == _expected_pages([photo], story)
@@ -601,14 +652,24 @@ def test_warns_when_text_is_cut_to_fit(capsys, tmp_path, printer):
 
 def test_json_reports_each_cut_field(capsys, tmp_path, printer):
     headline = "W" * LIMITS["headline"]
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "gazette", str(_photo(tmp_path)), "--headline", headline,
-                         "--yes")
+    code, out, err = run(
+        capsys, "-p", "demo", "-f", "json", "gazette", str(_photo(tmp_path)), "--headline", headline, "--yes"
+    )
     report = json.loads(out)
     assert code == 0 and report["job_ids"] == [101] and report["fits"] is False and list(report["cut"]) == ["headline"]
     fit = report["cut"]["headline"]
     assert fit["given"] == len(headline) and 0 < fit["max_fit"] < fit["given"]
-    code, out, _ = run(capsys, "-f", "json", "gazette", str(_photo(tmp_path)), "--headline", headline[:fit["max_fit"]],
-                       "-o", str(tmp_path / "page.png"))
+    code, out, _ = run(
+        capsys,
+        "-f",
+        "json",
+        "gazette",
+        str(_photo(tmp_path)),
+        "--headline",
+        headline[: fit["max_fit"]],
+        "-o",
+        str(tmp_path / "page.png"),
+    )
     assert code == 0 and json.loads(out)["fits"] is True and json.loads(out)["cut"] == {}
 
 
@@ -632,9 +693,14 @@ def _bad_photo(tmp_path, kind):
     return path
 
 
-@pytest.mark.parametrize("kind, message", [("unreadable", "cannot read photo broken.jpg"),
-                                           ("unsupported", "cannot read photo notes.txt"),
-                                           ("missing", "photo not found")])
+@pytest.mark.parametrize(
+    "kind, message",
+    [
+        ("unreadable", "cannot read photo broken.jpg"),
+        ("unsupported", "cannot read photo notes.txt"),
+        ("missing", "photo not found"),
+    ],
+)
 @pytest.mark.parametrize("mode", [[], ["-o", "out.pdf"], ["--save", "copy.png"]])
 def test_a_bad_photo_anywhere_sends_and_writes_nothing(capsys, tmp_path, monkeypatch, printer, kind, message, mode):
     monkeypatch.chdir(tmp_path)
@@ -656,8 +722,17 @@ def test_too_many_photos_are_refused_before_any_photo_is_read(capsys, tmp_path, 
     loaded = []
     monkeypatch.setattr(booth, "load_photo", lambda path: loaded.append(path) or Image.new("RGB", (30, 40)))
     photo = _photo(tmp_path)
-    code, _, err = run(capsys, "-p", "demo", "gazette", *[str(photo)] * (MAX_PHOTOS + 1), "-o",
-                       str(tmp_path / "out.pdf"), "--save", str(tmp_path / "copy.png"))
+    code, _, err = run(
+        capsys,
+        "-p",
+        "demo",
+        "gazette",
+        *[str(photo)] * (MAX_PHOTOS + 1),
+        "-o",
+        str(tmp_path / "out.pdf"),
+        "--save",
+        str(tmp_path / "copy.png"),
+    )
     assert code == 3 and f"gazette takes at most {MAX_PHOTOS} photos, got {MAX_PHOTOS + 1}" in err
     assert loaded == [] and printer.made == [] and [p.name for p in tmp_path.iterdir()] == ["photo.jpg"]
 
@@ -716,8 +791,13 @@ def test_output_named_like_a_photo_not_yet_there_is_refused(capsys, tmp_path, pr
 
 
 def test_page_paths_match_the_files_written(tmp_path):
-    for fmt, count, name in [("pdf", 1, "out.pdf"), ("pdf", 3, "out.pdf"), ("png", 1, "out.png"),
-                             ("png", 3, "out.png"), ("jpeg", 2, "out.jpg")]:
+    for fmt, count, name in [
+        ("pdf", 1, "out.pdf"),
+        ("pdf", 3, "out.pdf"),
+        ("png", 1, "out.png"),
+        ("png", 3, "out.png"),
+        ("jpeg", 2, "out.jpg"),
+    ]:
         path = tmp_path / name
         pages = [Image.new("RGB", (8, 8), "white")] * count
         assert vintage.page_paths(path, fmt, count) == [file for file, _ in article.page_files(pages, path, fmt)]
@@ -826,8 +906,7 @@ def test_landscape_words_are_drawn_in_a_bundled_font_that_has_their_glyphs(stric
 
 
 def test_the_longest_story_stays_inside_the_landscape_margins():
-    pages, _, cut = vintage.compose_pages([Image.new("RGB", (1600, 400), "red")] * 10, _longest_story(),
-                                          landscape=True)
+    pages, _, cut = vintage.compose_pages([Image.new("RGB", (1600, 400), "red")] * 10, _longest_story(), landscape=True)
     assert "story" in cut
     for page in pages:
         assert all(_bare(page, band) for band in _margins(A4_LANDSCAPE))
@@ -845,8 +924,9 @@ def test_unbroken_story_renders_quickly_inside_the_landscape_margins():
 @pytest.mark.parametrize("n", [1, 3])
 @pytest.mark.parametrize("shape", [(800, 1200), (1200, 800), (1000, 1000)])
 def test_default_story_is_never_cut_in_landscape(n, shape):
-    _, _, cut = vintage.compose_pages([Image.new("RGB", shape, "grey")] * n, vintage.DEFAULT_GAZETTE_STORY,
-                                      landscape=True)
+    _, _, cut = vintage.compose_pages(
+        [Image.new("RGB", shape, "grey")] * n, vintage.DEFAULT_GAZETTE_STORY, landscape=True
+    )
     assert cut == {}
 
 
@@ -856,8 +936,7 @@ def test_default_story_is_never_cut_in_landscape(n, shape):
 def test_the_landscape_lead_is_printed_whole_and_no_wider_than_its_limit(n, shape, story):
     lead = vintage._downscale(Image.new("RGB", shape, "grey"), vintage.LEAD_LIMIT)
     photos = [lead] + [Image.new("RGB", (400, 300), "grey")] * (n - 1)
-    _, placements, _ = vintage.compose_pages(photos, None if story == "default" else _longest_story(),
-                                             landscape=True)
+    _, placements, _ = vintage.compose_pages(photos, None if story == "default" else _longest_story(), landscape=True)
     k, (x0, y0, x1, y1) = placements[0][0]
     shown, photo = (x1 - x0) / (y1 - y0), lead.width / lead.height
     assert k == 0 and min(shown / photo, photo / shown) >= 0.9, (shape, (x0, y0, x1, y1))
@@ -892,8 +971,9 @@ def test_a_narrow_landscape_lead_gives_the_story_a_third_column(monkeypatch, lea
 @pytest.mark.parametrize("n, rows", [(4, [1]), (5, [2]), (6, [3]), (8, [3, 2]), (9, [3, 3])])
 def test_landscape_plates_stand_three_abreast_and_a_short_last_row_is_centred(n, rows):
     shapes = [(300, 400), (400, 300), (500, 500)]
-    pages, placements, _ = vintage.compose_pages([Image.new("RGB", shapes[k % 3], "grey") for k in range(n)],
-                                                 landscape=True)
+    pages, placements, _ = vintage.compose_pages(
+        [Image.new("RGB", shapes[k % 3], "grey") for k in range(n)], landscape=True
+    )
     boxes = [box for _, box in placements[1]]
     feet = sorted({box[3] for box in boxes})
     assert [sum(box[3] == foot for box in boxes) for foot in feet] == rows  # one foot a row: labels line up
@@ -923,8 +1003,9 @@ def test_gazette_help_offers_landscape(capsys):
 
 def test_landscape_prints_each_page_turned_upright_and_keeps_saved_pages_landscape(capsys, tmp_path, printer):
     photos, copy = _trip(tmp_path, 4), tmp_path / "copy.png"
-    code, out, _ = run(capsys, "-p", "demo", "-f", "json", "gazette", *map(str, photos), "--landscape", "--save",
-                       str(copy), "--yes")
+    code, out, _ = run(
+        capsys, "-p", "demo", "-f", "json", "gazette", *map(str, photos), "--landscape", "--save", str(copy), "--yes"
+    )
     pages = vintage.compose_pages(vintage.load_photos(photos), landscape=True)[0]
     assert code == 0 and json.loads(out)["job_ids"] == [101, 102]
     assert printer.jobs() == [booth.to_jpeg(page.transpose(Image.Transpose.ROTATE_90)) for page in pages]
@@ -938,11 +1019,13 @@ def test_landscape_prints_each_page_turned_upright_and_keeps_saved_pages_landsca
 
 def test_landscape_preview_keeps_pages_on_their_side(capsys, tmp_path, printer):
     photos = _trip(tmp_path, 4)
-    code, _, _ = run(capsys, "-p", "demo", "gazette", *map(str, photos), "--landscape", "-o",
-                     str(tmp_path / "page.png"))
+    code, _, _ = run(
+        capsys, "-p", "demo", "gazette", *map(str, photos), "--landscape", "-o", str(tmp_path / "page.png")
+    )
     assert code == 0 and printer.made == []
     assert [Image.open(tmp_path / f"page-{k}.png").size for k in (1, 2)] == [A4_LANDSCAPE] * 2
-    code, _, _ = run(capsys, "-p", "demo", "gazette", *map(str, photos), "--landscape", "-o",
-                     str(tmp_path / "page.pdf"))
+    code, _, _ = run(
+        capsys, "-p", "demo", "gazette", *map(str, photos), "--landscape", "-o", str(tmp_path / "page.pdf")
+    )
     boxes = re.findall(rb"/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]", (tmp_path / "page.pdf").read_bytes())
     assert code == 0 and len(boxes) == 2 and all(float(w) > float(h) for w, h in boxes), boxes

@@ -11,8 +11,19 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import (Button, DataTable, Footer, Input, Label, RichLog, Select, Static, Switch,
-                             TabbedContent, TabPane)
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Input,
+    Label,
+    RichLog,
+    Select,
+    Static,
+    Switch,
+    TabbedContent,
+    TabPane,
+)
 
 from prt import cache, guard
 from prt.config import Config
@@ -20,8 +31,17 @@ from prt.drivers.base import Driver, PrinterError, Unreachable
 from prt.drivers.registry import make_driver
 from prt.maintenance import Preflight, head_clean_preflight, nozzle_check_preflight
 from prt.models import Capability, PrinterInfo, PrintOptions, ScanSettings, Status, Target
-from prt.tui.widgets import (AMBER, GREEN, RED, Panel, render_alerts, render_paper, render_system,
-                             render_tanks, render_topbar)
+from prt.tui.widgets import (
+    AMBER,
+    GREEN,
+    RED,
+    Panel,
+    render_alerts,
+    render_paper,
+    render_system,
+    render_tanks,
+    render_topbar,
+)
 
 REFRESH_SECONDS = 10
 
@@ -31,8 +51,9 @@ class ConfirmScreen(ModalScreen[bool]):
 
     BINDINGS = [Binding("escape", "cancel", "Cancel")]
 
-    def __init__(self, question: str, preflight: Preflight | None = None, confirm: str = "Confirm",
-                 danger: bool = False):
+    def __init__(
+        self, question: str, preflight: Preflight | None = None, confirm: str = "Confirm", danger: bool = False
+    ):
         super().__init__()
         self.question, self.preflight, self.confirm_label, self.danger = question, preflight, confirm, danger
 
@@ -53,8 +74,11 @@ class ConfirmScreen(ModalScreen[bool]):
                 label = self.confirm_label
                 if self.preflight and not self.preflight.ok:
                     label = f"{label} anyway"
-                yield Button(label, id="confirm", classes="danger" if self.danger or
-                             (self.preflight and not self.preflight.ok) else "")
+                yield Button(
+                    label,
+                    id="confirm",
+                    classes="danger" if self.danger or (self.preflight and not self.preflight.ok) else "",
+                )
 
     def on_mount(self) -> None:
         self.query_one("#cancel", Button).focus()  # the safe choice has focus
@@ -89,8 +113,9 @@ class PrtApp(App):
         *[Binding(str(k), f"switch({k - 1})", show=False) for k in range(1, 10)],
     ]
 
-    def __init__(self, targets: list[Target], timeout: float = 5.0, notice: str | None = None,
-                 cfg: Config | None = None):
+    def __init__(
+        self, targets: list[Target], timeout: float = 5.0, notice: str | None = None, cfg: Config | None = None
+    ):
         super().__init__()
         self.targets = targets
         self.timeout = timeout
@@ -113,8 +138,11 @@ class PrtApp(App):
                     yield Panel("Paper", id="paper")
                     yield Panel("Alerts", id="alerts")
             with TabPane("Maintain", id="maintain"):
-                yield Static("Run a nozzle check first. Clean the head only if lines in the pattern are "
-                             "broken — cleaning uses ink and fills the waste pad.", classes="hint")
+                yield Static(
+                    "Run a nozzle check first. Clean the head only if lines in the pattern are "
+                    "broken — cleaning uses ink and fills the waste pad.",
+                    classes="hint",
+                )
                 with Horizontal(classes="actions"):
                     yield Button("Nozzle check", id="btn-nozzle")
                     yield Button("Head cleaning", id="btn-clean")
@@ -122,8 +150,11 @@ class PrtApp(App):
                     yield Button("Identify", id="btn-identify")
                 yield RichLog(id="log", markup=False, highlight=False, wrap=True)
             with TabPane("Print", id="print"):
-                yield Static("JPEG and PNG go straight to the printer; PDF and other files go through "
-                             "this computer's print queue.", classes="hint")
+                yield Static(
+                    "JPEG and PNG go straight to the printer; PDF and other files go through "
+                    "this computer's print queue.",
+                    classes="hint",
+                )
                 with Vertical(classes="field"):
                     yield Label("File")
                     yield Input(placeholder="path to a file, e.g. ~/Pictures/photo.jpg", id="print-file")
@@ -133,17 +164,35 @@ class PrtApp(App):
                         yield Input("1", id="print-copies", type="integer")
                     with Vertical(classes="field"):
                         yield Label("Paper")
-                        yield Select([("A4", "a4"), ("Letter", "letter"), ("4×6 photo", "4x6"), ("5×7 photo", "5x7"),
-                                      ("8×10", "8x10"), ("A5", "a5")],
-                                     value="a4", id="print-media", allow_blank=False)
+                        yield Select(
+                            [
+                                ("A4", "a4"),
+                                ("Letter", "letter"),
+                                ("4×6 photo", "4x6"),
+                                ("5×7 photo", "5x7"),
+                                ("8×10", "8x10"),
+                                ("A5", "a5"),
+                            ],
+                            value="a4",
+                            id="print-media",
+                            allow_blank=False,
+                        )
                     with Vertical(classes="field"):
                         yield Label("Tray")
-                        yield Select([("Automatic", "auto"), ("Main tray", "main"), ("Photo tray", "photo")],
-                                     value="auto", id="print-tray", allow_blank=False)
+                        yield Select(
+                            [("Automatic", "auto"), ("Main tray", "main"), ("Photo tray", "photo")],
+                            value="auto",
+                            id="print-tray",
+                            allow_blank=False,
+                        )
                     with Vertical(classes="field"):
                         yield Label("Quality")
-                        yield Select([("Draft", "draft"), ("Normal", "normal"), ("High", "high")], value="normal",
-                                     id="print-quality", allow_blank=False)
+                        yield Select(
+                            [("Draft", "draft"), ("Normal", "normal"), ("High", "high")],
+                            value="normal",
+                            id="print-quality",
+                            allow_blank=False,
+                        )
                     with Vertical(classes="field"):
                         yield Label("Black & white")
                         yield Switch(False, id="print-mono")
@@ -155,20 +204,33 @@ class PrtApp(App):
                 with Horizontal(classes="field-row"):
                     with Vertical(classes="field"):
                         yield Label("Type")
-                        yield Select([("PDF", "pdf"), ("JPEG", "jpeg")], value="pdf", id="scan-format",
-                                     allow_blank=False)
+                        yield Select(
+                            [("PDF", "pdf"), ("JPEG", "jpeg")], value="pdf", id="scan-format", allow_blank=False
+                        )
                     with Vertical(classes="field"):
                         yield Label("Resolution")
-                        yield Select([(f"{d} dpi", d) for d in (100, 200, 300, 600, 1200)], value=300,
-                                     id="scan-dpi", allow_blank=False)
+                        yield Select(
+                            [(f"{d} dpi", d) for d in (100, 200, 300, 600, 1200)],
+                            value=300,
+                            id="scan-dpi",
+                            allow_blank=False,
+                        )
                     with Vertical(classes="field"):
                         yield Label("Colour")
-                        yield Select([("Colour", "color"), ("Grey", "gray"), ("Black & white", "bw")],
-                                     value="color", id="scan-mode", allow_blank=False)
+                        yield Select(
+                            [("Colour", "color"), ("Grey", "gray"), ("Black & white", "bw")],
+                            value="color",
+                            id="scan-mode",
+                            allow_blank=False,
+                        )
                     with Vertical(classes="field"):
                         yield Label("Area")
-                        yield Select([("A4", "a4"), ("Letter", "letter"), ("Whole glass", "full")],
-                                     value="a4", id="scan-area", allow_blank=False)
+                        yield Select(
+                            [("A4", "a4"), ("Letter", "letter"), ("Whole glass", "full")],
+                            value="a4",
+                            id="scan-area",
+                            allow_blank=False,
+                        )
                 with Vertical(classes="field"):
                     yield Label("Save to folder")
                     yield Input(str(Path.cwd()), id="scan-dir")
@@ -209,16 +271,23 @@ class PrtApp(App):
         labels = [(t.name, True) for t in self.targets]
         model = self.info.make_model if self.info else self.target.host
         self.query_one("#topbar", Static).update(
-            render_topbar(self.target.name, model, self.status, labels, self.active, self.busy))
+            render_topbar(self.target.name, model, self.status, labels, self.active, self.busy)
+        )
         self.query_one("#ink", Panel).update(
-            render_tanks(self.status.inks if self.status else [], waste=self.status.waste if self.status else None))
+            render_tanks(self.status.inks if self.status else [], waste=self.status.waste if self.status else None)
+        )
         self.query_one("#system", Panel).update(render_system(self.info))
         self.query_one("#paper", Panel).update(render_paper(self.status))
         self.query_one("#alerts", Panel).update(render_alerts(self.status))
         caps = self.drivers.get(self.target.name)
-        for btn, cap in (("#btn-nozzle", Capability.NOZZLE_CHECK), ("#btn-clean", Capability.HEAD_CLEAN),
-                         ("#btn-test", Capability.TEST_PAGE), ("#btn-identify", Capability.IDENTIFY),
-                         ("#btn-print", Capability.PRINT), ("#btn-scan", Capability.SCAN)):
+        for btn, cap in (
+            ("#btn-nozzle", Capability.NOZZLE_CHECK),
+            ("#btn-clean", Capability.HEAD_CLEAN),
+            ("#btn-test", Capability.TEST_PAGE),
+            ("#btn-identify", Capability.IDENTIFY),
+            ("#btn-print", Capability.PRINT),
+            ("#btn-scan", Capability.SCAN),
+        ):
             self.query_one(btn, Button).disabled = bool(caps) and not caps.supports(cap)
 
     def log_line(self, level: str, message: str) -> None:
@@ -242,8 +311,9 @@ class PrtApp(App):
             self.call_from_thread(self._apply, name, st, info, None)
         except Unreachable as exc:
             st = cache.load(name)
-            self.call_from_thread(self._apply, name, st, self.info if self.info and self.info.name == name
-                                  else None, str(exc))
+            self.call_from_thread(
+                self._apply, name, st, self.info if self.info and self.info.name == name else None, str(exc)
+            )
         except PrinterError as exc:
             self.call_from_thread(self._apply, name, None, None, str(exc))
 
@@ -254,8 +324,7 @@ class PrtApp(App):
         self.status, self.info = st, info
         if error and (st is None or st.stale):
             if not getattr(self, "_warned", None) == (name, error):
-                self.notify(error + (" — showing last known status" if st else ""), severity="warning",
-                            timeout=6)
+                self.notify(error + (" — showing last known status" if st else ""), severity="warning", timeout=6)
                 self._warned = (name, error)
         self.paint()
 
@@ -306,8 +375,11 @@ class PrtApp(App):
         elif kind == "nozzle":
             pf, q, label = nozzle_check_preflight(st), "Print a nozzle check pattern?", "Print pattern"
         else:
-            pf, q, label = Preflight(ok=True, warnings=["prints one A4 page in colour"]), \
-                "Print the colour test page?", "Print"
+            pf, q, label = (
+                Preflight(ok=True, warnings=["prints one A4 page in colour"]),
+                "Print the colour test page?",
+                "Print",
+            )
         if st.state == "offline" and kind != "clean":
             pf.ok = False
         self.query_one(TabbedContent).active = "maintain"
@@ -324,9 +396,12 @@ class PrtApp(App):
 
     @work(thread=True, group="action")
     def _run_action(self, kind: str) -> None:
-        messages = {"nozzle": "nozzle check sent — broken lines mean clogged nozzles",
-                    "clean": "head cleaning started — wait until the printer is quiet, then run a nozzle check",
-                    "test": "test page queued", "identify": "the printer should be flashing now"}
+        messages = {
+            "nozzle": "nozzle check sent — broken lines mean clogged nozzles",
+            "clean": "head cleaning started — wait until the printer is quiet, then run a nozzle check",
+            "test": "test page queued",
+            "identify": "the printer should be flashing now",
+        }
         try:
             d = self.driver()
             if kind in ("nozzle", "test"):
@@ -364,10 +439,13 @@ class PrtApp(App):
         except ValueError:
             copies = 1
         tray = self.query_one("#print-tray", Select).value
-        opts = PrintOptions(copies=copies, media=str(self.query_one("#print-media", Select).value),
-                            tray=None if tray == "auto" else str(tray),
-                            quality=str(self.query_one("#print-quality", Select).value),
-                            mono=self.query_one("#print-mono", Switch).value)
+        opts = PrintOptions(
+            copies=copies,
+            media=str(self.query_one("#print-media", Select).value),
+            tray=None if tray == "auto" else str(tray),
+            quality=str(self.query_one("#print-quality", Select).value),
+            mono=self.query_one("#print-mono", Switch).value,
+        )
         result.update(Text(f"sending {path.name}…"))
         self._send_print(path, opts)
 
@@ -382,16 +460,19 @@ class PrtApp(App):
             msg.append(f"{path.name} sent" + (f" as job {job}" if job else ""))
             self.call_from_thread(result.update, msg)
         except PrinterError as exc:
-            self.call_from_thread(result.update, Text(f"✗ {exc}" + (f" — {exc.hint}" if exc.hint else ""),
-                                                      style=f"bold {RED}"))
+            self.call_from_thread(
+                result.update, Text(f"✗ {exc}" + (f" — {exc.hint}" if exc.hint else ""), style=f"bold {RED}")
+            )
 
     # --- scan -----------------------------------------------------------------------------
     @on(Button.Pressed, "#btn-scan")
     def _b_scan(self) -> None:
-        settings = ScanSettings(format=str(self.query_one("#scan-format", Select).value),
-                                dpi=int(self.query_one("#scan-dpi", Select).value),
-                                mode=str(self.query_one("#scan-mode", Select).value),
-                                area=str(self.query_one("#scan-area", Select).value))
+        settings = ScanSettings(
+            format=str(self.query_one("#scan-format", Select).value),
+            dpi=int(self.query_one("#scan-dpi", Select).value),
+            mode=str(self.query_one("#scan-mode", Select).value),
+            area=str(self.query_one("#scan-area", Select).value),
+        )
         folder = Path(self.query_one("#scan-dir", Input).value.strip() or ".").expanduser()
         if not folder.is_dir():
             self.query_one("#scan-result", Static).update(Text(f"✗ folder not found: {folder}", style=f"bold {RED}"))
@@ -416,8 +497,7 @@ class PrtApp(App):
             self.call_from_thread(result.update, msg)
         except Exception as exc:  # scan errors come from several layers; show them all the same way
             hint = getattr(exc, "hint", None)
-            self.call_from_thread(result.update, Text(f"✗ {exc}" + (f" — {hint}" if hint else ""),
-                                                      style=f"bold {RED}"))
+            self.call_from_thread(result.update, Text(f"✗ {exc}" + (f" — {hint}" if hint else ""), style=f"bold {RED}"))
         finally:
             self.call_from_thread(setattr, self.query_one("#btn-scan", Button), "disabled", False)
 
@@ -444,8 +524,14 @@ class PrtApp(App):
             table.clear()
             for j in sorted(jobs, key=lambda x: -x.id):
                 colour = {"completed": GREEN, "canceled": AMBER, "aborted": RED}.get(j.state, "#FFFFFF")
-                table.add_row(str(j.id), j.name, Text(j.state, style=colour), j.user or "",
-                              "" if j.pages is None else str(j.pages), key=str(j.id))
+                table.add_row(
+                    str(j.id),
+                    j.name,
+                    Text(j.state, style=colour),
+                    j.user or "",
+                    "" if j.pages is None else str(j.pages),
+                    key=str(j.id),
+                )
             if not jobs:
                 table.add_row("—", "no jobs", "", "", "")
 

@@ -49,9 +49,13 @@ def printer(monkeypatch):
     made = []
     monkeypatch.setattr("prt.cli.make_driver", lambda target, timeout=5.0: made.append(target) or fake)
     requests = lambda: [r for r in fake.client.requests if r[0] == ipp.OP_PRINT_JOB]  # noqa: E731
-    return SimpleNamespace(driver=fake, made=made, requests=requests,
-                           jobs=lambda: [data for _, _, _, data in requests()],
-                           names=lambda: [next(a.value for a in r[1] if a.name == "job-name") for r in requests()])
+    return SimpleNamespace(
+        driver=fake,
+        made=made,
+        requests=requests,
+        jobs=lambda: [data for _, _, _, data in requests()],
+        names=lambda: [next(a.value for a in r[1] if a.name == "job-name") for r in requests()],
+    )
 
 
 def _sets(game, cards):
@@ -59,6 +63,7 @@ def _sets(game, cards):
 
 
 # --- dealing: every card in a run is different ---------------------------------------------------
+
 
 @pytest.mark.parametrize("count, n", [(25, 25), (25, 1), (26, 30), (27, 30), (36, 30), (200, 30)])
 def test_every_card_in_a_run_holds_a_different_set_of_words(count, n):
@@ -106,8 +111,17 @@ def test_the_longest_word_fits_its_square_without_a_cut():
         assert bingo._lead(size) * len(lines) <= bingo.CELL - 2 * bingo.CELL_PAD  # the lines fit the square's height
 
 
-@pytest.mark.parametrize("word", ["Boss tells a long story", "Who brought the cake?", "Hippopotomonstrous",
-                                  "Supercalifragilistic", "Supercalifragilisticexpi", "a b c d e f g h i j k l"])
+@pytest.mark.parametrize(
+    "word",
+    [
+        "Boss tells a long story",
+        "Who brought the cake?",
+        "Hippopotomonstrous",
+        "Supercalifragilistic",
+        "Supercalifragilisticexpi",
+        "a b c d e f g h i j k l",
+    ],
+)
 def test_every_word_fits_inside_its_square(word):
     space = bingo.CELL - 2 * bingo.CELL_PAD
     font, size, lines, cut = bingo._fit_word(word, space)
@@ -125,6 +139,7 @@ def test_a_word_too_long_to_keep_whole_is_split_small_not_large(word):
 
 
 # --- the game: theme, words file, title ----------------------------------------------------------
+
 
 def test_themes_are_matched_without_regard_to_case_or_dashes():
     for given in ("road trip", "Road Trip", "road-trip", "ROAD_TRIP", "  road   trip "):
@@ -159,22 +174,25 @@ def test_words_file(tmp_path):
     assert game.title == "Party time" and len(game.words) == 25 and game.free == "FREE"
 
 
-@pytest.mark.parametrize("data, message", [
-    ({"words": _words(24)}, "24 words, fewer than 25"),
-    ({"words": _words(24) + ["word 1"]}, "words[24] repeats words[0]"),
-    ({"words": _words(24) + ["  "]}, "words[24] is empty"),
-    ({"words": _words(24) + ["x" * (bingo.MAX_WORD + 1)]}, "words[24] is too long"),
-    ({"words": _words(24) + ["Smile 😀"]}, "words[24] has characters"),
-    ({"words": _words(bingo.MAX_WORDS + 1)}, "more than 200"),
-    ({"words": "a b c"}, "must be a list of texts"),
-    ({"words": _words(24) + [3]}, "must be a list of texts"),
-    ({"title": 5, "words": _words(25)}, "fields must be text: title"),
-    ({"title": "x" * 61, "words": _words(25)}, "title is too long"),
-    ({"free": "x" * 13, "words": _words(25)}, "free is too long"),
-    ({"words": _words(25), "theme": "zoo"}, "unknown field(s) in words file: theme"),
-    ({"title": "No words"}, "is missing words"),
-    ([], "must hold a JSON object"),
-])
+@pytest.mark.parametrize(
+    "data, message",
+    [
+        ({"words": _words(24)}, "24 words, fewer than 25"),
+        ({"words": _words(24) + ["word 1"]}, "words[24] repeats words[0]"),
+        ({"words": _words(24) + ["  "]}, "words[24] is empty"),
+        ({"words": _words(24) + ["x" * (bingo.MAX_WORD + 1)]}, "words[24] is too long"),
+        ({"words": _words(24) + ["Smile 😀"]}, "words[24] has characters"),
+        ({"words": _words(bingo.MAX_WORDS + 1)}, "more than 200"),
+        ({"words": "a b c"}, "must be a list of texts"),
+        ({"words": _words(24) + [3]}, "must be a list of texts"),
+        ({"title": 5, "words": _words(25)}, "fields must be text: title"),
+        ({"title": "x" * 61, "words": _words(25)}, "title is too long"),
+        ({"free": "x" * 13, "words": _words(25)}, "free is too long"),
+        ({"words": _words(25), "theme": "zoo"}, "unknown field(s) in words file: theme"),
+        ({"title": "No words"}, "is missing words"),
+        ([], "must hold a JSON object"),
+    ],
+)
 def test_bad_words_files_are_refused(tmp_path, data, message):
     with pytest.raises(PrinterError) as exc:
         bingo.load_bingo(_words_file(tmp_path, data))
@@ -200,21 +218,24 @@ def _accepted(data) -> bool:
     return True
 
 
-@pytest.mark.parametrize("data", [
-    {"words": _words(25)},
-    {"title": "T", "free": "", "words": _words(bingo.MAX_WORDS)},
-    {"title": "", "words": _words(25)},
-    {"words": _words(24)},
-    {"words": _words(bingo.MAX_WORDS + 1)},
-    {"words": _words(24) + ["Word 1"]},
-    {"words": _words(24) + [" "]},
-    {"words": _words(24) + ["x" * (bingo.MAX_WORD + 1)]},
-    {"words": _words(25), "title": "x" * 61},
-    {"words": _words(25), "free": None},
-    {"words": _words(25), "extra": 1},
-    {"title": "T"},
-    [],
-])
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"words": _words(25)},
+        {"title": "T", "free": "", "words": _words(bingo.MAX_WORDS)},
+        {"title": "", "words": _words(25)},
+        {"words": _words(24)},
+        {"words": _words(bingo.MAX_WORDS + 1)},
+        {"words": _words(24) + ["Word 1"]},
+        {"words": _words(24) + [" "]},
+        {"words": _words(24) + ["x" * (bingo.MAX_WORD + 1)]},
+        {"words": _words(25), "title": "x" * 61},
+        {"words": _words(25), "free": None},
+        {"words": _words(25), "extra": 1},
+        {"title": "T"},
+        [],
+    ],
+)
 def test_bingo_schema_agrees_with_the_words_file_check(data):
     assert Draft202012Validator(catalog.schema("bingo")).is_valid(data) == _accepted(data)
 
@@ -239,6 +260,7 @@ def test_bingo_style_and_schema():
 
 # --- the card ------------------------------------------------------------------------------------
 
+
 def test_a_card_is_an_a4_page_with_its_words_and_a_free_centre():
     game, _ = bingo.game("zoo")
     rendered = render.bingo_cards(game, bingo.deal(len(game.words), 2, seed=1))
@@ -261,25 +283,50 @@ def test_a_long_title_goes_on_two_lines_and_a_longer_one_is_cut_and_reported():
 
 
 def test_job_names_number_the_cards():
-    assert render.bingo_job_names("Road Trip Bingo", 2) == ["prt bingo 1/2 Road Trip Bingo",
-                                                            "prt bingo 2/2 Road Trip Bingo"]
+    assert render.bingo_job_names("Road Trip Bingo", 2) == [
+        "prt bingo 1/2 Road Trip Bingo",
+        "prt bingo 2/2 Road Trip Bingo",
+    ]
 
 
 # --- prt bingo -----------------------------------------------------------------------------------
 
+
 def test_bingo_preview_saves_n_different_cards_and_prints_nothing(capsys, tmp_path, printer):
     out_file = tmp_path / "cards.png"
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "bingo", "--theme", "road trip", "-n", "8",
-                         "--seed", "42", "--preview", str(out_file))
+    code, out, err = run(
+        capsys,
+        "-p",
+        "demo",
+        "-f",
+        "json",
+        "bingo",
+        "--theme",
+        "road trip",
+        "-n",
+        "8",
+        "--seed",
+        "42",
+        "--preview",
+        str(out_file),
+    )
     assert code == 0, err
     assert "8 bingo cards of 'Road Trip Bingo' rendered" in err and "not printed" in err
     assert printer.made == [] and printer.jobs() == [] and guard.used_today() == 0
     data = without_estimate(out)
     files = [tmp_path / f"cards-{n}.png" for n in range(1, 9)]
-    assert data == {"action": "bingo", "title": "Road Trip Bingo", "theme": "road trip", "pages": 8, "seed": 42,
-                    "words": len(bingo.THEMES["road trip"]), "paper": {"size": "a4", "media": "a4", "tray": None},
-                    "fits": True, "cut": {},
-                    "files": [{"file": str(f), "format": "png", "bytes": f.stat().st_size} for f in files]}
+    assert data == {
+        "action": "bingo",
+        "title": "Road Trip Bingo",
+        "theme": "road trip",
+        "pages": 8,
+        "seed": 42,
+        "words": len(bingo.THEMES["road trip"]),
+        "paper": {"size": "a4", "media": "a4", "tray": None},
+        "fits": True,
+        "cut": {},
+        "files": [{"file": str(f), "format": "png", "bytes": f.stat().st_size} for f in files],
+    }
     images = [Image.open(f) for f in files]
     assert all(image.size == (1240, 1754) for image in images)
     assert len({image.tobytes() for image in images}) == 8
@@ -303,8 +350,9 @@ def test_the_reported_seed_deals_the_same_cards_again(capsys, tmp_path, printer)
     first, second = tmp_path / "a.png", tmp_path / "b.png"
     code, out, _ = run(capsys, "-f", "json", "bingo", "--theme", "space", "-n", "2", "-o", str(first))
     seed = json.loads(out)["seed"]
-    code, out, _ = run(capsys, "-f", "json", "bingo", "--theme", "space", "-n", "2", "--seed", str(seed),
-                       "-o", str(second))
+    code, out, _ = run(
+        capsys, "-f", "json", "bingo", "--theme", "space", "-n", "2", "--seed", str(seed), "-o", str(second)
+    )
     assert code == 0
     for n in (1, 2):
         assert (tmp_path / f"a-{n}.png").read_bytes() == (tmp_path / f"b-{n}.png").read_bytes()
@@ -312,8 +360,9 @@ def test_the_reported_seed_deals_the_same_cards_again(capsys, tmp_path, printer)
 
 def test_bingo_prints_every_card_as_its_own_a4_job(capsys, tmp_path, printer, monkeypatch):
     monkeypatch.setenv("PRT_AGENT", "1")
-    code, out, err = run(capsys, "-p", "demo", "-f", "json", "bingo", "--theme", "road trip", "-n", "8",
-                         "--seed", "9", "--yes")
+    code, out, err = run(
+        capsys, "-p", "demo", "-f", "json", "bingo", "--theme", "road trip", "-n", "8", "--seed", "9", "--yes"
+    )
     assert code == 0, err
     data = json.loads(out)
     game, _ = bingo.game("road trip")
@@ -339,8 +388,20 @@ def test_bingo_reads_a_words_file_from_stdin(capsys, tmp_path, printer, stdin):
 
 def test_a_words_file_with_any_theme(capsys, tmp_path, printer):
     path = _words_file(tmp_path, {"words": _words(25)})
-    code, out, err = run(capsys, "-f", "json", "bingo", "--theme", "dinosaurs", "--words-file", str(path), "-n", "25",
-                         "-o", str(tmp_path / "d.pdf"))
+    code, out, err = run(
+        capsys,
+        "-f",
+        "json",
+        "bingo",
+        "--theme",
+        "dinosaurs",
+        "--words-file",
+        str(path),
+        "-n",
+        "25",
+        "-o",
+        str(tmp_path / "d.pdf"),
+    )
     assert code == 0, err
     data = json.loads(out)
     assert data["title"] == "Dinosaurs Bingo" and data["pages"] == 25
@@ -350,11 +411,13 @@ def test_bad_input_is_refused_before_anything_is_written_or_sent(capsys, tmp_pat
     code, out, err = run(capsys, "-f", "json", "bingo", "--theme", "dinosaurs", "-n", "2", "--yes")
     assert code == 2 and _error(err)["kind"] == "unknown_theme" and out == ""
     path = _words_file(tmp_path, {"words": _words(25)})
-    code, _, err = run(capsys, "-f", "json", "bingo", "--words-file", str(path), "-n", "26", "-o",
-                       str(tmp_path / "x.png"))
+    code, _, err = run(
+        capsys, "-f", "json", "bingo", "--words-file", str(path), "-n", "26", "-o", str(tmp_path / "x.png")
+    )
     assert code == 3 and _error(err)["kind"] == "invalid_input" and "only 25 different" in _error(err)["message"]
-    code, _, err = run(capsys, "-f", "json", "bingo", "--words-file", str(_words_file(tmp_path, {"words": []}, "e.json")),
-                       "--yes")
+    code, _, err = run(
+        capsys, "-f", "json", "bingo", "--words-file", str(_words_file(tmp_path, {"words": []}, "e.json")), "--yes"
+    )
     assert code == 3 and "fewer than 25" in _error(err)["message"]
     code, _, err = run(capsys, "-f", "json", "bingo", "-n", str(bingo.MAX_CARDS + 1), "-o", str(tmp_path / "y.png"))
     assert code == 2 and _error(err)["kind"] == "usage"
@@ -403,5 +466,4 @@ def test_a_small_pool_deals_from_every_possible_card():
     # 26 words make 325 different cards (each leaves 2 words off); deal() itself has no cap, so a deal of all 325
     # lists each of them exactly once.
     cards = bingo.deal(26, 325, seed=0)
-    assert {frozenset(c) for c in cards} == {frozenset(set(range(26)) - set(out))
-                                             for out in combinations(range(26), 2)}
+    assert {frozenset(c) for c in cards} == {frozenset(set(range(26)) - set(out)) for out in combinations(range(26), 2)}
