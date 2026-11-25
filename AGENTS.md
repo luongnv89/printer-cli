@@ -103,7 +103,7 @@ The tools are `status`, `ink`, `list_styles`, `preview_booth`, `preview_article`
 
 ### Skills and the Claude Code plugin
 
-Five agent skills come with prt: `photo-booth` (write a story for a photo and print it with `prt booth`), `greeting-card` (write a verse for a photo and the occasion and print it as a folding card with `prt card`), `article-print` (print an article, fetching the text yourself when `prt article` cannot) `letter-gazette` (scan a handwritten letter with `prt scan --format jpeg`, transcribe it, and print the scan and the transcription with `prt gazette`) and `puzzle-check` (print a puzzle with `prt puzzle` and keep its answers, then scan the filled-in sheet and check it). They live in [`skills/`](skills). With `-p demo` a JPEG scan is a sample handwritten letter, so the letter workflow runs without a printer.
+Five agent skills come with prt: `photo-booth` (write a story for a photo and print it with `prt booth`), `greeting-card` (write a verse for a photo and the occasion and print it as a folding card with `prt card`), `article-print` (print an article, fetching the text yourself when `prt article` cannot), and `letter-gazette` (scan a handwritten letter with `prt scan --format jpeg`, transcribe it, and print the scan and the transcription with `prt gazette`) and `puzzle-check` (print a puzzle with `prt puzzle` and keep its answers, then scan the filled-in sheet and check it). They live in [`skills/`](skills). With `-p demo` a JPEG scan is a sample handwritten letter, so the letter workflow runs without a printer.
 
 ```bash
 prt skills list                     # the bundled skills

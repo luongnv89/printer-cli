@@ -99,7 +99,10 @@ review:
   # true: a trivial PR caps the review-fix loop at 1 cycle and skips optional
   # passes; complex or ambiguous PRs keep full depth. false: full depth always.
   adaptive_depth: true
-  auto_merge: false
+  # Merge a clean PR at the end of the review (squash). Required so the
+  # merge carries the PR body — the repo's squash message source is
+  # COMMIT_MESSAGES, so a hand merge drops the Decision Record.
+  auto_merge: true
   confidence_threshold: 80
   run_tests: true
   # Set false at init ("ignore CI status"): the repo has no CI workflows,
