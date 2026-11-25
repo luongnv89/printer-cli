@@ -60,6 +60,7 @@ EXCLUDED = {
     "prt gazette me.jpg": "gazette " + USAGE,
     "prt gazette --edition morning --edition-file morning.json --preview": "morning edition " + USAGE,
     "# cron, every morning at 07:30": "operating-system scheduler reference; " + SETUP,
+    "# cron, at 10:00 on every third day of the month": "keep-alive scheduler reference; " + SETUP,
     "prt receipt --preview receipt.pdf -f json": "commit receipt " + USAGE,
     "prt compose party.json --preview": "compose usage variants; the compose slide shows the page file and its command",
     "✗ Cyan ink is at 1%": "a refused head cleaning: a safety note, not something prt makes",
