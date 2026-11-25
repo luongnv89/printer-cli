@@ -27,7 +27,7 @@ import re
 import stat
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterator, NoReturn
+from typing import Any, Callable, Iterator, NoReturn, cast
 
 from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 
@@ -582,6 +582,7 @@ def load_image(path: Path, where: str) -> Image.Image:
             hint="use a smaller copy of the image",
             exit_code=3,
         )
+    img: Image.Image  # Image.open gives an ImageFile; the steps below give plain Images
     try:
         with Image.open(path, formats=IMAGE_FORMATS) as img:
             if img.width * img.height > MAX_IMAGE_PIXELS:
@@ -674,7 +675,7 @@ def _image(block: dict[str, Any], width: int) -> Piece:
     tallest = min(room, round(block["height"] * PX_PER_MM) if "height" in block else IMAGE_DEFAULT_H)
     scale = min(width / img.width, tallest / img.height)
     size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
-    return _with_caption(size, lambda: img.resize(size, Image.LANCZOS), block, width)
+    return _with_caption(size, lambda: img.resize(size, Image.Resampling.LANCZOS), block, width)
 
 
 def _qr_code(data: str, width: int, where: str) -> tuple[Any, int]:
@@ -686,7 +687,7 @@ def _qr_code(data: str, width: int, where: str) -> tuple[Any, int]:
         code = segno.make(data, error="m", micro=False)
     except segno.DataOverflowError as exc:
         raise PrinterError(f"{where}: too much data for a QR code", hint="shorten the data", exit_code=3) from exc
-    scale = width // code.symbol_size(scale=1, border=QR_QUIET)[0]
+    scale = width // cast(int, code.symbol_size(scale=1, border=QR_QUIET)[0])  # an int at scale=1
     if scale < QR_MIN_MODULE:
         raise PrinterError(
             f"{where}: too much data for a QR code {width / PX_PER_MM:.0f} mm wide",
@@ -701,7 +702,7 @@ def _qr_bitmap(code: Any, scale: int) -> Image.Image:
     modules = len(rows)
     img = Image.new("L", (modules, modules), 255)
     img.putdata([0 if dark else 255 for row in rows for dark in row])
-    return img.resize((modules * scale, modules * scale), Image.NEAREST).convert("RGB")
+    return img.resize((modules * scale, modules * scale), Image.Resampling.NEAREST).convert("RGB")
 
 
 def qr_image(data: str, width: int, where: str) -> Image.Image:

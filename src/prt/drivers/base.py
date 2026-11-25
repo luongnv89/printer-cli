@@ -141,6 +141,10 @@ class Driver(ABC):
         """Submit a file; returns the job id. ``before_send`` runs after the file's checks, right before it is sent."""
         raise Unsupported(self, Capability.PRINT)
 
+    def submit(self, data: bytes, mime: str, options: PrintOptions) -> int:
+        """Send already-rendered bytes of type ``mime``; returns the job id."""
+        raise Unsupported(self, Capability.PRINT)
+
     def scan(self, settings: ScanSettings, progress=None) -> bytes:
         raise Unsupported(self, Capability.SCAN)
 

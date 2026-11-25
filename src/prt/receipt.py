@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from prt.drivers.base import PrinterError
@@ -148,7 +148,7 @@ def document(receipt: Receipt) -> TextGazette:
         summary = f"No commits in the last {period_name}."
     sections = [Section("At a glance", (TextBlock(summary, "summary"),), "summary")]
 
-    days: dict[object, list[Commit]] = {}
+    days: dict[date, list[Commit]] = {}
     for commit in receipt.commits:
         days.setdefault(commit.authored_at.date(), []).append(commit)
     commit_index = 0

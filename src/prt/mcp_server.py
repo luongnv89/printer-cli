@@ -23,7 +23,7 @@ import threading
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Callable, Literal, cast
 
 from prt import __version__, cache, catalog, guard, render
 from prt.drivers.base import PrinterError, Unreachable
@@ -265,7 +265,7 @@ class Tools:
             )
         if not 1 <= copies <= 99:
             raise _usage("copies must be between 1 and 99")
-        file = Path(path).expanduser()
+        file = Path(cast(str, path)).expanduser()  # not None: exactly one of path and token is given
         if not file.is_file():
             raise PrinterError(f"file not found: {file}", hint="check the path", exit_code=3)
         d = self._driver(printer)

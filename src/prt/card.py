@@ -16,6 +16,7 @@ import json
 import unicodedata
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
+from typing import cast
 
 from PIL import Image, ImageDraw
 
@@ -339,10 +340,11 @@ def fit_verse(verse: str, width: int, height: int, size: int = VERSE_SIZE, min_s
     if not kept:
         return font, s, [], Cut(0, len(verse))
     last, text = kept[-1]
-    shown = _ellipsize(text, font, width)
+    shown = _ellipsize(cast(str, text), font, width)  # the loop above ends kept on a line, not a gap (None)
     kept[-1] = (last, shown)
     # How much of the last line was printed, in the printed form of that line, then in its own characters.
-    done = [t for i, t in kept[:-1] if i == last] + [shown.removesuffix("…").rstrip()]
+    # Rows of line `last` are its wrapped text; a gap (None) has a line number of its own.
+    done = [cast(str, t) for i, t in kept[:-1] if i == last] + [shown.removesuffix("…").rstrip()]
     source = verse.split("\n")
     in_line = _in_source(Cut(_consumed(printed[last], done), 0), source[last], _printable).max_fit
     return font, s, kept, Cut(sum(len(line) + 1 for line in source[:last]) + in_line, len(verse))

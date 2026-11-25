@@ -295,6 +295,7 @@ def load_photo(path: Path) -> Image.Image:
     """Fully decode the photo now, so a bad file fails before anything reaches the printer."""
     if not path.is_file():
         raise PrinterError(f"photo not found: {path}", hint="check the path", exit_code=3)
+    img: Image.Image  # Image.open gives an ImageFile; the steps below give plain Images
     try:
         with Image.open(path) as img:
             img.load()
