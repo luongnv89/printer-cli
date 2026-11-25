@@ -35,6 +35,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `prt print --wait` and `prt jobs wait ID`: wait until a job has finished and report its final state; a job that was cancelled or aborted exits with code 1. `--wait-timeout` sets how long to wait. `--wait` refuses files that go through CUPS, whose job ids the printer does not know. The demo printer's jobs now move from pending to processing to completed.
 
 ### Changed
+- The GitHub Pages deployment workflow now bounds its deploy job at 10 minutes, with the deploy action itself timing out cleanly after 8 minutes rather than racing the job-level backstop (#77).
 - `src/` now type-checks clean with mypy, and a mypy pre-commit hook keeps it that way (#78). The hook runs the locked mypy over the whole package (about 4 s, under 1 s with a warm cache) whenever a file in `src/`, `pyproject.toml` or `uv.lock` is staged, so a dependency bump or a settings change is checked too. Settings are in `[tool.mypy]` in `pyproject.toml`: no global `ignore_missing_imports` or `ignore_errors`, unused ignores are errors, and every `# type: ignore` needs an error code; a test also requires a reason after each one. `mypy` and `types-defusedxml` join the `dev` dependency group. In code, `Driver.submit` now exists on the base class and raises `Unsupported` like `print_file`, and `style.box` and `style.table_rows` take any sequence of rows.
 
 ### Security
