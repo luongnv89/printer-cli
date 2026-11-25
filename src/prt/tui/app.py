@@ -377,8 +377,7 @@ class PrtApp(App):
         try:
             pages = guard.job_pages([path], opts.copies)
             with guard.authorize(self.cfg, pages, yes=True) as ticket:
-                ticket.attempt(pages or 0)
-                job = self.driver().print_file(path, opts)
+                job = self.driver().print_file(path, opts, before_send=lambda: ticket.attempt(pages or 0))
             msg = Text("● ", style=f"bold {GREEN}")
             msg.append(f"{path.name} sent" + (f" as job {job}" if job else ""))
             self.call_from_thread(result.update, msg)

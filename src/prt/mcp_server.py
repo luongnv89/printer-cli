@@ -230,8 +230,8 @@ class Tools:
         d.require(Capability.PRINT)
         pages = guard.job_pages([file], copies)
         with guard.authorize(self.cfg, pages, yes=True) as ticket:
-            ticket.attempt(pages or 0)
-            job = d.print_file(file, PrintOptions(copies=copies, media=media, job_name=file.name))
+            job = d.print_file(file, PrintOptions(copies=copies, media=media, job_name=file.name),
+                               before_send=lambda: ticket.attempt(pages or 0))
         return {"action": "print", "printer": d.target.name, "file": str(file), "copies": copies, "job_id": job}
 
     def _print_preview(self, token: str, printer: str | None) -> dict[str, Any]:

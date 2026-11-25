@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 
@@ -324,9 +324,9 @@ class IPPDriver(Driver):
         ], job_attrs=job_attrs, data=data, timeout=max(self.timeout, 60))
         return _int(resp.group(ipp.TAG_JOB).get("job-id")) or 0
 
-    def print_file(self, path: Path, options: PrintOptions) -> int:
+    def print_file(self, path: Path, options: PrintOptions, before_send: Callable[[], None] | None = None) -> int:
         from prt import printing
-        return printing.print_file(self, path, options)
+        return printing.print_file(self, path, options, before_send)
 
     def scan(self, settings: ScanSettings, progress=None) -> bytes:
         from prt.transport.escl import ESCLClient
