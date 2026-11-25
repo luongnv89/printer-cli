@@ -29,6 +29,8 @@ These images are the sample pages shown in the main README. They were rendered w
 | `article-classic.jpg` | `prt article article.json --style classic-magazine -o article-classic.png` (page 1) |
 | `gazette.jpg` | `prt gazette astronaut.jpg launch.jpg earthrise.jpg --story-file story.json -o gazette.png` |
 | `gazette-landscape.jpg` | the same with `--landscape` |
+| `gazette-morning.jpg` | `prt gazette --edition morning --edition-file morning.json -o gazette-morning.png` (the `morning` schema example) |
+| `commit-receipt.jpg` | `prt receipt . --period week -o commit-receipt.png` in this repository |
 | `tui.jpg` | `prt -p demo tui`, saved as a Textual screenshot at 120×36 |
 
 `story.json`, `article.json`, `recipe.json`, `postcard.json`, `disc.json`, `comic.json`, `bingo.json` and `crossword.json` are the inputs used above. The article text, the recipe, the postcard, the disc's track list, the comic's dialogue, the bingo words and the crossword clues were written for these samples (the track titles are made up).
