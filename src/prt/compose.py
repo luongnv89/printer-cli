@@ -38,6 +38,7 @@ from prt.testpage import H, MARGIN, W, _font
 # --- limits -----------------------------------------------------------------------------------------
 
 MAX_PAGE_FILE = 256 * 1024  # bytes of JSON
+MAX_NESTING = 32  # arrays and objects inside each other; a valid page needs 6
 MAX_PAGES = 10  # a page file that needs more is refused, never cut short
 MAX_BLOCKS = 200  # top-level blocks
 MAX_CELL_BLOCKS = 50  # blocks in one column of a columns block
@@ -407,6 +408,21 @@ class Page:
     inputs: list[Path] = field(default_factory=list)  # the files it was read from: never overwritten by output
 
 
+def _nests_too_deep(data: Any) -> bool:
+    """Whether arrays and objects in ``data`` nest more than MAX_NESTING deep (walked without recursion).
+
+    json.loads alone is no guard: since Python 3.14 its depth limit follows the C stack, so how deep it
+    parses depends on the platform."""
+    stack = [(data, 1)]
+    while stack:
+        value, depth = stack.pop()
+        if isinstance(value, (dict, list)):
+            if depth > MAX_NESTING:
+                return True
+            stack.extend((item, depth + 1) for item in (value.values() if isinstance(value, dict) else value))
+    return False
+
+
 def _reject_constant(name: str) -> Any:
     raise ValueError(f"{name} is not a JSON number")
 
@@ -453,6 +469,8 @@ def parse(content: bytes, name: str = "the page file", base: Path | None = None)
         ) from exc
     except ValueError as exc:  # NaN or Infinity
         raise PrinterError(f"{name} is not valid JSON: {exc}", hint=SCHEMA_HINT, exit_code=3) from exc
+    if _nests_too_deep(data):
+        raise PrinterError(f"{name} is not valid JSON: nested too deeply", hint=SCHEMA_HINT, exit_code=3)
     try:
         check(data, name)
     except RecursionError as exc:  # json.loads took it, but checking it nests deeper still
